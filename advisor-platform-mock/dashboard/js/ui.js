@@ -52,6 +52,8 @@ export async function openHousehold(id, canShare) {
     dlg.innerHTML = `<button class="btn quiet close" data-close>Close</button><h2 id="dlgTitle">${esc(h.name)}</h2>
       <div>${statusBadge(h.status)}</div>
       <dl class="defs"><dt>Assets</dt><dd>${moneyFull(h.aum)}</dd><dt>30-day change</dt><dd class="${pctClass(h.change30d)}">${pct(h.change30d)}</dd><dt>Last contact</dt><dd>${esc(daysAgo(h.lastContactAt))}</dd></dl>
+      <h3>Allocation</h3>
+      <div id="hhAlloc"><div class="skel"></div></div>
       <h3>Accounts</h3>
       <div class="tablewrap"><table><thead><tr><th>Account</th><th>Type</th><th class="num">Balance</th><th class="num">Today</th><th>Opening</th></tr></thead><tbody>
       ${h.accounts.map(a => `<tr><td>${esc(a.maskedNumber)}</td><td>${esc(a.type)}</td><td class="num">${moneyFull(a.balance)}</td><td class="num ${pctClass(a.todayGainLoss)}">${moneyFull(a.todayGainLoss)}</td><td>${esc((a.openingStatus || '').toUpperCase())}</td></tr>`).join('')}</tbody></table></div>
@@ -61,6 +63,7 @@ export async function openHousehold(id, canShare) {
       <div class="field"><label for="shTitle">Title shown to the client</label><input type="text" id="shTitle" placeholder="For example, Your retirement plan summary"></div>
       <div class="field"><label for="shMsg">Message (optional)</label><textarea id="shMsg"></textarea></div>
       <button class="btn primary" id="shGo">Approve and share</button>` : ''}`;
+    loadAllocation(id);
     const go = $('shGo');
     if (go) go.onclick = async () => {
       const title = $('shTitle').value.trim(); if (!title) { toast('Add a title first.'); return; }
@@ -93,4 +96,43 @@ export function bookPanel({ scope, canShare, id, title, size = 8 }) {
 export function subnav(el, items, active, go) {
   el.innerHTML = items.map(([k, label]) => `<button role="tab" data-sec="${esc(k)}" aria-selected="${k === active}">${esc(label)}</button>`).join('');
   el.querySelectorAll('[data-sec]').forEach(b => b.onclick = () => go(b.dataset.sec));
+}
+
+/* Target against current, per asset class. The drift threshold belongs to the household's
+   model rather than to us, so it is shown when Green Meadows supplies it and left out when
+   it does not, instead of falling back to an invented number. */
+async function loadAllocation(id) {
+  const el = $('hhAlloc');
+  if (!el) return;
+  try {
+    const a = await api('GET', '/households/' + encodeURIComponent(id) + '/allocation');
+    if (a.priced === false) {
+      el.innerHTML = `<p class="hint">${esc(a.unavailableReason || 'Allocation is unavailable.')}</p>`;
+      return;
+    }
+    if (!a.model) {
+      el.innerHTML = '<p class="hint">No model portfolio on file for this household, so there is no target to compare against.</p>';
+      return;
+    }
+    const limit = a.driftThresholdPoints ?? null;
+    const over = limit !== null && a.maxDriftPoints > limit;
+    el.innerHTML = `
+      <div class="meta" style="margin-bottom:10px">${esc(a.model.name)} \u2022 largest drift
+        <strong class="${over ? 'due-hot' : ''}">${a.maxDriftPoints} points</strong>${limit !== null ? ` against a ${limit}-point limit` : ''}</div>
+      <ul class="alloc">${a.lines.map(l => {
+        const scale = Math.max(...a.lines.map(x => Math.max(x.targetPct, x.currentPct)));
+        return `<li>
+          <span class="alloc-label">${esc(l.assetClass)}</span>
+          <span class="alloc-bars" role="img" aria-label="${esc(l.assetClass)}: target ${l.targetPct}%, current ${l.currentPct}%">
+            <span class="alloc-target" style="width:${(l.targetPct / scale) * 100}%"></span>
+            <span class="alloc-current ${Math.abs(l.driftPct) >= (limit ?? Infinity) ? 'hot' : ''}" style="width:${(l.currentPct / scale) * 100}%"></span>
+          </span>
+          <span class="alloc-nums">${l.currentPct}% <span class="meta">of ${l.targetPct}%</span></span>
+          <span class="alloc-drift ${l.driftPct > 0 ? 'up' : l.driftPct < 0 ? 'neg' : ''}">${l.driftPct > 0 ? '+' : ''}${l.driftPct}</span>
+        </li>`;
+      }).join('')}</ul>
+      ${a.unclassifiedPct ? `<p class="hint">${a.unclassifiedPct}% of holdings are not in the model and could not be classified.</p>` : ''}`;
+  } catch (e) {
+    el.innerHTML = `<p class="hint">${esc(e.status === 404 ? 'No allocation for this household.' : e.message)}</p>`;
+  }
 }

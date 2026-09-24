@@ -224,7 +224,7 @@ export function advOnboarding() {
   });
   run();
 
-  load($('w-mig'), 'Import a book', () => Promise.resolve(null), () =>
+  load($('w-mig'), 'Import a book', () => api('GET', '/migrations'), (past) =>
     head('Import a book', 'Migrate from another system') + `
     <p class="hint">Paste one household per line as <code>Name, assets</code>. Rows that fail validation are reported and skipped; the rest are imported and flagged for review.</p>
     <div class="field"><label for="migSrc">Where is it coming from?</label><input type="text" id="migSrc" value="Redtail export"></div>
@@ -233,7 +233,10 @@ Vance Trust, 1400000
 , 50
 Bad Assets, -3</textarea></div>
     <button class="btn primary" id="migGo">Validate and import</button>
-    <div id="migOut"></div>`,
+    <div id="migOut"></div>
+    ${past && past.items.length ? `<h3>Past imports</h3><ul class="rows">${past.items.map(m => `
+      <li><div class="grow"><div class="title">${esc(m.source)}</div>
+      <div class="meta">${esc(daysAgo(m.createdAt))} \u2022 ${m.counts.imported} imported, ${m.counts.invalid} rejected</div></div></li>`).join('')}</ul>` : ''}`,
   () => {
     $('migGo').onclick = async () => {
       const rows = $('migRows').value.split('\n').map(l => l.trim()).filter(Boolean).map(l => {
@@ -325,6 +328,9 @@ export async function openMeeting(id, done) {
         ${record.withheld ? `<p class="err">${esc(record.withheldReason)}</p>`
           : `<p class="draft">${esc(record.content)}</p><div class="actions"><button class="btn primary" id="mtNext">Suggest next steps</button></div><div id="mtOut"></div>`}`
         : '<p class="hint">No notes or transcript for this meeting.</p>'}
+      ${new Date(m.startsAt) > new Date() ? `<h3>Move</h3>
+        <div class="field"><label for="mtWhen">New date and time</label><input type="datetime-local" id="mtWhen" value="${esc(localDate(new Date(m.startsAt)))}T${esc(new Date(m.startsAt).toTimeString().slice(0, 5))}"></div>
+        <button class="btn" id="mtMove">Move meeting</button>` : ''}
       <div class="actions"><button class="btn quiet" id="mtDel">Cancel meeting</button></div>`;
     const nx = $('mtNext');
     if (nx) nx.onclick = async () => {
@@ -340,6 +346,14 @@ export async function openMeeting(id, done) {
           catch (e) { toast(e.message); b.disabled = false; }
         });
       } catch (e) { toast(e.message); nx.disabled = false; }
+    };
+    const mv = $('mtMove');
+    if (mv) mv.onclick = async () => {
+      const when = $('mtWhen').value;
+      if (!when) { toast('Pick a new date and time.'); return; }
+      mv.disabled = true;
+      try { await api('PATCH', '/meetings/' + encodeURIComponent(id), { body: { startsAt: new Date(when).toISOString() } }); toast('Meeting moved.'); dlg.close(); done(); }
+      catch (e) { toast(e.message); mv.disabled = false; }
     };
     $('mtDel').onclick = async () => {
       try { await api('DELETE', '/meetings/' + encodeURIComponent(id)); toast('Meeting cancelled.'); dlg.close(); done(); advLoadStrip(); }

@@ -488,3 +488,24 @@ test('no flow mapping has an unquoted value containing a comma', async () => {
     }
   }
 });
+
+// Every operation in the contract should be reachable from the dashboard. An endpoint with
+// no UI is a feature that looks done in the contract and does not exist for a user.
+test('no contract operation is left without a UI', () => {
+  const dir = path.join(__dirname, '..', 'dashboard', 'js');
+  const js = fs.readdirSync(dir).map(f => fs.readFileSync(path.join(dir, f), 'utf8')).join('\n');
+  const spec = fs.readFileSync(path.join(__dirname, '..', 'openapi.yaml'), 'utf8');
+  const start = spec.indexOf('\npaths:'), end = spec.indexOf('\ncomponents:');
+  const ops = []; let cur = null;
+  for (const l of spec.slice(start, end).split('\n')) {
+    const p = l.match(/^  (\/[^\s:]+):\s*$/); if (p) { cur = p[1]; continue; }
+    const m = l.match(/^    (get|post|patch|put|delete):\s*$/); if (m && cur) ops.push([m[1].toUpperCase(), cur]);
+  }
+  const missing = ops.filter(([method, p]) => {
+    const base = p.replace(/\{[^}]+\}.*/, '').replace(/\/$/, '');
+    const tail = p.split('}').pop().replace(/^\//, '');
+    return !(new RegExp(`'${method}', [\`']${base.replace(/\//g, '\\/')}`).test(js)
+      || (tail && js.includes(tail) && js.includes(base)));
+  }).map(([m, p]) => `${m} ${p}`);
+  assert.deepEqual(missing, [], 'operations with no UI: ' + missing.join(', '));
+});

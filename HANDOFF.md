@@ -97,7 +97,7 @@ Roles: `principal`, `advisor`, `associate`, `client`. A user can hold several (a
 
 **Regulatory sensitivity (needs review before build):** recording consent (MEET-04), placing trades (PM-05), robo portfolios (PM-04), credit risk (RTI-01), tax strategies (RTI-03), advisor value claims (RTI-09), marketing content (GP-06 to GP-10), and the Client Sentiment Index (COMM-05).
 
-**Coverage against the 75, audited 24 September 2026 by reading the code:** 15 built and working, 2 in the contract with no UI (`GET /households/{id}/allocation` and the model-portfolio data behind PM-03), 21 partial, 37 not started. Full matrix: https://claude.ai/code/artifact/5611e434-13f5-4262-9562-4881dd3b797d
+**Coverage against the 75, audited 24 September 2026 by reading the code:** 16 built and working, 21 partial, 38 remaining. Every one of the 50 contract operations now has a UI; a test asserts it. Full matrix: https://claude.ai/code/artifact/5611e434-13f5-4262-9562-4881dd3b797d
 
 The largest gap is structural rather than incremental. Seven of the eleven Intelligence Platform features are "query X" — meetings, CRM, email, custodial data, documents, market information, internal research — and the dashboard has no query surface at all: no chat, no ask box, no cross-source search. Those seven are one missing capability, not seven builds, and deciding where it lives changes the shell rather than filling in a section of it.
 
