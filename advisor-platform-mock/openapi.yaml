@@ -1,0 +1,857 @@
+openapi: 3.0.3
+info:
+  title: Advisor Platform API (dashboard domains)
+  version: 0.2.0-draft
+  description: |
+    Draft contract for the advisor dashboard. Not built yet: this spec is the design.
+    The backend service aggregates Green Meadows (custodial data) and other sources
+    (calendar, CRM, task store) into these shapes, so the dashboard never talks to
+    those systems directly.
+
+    Three views, one API: firm (principal), advisor, and client portal. The caller's role decides
+    what each endpoint returns. Firm-wide data is requested with scope=firm (principal role only).
+    Client-portal endpoints live under /me and are limited to the signed-in client's own household.
+    Internal content (prep briefs, alerts, tasks, signals, notes, sentiment, coaching) is never returned
+    to a client. Anything a client sees beyond factual account data is shared explicitly by an advisor
+    through POST /households/{householdId}/shares.
+
+    Conventions
+    - All calls are made by the dashboard to the backend; credentials for Green Meadows
+      and other systems stay on the backend.
+    - Dates are ISO 8601 (dates as YYYY-MM-DD, times in UTC with offset). The dashboard formats them.
+    - Money is a number in USD.
+    - Paging is zero-based with default size 20, matching Green Meadows.
+    - Empty results return 200 with an empty list, not 204.
+    - Every response object that summarises data carries `dataAsOf` so the UI can show freshness.
+    - Account numbers are always masked (last 4 digits only).
+    - Every request may send `x-trace-id`; the backend echoes it and forwards it to Green Meadows
+      as x_gm_ext_traceid.
+servers:
+  - url: https://api.example.com/v1
+    description: Placeholder. Set when the backend is deployed.
+security:
+  - bearerAuth: []
+tags:
+  - name: Session
+  - name: Summary
+  - name: Households
+  - name: Meetings
+  - name: Tasks
+  - name: Alerts
+  - name: Portfolio signals
+  - name: Firm
+  - name: Sharing
+  - name: Client portal
+
+paths:
+  /session:
+    get:
+      tags: [Session]
+      operationId: getSession
+      summary: Signed-in advisor
+      description: "Feeds the dashboard greeting. Requirement: IP-09."
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Session' } } } }
+        '401': { $ref: '#/components/responses/Error' }
+
+  /summary:
+    get:
+      tags: [Summary]
+      operationId: getSummary
+      summary: Practice summary strip
+      description: "Assets, month change, 12-month trend, counts. Assets from Green Meadows balances; counts from households, meetings and tasks. Requirement: IP-09, PO-11. Advisor role only; principals use /firm/summary for firm-wide figures."
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Summary' } } } }
+        '500': { $ref: '#/components/responses/Error' }
+
+  /households:
+    get:
+      tags: [Households]
+      operationId: listHouseholds
+      summary: Book of business
+      description: "Households with assets, 30-day change and last contact. Accounts and values from Green Meadows; last contact from the CRM. Requirement: PO-11, IP-09."
+      parameters:
+        - { $ref: '#/components/parameters/scope' }
+        - { $ref: '#/components/parameters/page' }
+        - { $ref: '#/components/parameters/size' }
+        - name: sort
+          in: query
+          description: "Format: property,(asc|desc). Properties: name, aum, change30d, lastContactAt."
+          schema: { type: string, default: 'aum,desc' }
+        - name: status
+          in: query
+          schema: { $ref: '#/components/schemas/HouseholdStatus' }
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/HouseholdPage' } } } }
+        '400': { $ref: '#/components/responses/Error' }
+
+  /households/{householdId}:
+    get:
+      tags: [Households]
+      operationId: getHousehold
+      summary: One household with its accounts
+      description: "Requirement: IP-08, PM-01."
+      parameters:
+        - { $ref: '#/components/parameters/householdId' }
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/HouseholdDetail' } } } }
+        '404': { $ref: '#/components/responses/Error' }
+
+  /meetings:
+    get:
+      tags: [Meetings]
+      operationId: listMeetings
+      summary: Meetings in a date range
+      description: "Defaults to today. Source: calendar. Requirement: MEET-01, MEET-03."
+      parameters:
+        - name: from
+          in: query
+          schema: { type: string, format: date }
+        - name: to
+          in: query
+          schema: { type: string, format: date }
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/MeetingList' } } } }
+        '400': { $ref: '#/components/responses/Error' }
+
+  /meetings/{meetingId}:
+    get:
+      tags: [Meetings]
+      operationId: getMeeting
+      summary: One meeting with its prep brief
+      description: "Requirement: MEET-01, MEET-02."
+      parameters:
+        - { $ref: '#/components/parameters/meetingId' }
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Meeting' } } } }
+        '404': { $ref: '#/components/responses/Error' }
+
+  /tasks:
+    get:
+      tags: [Tasks]
+      operationId: listTasks
+      summary: Advisor's tasks
+      description: "Requirement: PO-02, MEET-07."
+      parameters:
+        - name: status
+          in: query
+          schema: { $ref: '#/components/schemas/TaskStatus' }
+        - name: dueBy
+          in: query
+          schema: { type: string, format: date }
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/TaskList' } } } }
+    post:
+      tags: [Tasks]
+      operationId: createTask
+      summary: Create a task
+      description: "Manual entry, or an accepted AI suggestion (origin meeting or alert). Requirement: PO-02, MEET-07."
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/TaskCreate' } } }
+      responses:
+        '201': { description: Created, content: { application/json: { schema: { $ref: '#/components/schemas/Task' } } } }
+        '400': { $ref: '#/components/responses/Error' }
+
+  /tasks/{taskId}:
+    patch:
+      tags: [Tasks]
+      operationId: updateTask
+      summary: Complete, reopen or edit a task
+      parameters:
+        - { $ref: '#/components/parameters/taskId' }
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/TaskUpdate' } } }
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Task' } } } }
+        '404': { $ref: '#/components/responses/Error' }
+
+  /alerts:
+    get:
+      tags: [Alerts]
+      operationId: listAlerts
+      summary: Items needing attention
+      description: "Sorted by severity, then age. Sources include account status and margin calls (Green Meadows), compliance queue, CRM contact gaps. Requirement: PO-03, COMM-04."
+      parameters:
+        - { $ref: '#/components/parameters/scope' }
+        - name: severity
+          in: query
+          schema: { $ref: '#/components/schemas/Severity' }
+        - name: status
+          in: query
+          schema: { $ref: '#/components/schemas/AlertStatus' }
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/AlertList' } } } }
+
+  /alerts/{alertId}:
+    patch:
+      tags: [Alerts]
+      operationId: updateAlert
+      summary: Dismiss or resolve an alert
+      parameters:
+        - { $ref: '#/components/parameters/alertId' }
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/AlertUpdate' } } }
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Alert' } } } }
+        '404': { $ref: '#/components/responses/Error' }
+
+  /portfolio-signals:
+    get:
+      tags: [Portfolio signals]
+      operationId: listPortfolioSignals
+      summary: Portfolio signal counts
+      description: "Tax loss harvesting, concentration, allocation drift, idle cash. Computed by the platform from Green Meadows positions, tax lots, balances and model portfolios. Requirement: RTI-05, PM-02."
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/SignalList' } } } }
+
+  /portfolio-signals/{signalId}/items:
+    get:
+      tags: [Portfolio signals]
+      operationId: listSignalItems
+      summary: Households and accounts behind a signal
+      parameters:
+        - { $ref: '#/components/parameters/signalId' }
+        - { $ref: '#/components/parameters/page' }
+        - { $ref: '#/components/parameters/size' }
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/SignalItemPage' } } } }
+        '404': { $ref: '#/components/responses/Error' }
+
+  /firm/summary:
+    get:
+      tags: [Firm]
+      operationId: getFirmSummary
+      summary: Firm-wide summary
+      description: "Firm assets, trend, advisor and household counts, open compliance items. Principal role only. Requirement: IP-09, PO-07, PO-10."
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/FirmSummary' } } } }
+        '403': { $ref: '#/components/responses/Error' }
+
+  /firm/advisors:
+    get:
+      tags: [Firm]
+      operationId: listAdvisors
+      summary: Advisor roster with performance
+      description: "Assets, households and activity per advisor. Principal role only. Requirement: PO-06, PO-07."
+      parameters:
+        - { $ref: '#/components/parameters/page' }
+        - { $ref: '#/components/parameters/size' }
+        - name: sort
+          in: query
+          description: "Properties: name, aum, households, tasksOverdue, openAlerts."
+          schema: { type: string, default: 'aum,desc' }
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/AdvisorPage' } } } }
+        '403': { $ref: '#/components/responses/Error' }
+
+  /firm/advisors/{advisorId}:
+    get:
+      tags: [Firm]
+      operationId: getAdvisor
+      summary: One advisor, for drill-down
+      description: "Lets a principal open an advisor's dashboard in read-only mode. Requirement: PO-06."
+      parameters:
+        - { name: advisorId, in: path, required: true, schema: { type: string } }
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/AdvisorRow' } } } }
+        '403': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+
+  /firm/compliance:
+    get:
+      tags: [Firm]
+      operationId: listComplianceItems
+      summary: Compliance obligations across the firm
+      description: "Principal role only. Requirement: PO-08."
+      parameters:
+        - name: status
+          in: query
+          schema: { type: string, enum: [open, overdue, done] }
+        - name: advisorId
+          in: query
+          schema: { type: string }
+        - { $ref: '#/components/parameters/page' }
+        - { $ref: '#/components/parameters/size' }
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/CompliancePage' } } } }
+        '403': { $ref: '#/components/responses/Error' }
+
+  /households/{householdId}/shares:
+    post:
+      tags: [Sharing]
+      operationId: shareWithClient
+      summary: Share an approved item with the client
+      description: "The only way advisor-side content reaches the client portal. The backend records who approved it and when. Requirement: X-03, RTI-08, RTI-10, AX-12."
+      parameters:
+        - { $ref: '#/components/parameters/householdId' }
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/ShareCreate' } } }
+      responses:
+        '201': { description: Shared, content: { application/json: { schema: { $ref: '#/components/schemas/SharedItem' } } } }
+        '400': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+
+  /me/household:
+    get:
+      tags: [Client portal]
+      operationId: getMyHousehold
+      summary: The client's own household and accounts
+      description: "Client role only. Factual account data from Green Meadows, using the client's user-specific token. Requirement: AX-12, PM-01."
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/ClientHousehold' } } } }
+        '403': { $ref: '#/components/responses/Error' }
+
+  /me/documents:
+    get:
+      tags: [Client portal]
+      operationId: listMyDocuments
+      summary: The client's statements and documents
+      description: "Client role only. From Green Meadows document search plus advisor-shared documents. Requirement: AX-12."
+      parameters:
+        - { name: docType, in: query, schema: { type: string } }
+        - { name: from, in: query, schema: { type: string, format: date } }
+        - { name: to, in: query, schema: { type: string, format: date } }
+        - { $ref: '#/components/parameters/page' }
+        - { $ref: '#/components/parameters/size' }
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/DocumentPage' } } } }
+        '403': { $ref: '#/components/responses/Error' }
+
+  /me/documents/{documentId}:
+    get:
+      tags: [Client portal]
+      operationId: downloadMyDocument
+      summary: Download one document
+      parameters:
+        - { name: documentId, in: path, required: true, schema: { type: string } }
+      responses:
+        '200': { description: The file, content: { application/pdf: { schema: { type: string, format: binary } } } }
+        '403': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+
+  /me/fees:
+    get:
+      tags: [Client portal]
+      operationId: listMyFees
+      summary: Fees charged and scheduled
+      description: "Client role only. Requirement: AX-10."
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/FeeList' } } } }
+        '403': { $ref: '#/components/responses/Error' }
+
+  /me/shared:
+    get:
+      tags: [Client portal]
+      operationId: listSharedWithMe
+      summary: Items the advisor has shared
+      description: "Plans, tax explanations, reports and messages the advisor approved. Requirement: RTI-08, RTI-10."
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/SharedItemList' } } } }
+        '403': { $ref: '#/components/responses/Error' }
+
+  /me/preferences:
+    get:
+      tags: [Client portal]
+      operationId: getMyPreferences
+      summary: Client preferences
+      description: "Backed by Green Meadows user preferences plus portal settings. Requirement: AX-12."
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Preferences' } } } }
+    patch:
+      tags: [Client portal]
+      operationId: updateMyPreferences
+      summary: Update client preferences
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/Preferences' } } }
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Preferences' } } } }
+        '400': { $ref: '#/components/responses/Error' }
+
+  /me/meeting-requests:
+    post:
+      tags: [Client portal]
+      operationId: requestMeeting
+      summary: Ask the advisor for a meeting
+      description: "Creates a request the advisor sees as a task. Requirement: MEET-03."
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/MeetingRequestCreate' } } }
+      responses:
+        '201': { description: Created, content: { application/json: { schema: { $ref: '#/components/schemas/MeetingRequest' } } } }
+        '400': { $ref: '#/components/responses/Error' }
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      description: Session token for the platform backend. Green Meadows credentials are never exposed here.
+
+  parameters:
+    scope:
+      name: scope
+      in: query
+      description: "own (default) returns the caller's clients. firm returns firm-wide data and requires the principal role."
+      schema: { type: string, enum: [own, firm], default: own }
+    page: { name: page, in: query, description: Zero-based page index, schema: { type: integer, minimum: 0, default: 0 } }
+    size: { name: size, in: query, description: Page size, schema: { type: integer, minimum: 1, maximum: 100, default: 20 } }
+    householdId: { name: householdId, in: path, required: true, schema: { type: string } }
+    meetingId: { name: meetingId, in: path, required: true, schema: { type: string } }
+    taskId: { name: taskId, in: path, required: true, schema: { type: string } }
+    alertId: { name: alertId, in: path, required: true, schema: { type: string } }
+    signalId: { name: signalId, in: path, required: true, schema: { type: string } }
+
+  responses:
+    Error:
+      description: Error
+      content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+
+  schemas:
+    Error:
+      type: object
+      required: [code, message]
+      properties:
+        code: { type: string, example: not_found }
+        message: { type: string }
+        traceId: { type: string }
+
+    Source:
+      type: string
+      description: Where the data came from, so the UI can show freshness and provenance.
+      enum: [greenmeadows, crm, calendar, platform]
+
+    Session:
+      type: object
+      required: [id, name, role, roles, views, firm]
+      properties:
+        id: { type: string }
+        name: { type: string, example: Dana Whitfield }
+        role: { type: string, description: Job title for display, example: Senior advisor }
+        roles:
+          type: array
+          description: Permission roles. A solo advisor may hold both principal and advisor.
+          items: { type: string, enum: [principal, advisor, associate, client] }
+        views:
+          type: array
+          description: Views this user may open, in default order.
+          items: { type: string, enum: [firm, advisor, client] }
+        firm:
+          type: object
+          required: [id, name]
+          properties:
+            id: { type: string }
+            name: { type: string }
+
+    Summary:
+      type: object
+      required: [aum, households, meetingsThisWeek, tasksOpen, tasksDueToday, dataAsOf]
+      properties:
+        aum:
+          type: object
+          required: [value, changeMtd, trend]
+          properties:
+            value: { type: number, example: 412600000 }
+            changeMtd: { type: number, description: "Fraction, 0.018 = 1.8%", example: 0.018 }
+            trend:
+              type: array
+              description: Last 12 month-end values, oldest first.
+              items: { $ref: '#/components/schemas/TrendPoint' }
+        households: { type: integer }
+        meetingsThisWeek: { type: integer }
+        tasksOpen: { type: integer }
+        tasksDueToday: { type: integer }
+        dataAsOf: { type: string, format: date-time }
+
+    HouseholdStatus:
+      type: string
+      enum: [on_track, needs_review, overdue_contact, onboarding, forms_incomplete]
+
+    HouseholdSummary:
+      type: object
+      required: [id, name, aum, change30d, status]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        aum: { type: number }
+        change30d: { type: number, description: Fraction, example: 0.012 }
+        lastContactAt: { type: string, format: date-time, nullable: true, description: From the CRM. Null when unknown. }
+        status: { $ref: '#/components/schemas/HouseholdStatus' }
+        accountCount: { type: integer }
+        dataAsOf: { type: string, format: date-time }
+
+    HouseholdPage:
+      type: object
+      required: [items, page, size, totalItems]
+      properties:
+        items: { type: array, items: { $ref: '#/components/schemas/HouseholdSummary' } }
+        page: { type: integer }
+        size: { type: integer }
+        totalItems: { type: integer }
+
+    AccountSummary:
+      type: object
+      required: [maskedNumber, type, status, balance]
+      properties:
+        maskedNumber: { type: string, example: '****4821' }
+        type: { type: string, example: Individual brokerage }
+        status: { type: string, description: From Green Meadows account status, example: active }
+        openingStatus: { type: string, enum: [igo, igox, nigo] }
+        balance: { type: number }
+        todayGainLoss: { type: number }
+        totalGainLoss: { type: number }
+
+    HouseholdDetail:
+      allOf:
+        - $ref: '#/components/schemas/HouseholdSummary'
+        - type: object
+          properties:
+            accounts: { type: array, items: { $ref: '#/components/schemas/AccountSummary' } }
+
+    PrepStatus:
+      type: string
+      enum: [ready, needs_prep]
+
+    Meeting:
+      type: object
+      required: [id, startsAt, householdId, householdName, type, prepStatus]
+      properties:
+        id: { type: string }
+        startsAt: { type: string, format: date-time }
+        durationMinutes: { type: integer }
+        householdId: { type: string }
+        householdName: { type: string }
+        type: { type: string, example: Annual review }
+        prepStatus: { $ref: '#/components/schemas/PrepStatus' }
+        brief: { type: string, nullable: true, description: AI-drafted prep brief. Draft until the advisor accepts it. }
+        briefSources:
+          type: array
+          description: Systems the brief drew from, for citation.
+          items: { $ref: '#/components/schemas/Source' }
+
+    MeetingList:
+      type: object
+      required: [items]
+      properties:
+        items: { type: array, items: { $ref: '#/components/schemas/Meeting' } }
+
+    TaskStatus:
+      type: string
+      enum: [open, done]
+
+    TaskOrigin:
+      type: string
+      enum: [manual, meeting, alert]
+
+    Task:
+      type: object
+      required: [id, title, status, origin]
+      properties:
+        id: { type: string }
+        title: { type: string }
+        householdId: { type: string, nullable: true }
+        householdName: { type: string, nullable: true }
+        dueDate: { type: string, format: date, nullable: true }
+        status: { $ref: '#/components/schemas/TaskStatus' }
+        origin: { $ref: '#/components/schemas/TaskOrigin' }
+        originMeetingId: { type: string, nullable: true }
+        createdAt: { type: string, format: date-time }
+
+    TaskCreate:
+      type: object
+      required: [title]
+      properties:
+        title: { type: string }
+        householdId: { type: string }
+        dueDate: { type: string, format: date }
+        origin: { $ref: '#/components/schemas/TaskOrigin' }
+        originMeetingId: { type: string }
+
+    TaskUpdate:
+      type: object
+      properties:
+        title: { type: string }
+        dueDate: { type: string, format: date, nullable: true }
+        status: { $ref: '#/components/schemas/TaskStatus' }
+
+    TaskList:
+      type: object
+      required: [items, openCount]
+      properties:
+        items: { type: array, items: { $ref: '#/components/schemas/Task' } }
+        openCount: { type: integer }
+
+    Severity:
+      type: string
+      enum: [high, medium, low]
+
+    AlertStatus:
+      type: string
+      enum: [open, dismissed, resolved]
+
+    AlertAction:
+      type: object
+      required: [type, label]
+      properties:
+        type: { type: string, enum: [review, open_queue, draft_email, send_reminder] }
+        label: { type: string, example: Review }
+        targetId: { type: string, description: Household, queue or item the action opens. }
+
+    Alert:
+      type: object
+      required: [id, severity, title, status, createdAt]
+      properties:
+        id: { type: string }
+        severity: { $ref: '#/components/schemas/Severity' }
+        title: { type: string }
+        householdId: { type: string, nullable: true }
+        householdName: { type: string, nullable: true, description: Null for practice-level alerts. }
+        source: { $ref: '#/components/schemas/Source' }
+        status: { $ref: '#/components/schemas/AlertStatus' }
+        action: { $ref: '#/components/schemas/AlertAction' }
+        createdAt: { type: string, format: date-time }
+
+    AlertUpdate:
+      type: object
+      required: [status]
+      properties:
+        status: { $ref: '#/components/schemas/AlertStatus' }
+
+    AlertList:
+      type: object
+      required: [items]
+      properties:
+        items: { type: array, items: { $ref: '#/components/schemas/Alert' } }
+
+    SignalKind:
+      type: string
+      enum: [tax_loss_harvesting, concentration, allocation_drift, idle_cash]
+
+    Signal:
+      type: object
+      required: [id, kind, count, label]
+      properties:
+        id: { type: string }
+        kind: { $ref: '#/components/schemas/SignalKind' }
+        count: { type: integer }
+        label: { type: string }
+        detail: { type: string, example: About $61,200 in unrealized losses }
+        dataAsOf: { type: string, format: date-time }
+
+    SignalList:
+      type: object
+      required: [items]
+      properties:
+        items: { type: array, items: { $ref: '#/components/schemas/Signal' } }
+
+    SignalItem:
+      type: object
+      required: [householdId, householdName, maskedAccountNumber, detail]
+      properties:
+        householdId: { type: string }
+        householdName: { type: string }
+        maskedAccountNumber: { type: string }
+        detail: { type: string, example: 24% of equities in one holding }
+        amount: { type: number, nullable: true }
+
+    SignalItemPage:
+      type: object
+      required: [items, page, size, totalItems]
+      properties:
+        items: { type: array, items: { $ref: '#/components/schemas/SignalItem' } }
+        page: { type: integer }
+        size: { type: integer }
+        totalItems: { type: integer }
+
+    FirmSummary:
+      type: object
+      required: [aum, advisors, households, openComplianceItems, dataAsOf]
+      properties:
+        aum: { $ref: '#/components/schemas/Summary/properties/aum' }
+        advisors: { type: integer }
+        households: { type: integer }
+        openComplianceItems: { type: integer }
+        overdueComplianceItems: { type: integer }
+        dataAsOf: { type: string, format: date-time }
+
+    AdvisorRow:
+      type: object
+      required: [id, name, households, aum]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        households: { type: integer }
+        aum: { type: number }
+        change30d: { type: number, description: Fraction }
+        meetingsThisWeek: { type: integer }
+        tasksOverdue: { type: integer }
+        openAlerts: { type: integer }
+        dataAsOf: { type: string, format: date-time }
+
+    AdvisorPage:
+      type: object
+      required: [items, page, size, totalItems]
+      properties:
+        items: { type: array, items: { $ref: '#/components/schemas/AdvisorRow' } }
+        page: { type: integer }
+        size: { type: integer }
+        totalItems: { type: integer }
+
+    ComplianceItem:
+      type: object
+      required: [id, title, category, status]
+      properties:
+        id: { type: string }
+        title: { type: string }
+        category: { type: string, enum: [communications_review, annual_review, disclosure, restriction, agreement] }
+        advisorId: { type: string }
+        advisorName: { type: string }
+        householdId: { type: string, nullable: true }
+        dueDate: { type: string, format: date, nullable: true }
+        status: { type: string, enum: [open, overdue, done] }
+
+    CompliancePage:
+      type: object
+      required: [items, page, size, totalItems]
+      properties:
+        items: { type: array, items: { $ref: '#/components/schemas/ComplianceItem' } }
+        page: { type: integer }
+        size: { type: integer }
+        totalItems: { type: integer }
+
+    ShareType:
+      type: string
+      enum: [plan, tax_explanation, report, proposal, message, document]
+
+    ShareCreate:
+      type: object
+      required: [type, sourceId, title]
+      properties:
+        type: { $ref: '#/components/schemas/ShareType' }
+        sourceId: { type: string, description: The advisor-side item being shared. }
+        title: { type: string }
+        message: { type: string, description: Optional note shown to the client. }
+
+    SharedItem:
+      type: object
+      required: [id, type, title, sharedAt, sharedBy]
+      properties:
+        id: { type: string }
+        type: { $ref: '#/components/schemas/ShareType' }
+        title: { type: string }
+        message: { type: string, nullable: true }
+        sharedAt: { type: string, format: date-time }
+        sharedBy: { type: string, description: Advisor who approved the share. }
+        contentUrl: { type: string, nullable: true }
+
+    SharedItemList:
+      type: object
+      required: [items]
+      properties:
+        items: { type: array, items: { $ref: '#/components/schemas/SharedItem' } }
+
+    ClientAccount:
+      type: object
+      description: Client-safe account view. No opening or maintenance status.
+      required: [maskedNumber, type, balance]
+      properties:
+        maskedNumber: { type: string, example: '****4821' }
+        type: { type: string }
+        balance: { type: number }
+        todayGainLoss: { type: number }
+        totalGainLoss: { type: number }
+
+    TrendPoint:
+      type: object
+      required: [month, value]
+      properties:
+        month: { type: string, example: '2026-09' }
+        value: { type: number }
+
+    ClientHousehold:
+      type: object
+      required: [id, name, aum, accounts, dataAsOf]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        aum: { type: number }
+        change30d: { type: number, description: Fraction }
+        trend:
+          type: array
+          description: >
+            Last 12 month-end values of the household, oldest first, for the portal's value chart.
+            Must come from custodial balance history. The dashboard draws no chart when this is
+            absent: it must never synthesise a performance line the firm cannot evidence.
+          items: { $ref: '#/components/schemas/TrendPoint' }
+        advisorName: { type: string }
+        accounts: { type: array, items: { $ref: '#/components/schemas/ClientAccount' } }
+        dataAsOf: { type: string, format: date-time }
+
+    Document:
+      type: object
+      required: [id, title, docType, date]
+      properties:
+        id: { type: string }
+        title: { type: string }
+        docType: { type: string }
+        maskedAccountNumber: { type: string, nullable: true }
+        date: { type: string, format: date }
+        source: { $ref: '#/components/schemas/Source' }
+
+    DocumentPage:
+      type: object
+      required: [items, page, size, totalItems]
+      properties:
+        items: { type: array, items: { $ref: '#/components/schemas/Document' } }
+        page: { type: integer }
+        size: { type: integer }
+        totalItems: { type: integer }
+
+    Fee:
+      type: object
+      required: [id, description, amount, status]
+      properties:
+        id: { type: string }
+        maskedAccountNumber: { type: string }
+        description: { type: string }
+        amount: { type: number }
+        periodStart: { type: string, format: date }
+        periodEnd: { type: string, format: date }
+        status: { type: string, enum: [scheduled, billed, paid, waived] }
+
+    FeeList:
+      type: object
+      required: [items, dataAsOf]
+      properties:
+        items: { type: array, items: { $ref: '#/components/schemas/Fee' } }
+        dataAsOf: { type: string, format: date-time }
+
+    Preferences:
+      type: object
+      description: Draft. Fields to be matched to the Green Meadows preferences endpoints once their shapes are known.
+      properties:
+        paperless: { type: boolean }
+        notificationChannels:
+          type: array
+          items: { type: string, enum: [email, sms, portal] }
+
+    MeetingRequestCreate:
+      type: object
+      required: [topic]
+      properties:
+        topic: { type: string }
+        preferredTimes: { type: array, items: { type: string, format: date-time } }
+        note: { type: string }
+
+    MeetingRequest:
+      type: object
+      required: [id, status, topic, createdAt]
+      properties:
+        id: { type: string }
+        status: { type: string, enum: [requested, confirmed, declined] }
+        topic: { type: string }
+        createdAt: { type: string, format: date-time }
