@@ -23,8 +23,10 @@ export function advLoadStrip() {
 
 export function advisorView() {
   $('view').innerHTML = `<dl class="strip" id="strip"></dl>
-    <nav class="subnav" id="advnav" role="tablist" aria-label="Advisor sections"></nav>
-    <div id="section"></div>`;
+    <div class="viewbody">
+      <div id="navrail"><nav class="subnav" id="advnav" aria-label="Advisor sections"></nav></div>
+      <div id="section"></div>
+    </div>`;
   advLoadStrip();
   const go = (k) => { advSection = k; subnav($('advnav'), ADV_SECTIONS, k, go); ADV_RENDER[k](); };
   go(advSection);
@@ -32,17 +34,10 @@ export function advisorView() {
 
 /* ---- Today ---- */
 export function advToday() {
-  $('section').innerHTML = `<div id="aiNote"></div><div class="grid">
+  $('section').innerHTML = `<div class="grid">
     <div class="col">${panel('w-meetings')}</div>
     <div class="col">${panel('w-alerts')}${panel('w-signals')}</div>
   </div>`;
-
-  // Said once, where nothing reloads over it: an advisor should know what is drafting for them.
-  api('GET', '/ai/status').then(st => {
-    const el = $('aiNote');
-    if (!el || st.live) return;
-    el.innerHTML = `<p class="hint" style="margin:0 0 14px">Drafting is offline. ${esc(st.reason || '')} Drafts are still produced, and each one says what made it.</p>`;
-  }).catch(() => {});
 
   load($('w-meetings'), "Today's meetings", () => api('GET', '/meetings'), (r) => {
     const list = r.items, nextIdx = list.findIndex(m => new Date(m.startsAt) > new Date());

@@ -101,11 +101,69 @@ export function bookPanel({ scope, canShare, id, title, size = 8 }) {
 }
 
 
-/* A section switcher inside a view. The role switcher above it stays the top level. */
+/* A section switcher inside a view. The role switcher above it stays the top level.
+   A rail on the left at full width; below 860px it collapses to a toggle that names the
+   section you are in, so the current position is still readable with the list closed. */
+
+/* On the smallest screens the nav belongs above the page title rather than below the summary:
+   on a phone you want to move before you read. CSS order cannot do this, because the nav and
+   the header sit in different containers, so the element itself is relocated between two mount
+   points. One listener, registered once. */
+const NARROW = typeof matchMedia === 'function' ? matchMedia('(max-width: 620px)') : null;
+
+function placeNav(el) {
+  const top = document.getElementById('navtop');
+  const rail = document.getElementById('navrail');
+  const target = NARROW && NARROW.matches ? top : rail;
+  if (target && el.parentElement !== target) target.appendChild(el);
+}
+
+if (NARROW) {
+  NARROW.addEventListener('change', () => {
+    document.querySelectorAll('.subnav').forEach(placeNav);
+  });
+}
 
 export function subnav(el, items, active, go) {
-  el.innerHTML = items.map(([k, label]) => `<button role="tab" data-sec="${esc(k)}" aria-selected="${k === active}">${esc(label)}</button>`).join('');
-  el.querySelectorAll('[data-sec]').forEach(b => b.onclick = () => go(b.dataset.sec));
+  // When the nav is relocated to #navtop it sits outside #view, so replacing the view does not
+  // remove it. Clear any nav that is not this one, or switching views stacks two hamburgers.
+  document.querySelectorAll('.subnav').forEach(n => { if (n !== el) n.remove(); });
+
+  const listId = el.id + '-list';
+  const current = (items.find(([k]) => k === active) || [])[1] || 'Sections';
+  el.innerHTML = `
+    <button class="subnav-toggle" aria-expanded="false" aria-controls="${esc(listId)}">
+      <span class="bars" aria-hidden="true"></span><span class="subnav-current">${esc(current)}</span>
+    </button>
+    <div class="subnav-list" id="${esc(listId)}" role="tablist" aria-orientation="vertical">
+      ${items.map(([k, label]) => `<button role="tab" data-sec="${esc(k)}" aria-selected="${k === active}">${esc(label)}</button>`).join('')}
+    </div>`;
+
+  placeNav(el);
+
+  const toggle = el.querySelector('.subnav-toggle');
+  const close = () => { el.classList.remove('open'); toggle.setAttribute('aria-expanded', 'false'); };
+  toggle.onclick = () => {
+    const open = el.classList.toggle('open');
+    toggle.setAttribute('aria-expanded', String(open));
+  };
+  el.querySelectorAll('[data-sec]').forEach(b => b.onclick = () => { close(); go(b.dataset.sec); });
+
+  // Escape closes it, and so does a click anywhere else: an open menu should not trap you.
+  el.onkeydown = (e) => { if (e.key === 'Escape' && el.classList.contains('open')) { close(); toggle.focus(); } };
+  // subnav() re-runs on every section change, so the outside-click handler is registered once
+  // per element and reads the element fresh. Adding one per call would leak a listener a click.
+  if (!el.dataset.outsideBound) {
+    el.dataset.outsideBound = '1';
+    document.addEventListener('click', (e) => {
+      if (!el.isConnected) return;
+      if (!el.contains(e.target)) {
+        el.classList.remove('open');
+        const t = el.querySelector('.subnav-toggle');
+        if (t) t.setAttribute('aria-expanded', 'false');
+      }
+    });
+  }
 }
 
 /* Target against current, per asset class. The drift threshold belongs to the household's

@@ -82,6 +82,11 @@ Breakpoints at **1180px**, **860px** and **620px**. A twelve-column grid is not 
 sit in a two-column flex grid that collapses. Wide content (tables, the calendar, the Kanban
 board) scrolls inside its own container so the page never scrolls sideways.
 
+The section navigation is a **sticky rail on the left**, beside the section it switches. Below
+860px it becomes a toggle that names the section you are in, so your position stays readable
+with the list closed. Below 620px that toggle moves **above the page title** — on a phone you
+want to move before you read. Escape, a tap outside, or choosing a section all close it.
+
 ### Accessibility floor
 
 Not negotiable, and already in place: visible keyboard focus, `prefers-reduced-motion`
@@ -146,7 +151,8 @@ what is missing is waiting on a data source or a compliance review rather than o
 Already styled and in use: panels, hairline tables with sortable headers, stat strips,
 sparklines, the meeting timeline, alert rows with severity stripes, badges and pills, tags,
 task rows, the Kanban board, the month calendar, allocation bars, usage meters, dialogs,
-toasts, skeleton loaders, sub-navigation, and the empty and error states.
+toasts, skeleton loaders, the section rail and its mobile toggle, and the empty and error
+states.
 
 ---
 

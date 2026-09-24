@@ -20,8 +20,10 @@ export function firmLoadStrip() {
 
 export function firmView() {
   $('view').innerHTML = `<dl class="strip" id="strip"></dl>
-    <nav class="subnav" id="firmnav" role="tablist" aria-label="Firm sections"></nav>
-    <div id="section"></div>`;
+    <div class="viewbody">
+      <div id="navrail"><nav class="subnav" id="firmnav" aria-label="Firm sections"></nav></div>
+      <div id="section"></div>
+    </div>`;
   firmLoadStrip();
   const go = (k) => { firmSection = k; subnav($('firmnav'), FIRM_SECTIONS, k, go); FIRM_RENDER[k](); };
   go(firmSection);
@@ -67,7 +69,10 @@ export function firmOverview() {
 export function firmBilling() {
   $('section').innerHTML = `<div class="grid"><div class="col">${panel('b-sub')}${panel('b-inv')}</div><div class="col">${panel('b-plan')}${panel('b-fees')}</div></div>`;
 
-  load($('b-sub'), 'Platform subscription', () => api('GET', '/firm/billing/subscription'), (s) =>
+  // Where the model status belongs: beside the AI usage meter a principal is already reading.
+  load($('b-sub'), 'Platform subscription',
+    () => Promise.all([api('GET', '/firm/billing/subscription'), api('GET', '/ai/status').catch(() => null)]),
+    ([s, ai]) =>
     head('Platform subscription', s.plan) + `
     <dl class="defs"><dt>Seats</dt><dd>${s.seats.used} of ${s.seats.purchased} in use</dd>
       <dt>Renews</dt><dd>${esc(fmtDate(s.renewalDate))}</dd>
@@ -76,7 +81,10 @@ export function firmBilling() {
     <h3>Usage this period</h3>
     <ul class="meters">${s.meters.map(m => { const p = Math.min(100, Math.round(m.used / m.included * 100)); return `
       <li><div class="meter-top"><span>${esc(m.label)}</span><span class="meta">${m.used.toLocaleString('en-US')} of ${m.included.toLocaleString('en-US')} ${esc(m.unit)}</span></div>
-      <div class="meter"><span style="width:${p}%" class="${p >= 90 ? 'hot' : ''}"></span></div></li>`; }).join('')}</ul>`);
+      <div class="meter"><span style="width:${p}%" class="${p >= 90 ? 'hot' : ''}"></span></div></li>`; }).join('')}</ul>
+    ${ai ? `<p class="hint">${ai.live
+      ? 'Drafting is live, on ' + esc(ai.model) + '.'
+      : 'Drafting is offline, so nothing here is consuming the AI allowance. ' + esc(ai.reason || '')}</p>` : ''}`);
 
   load($('b-inv'), 'Invoices', () => api('GET', '/firm/billing/invoices'), (r) =>
     head('Invoices', r.totalItems + ' on file') + `<ul class="rows">${r.items.map(i => `
