@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 'use strict';
 /*
- * Standalone mock server for the Advisor Platform API v0.2.
+ * Standalone mock server for the Advisor Platform API v0.3.
  * No dependencies; needs Node 18 or newer.
  *
  *   npm start              serves http://localhost:4010
@@ -59,7 +59,7 @@ function createServer(options = {}) {
     const traceId = req.headers['x-trace-id'] || 'mock-' + Math.random().toString(36).slice(2, 10);
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Headers', 'Authorization, Content-Type, x-trace-id, x-mock-persona, x-mock-delay, x-mock-fail');
-    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PATCH, OPTIONS');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PATCH, DELETE, OPTIONS');
     res.setHeader('x-trace-id', traceId);
     const log = (status) => { if (!quiet) console.log(`${new Date().toISOString()} ${req.method} ${url.pathname}${url.search} -> ${status} (${Date.now() - started} ms)`); };
     const done = (status) => { log(status); };
@@ -112,7 +112,7 @@ if (require.main === module) {
   const port = Number(process.env.PORT || 4010);
   createServer().listen(port, () => {
     const mock = createMock();
-    console.log(`Advisor Platform mock API v0.2 on http://localhost:${port}`);
+    console.log(`Advisor Platform mock API v0.3 on http://localhost:${port}`);
     console.log('  Dashboard:  http://localhost:' + port + '/');
     console.log('  API:        http://localhost:' + port + '/v1   (Authorization: Bearer <persona>)');
     console.log('  Spec:       http://localhost:' + port + '/openapi.yaml');

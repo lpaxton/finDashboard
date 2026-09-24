@@ -1,6 +1,6 @@
-# Advisor Platform mock server (API v0.2)
+# Advisor Platform mock server (API v0.3)
 
-A dependency-free mock of the draft Advisor Platform API for the firm, advisor and client-portal views. It implements all 26 operations in `openapi.yaml` on one consistent dataset, enforces roles, and serves the dashboard.
+A dependency-free mock of the draft Advisor Platform API for the firm, advisor and client-portal views. It implements all 50 operations in `openapi.yaml` on one consistent dataset, enforces roles, and serves the dashboard.
 
 Nothing here is the real backend. It exists so the dashboard can be built and demonstrated before the backend and the Green Meadows connection exist, and so developers have a running example of every shape in the contract.
 
@@ -18,7 +18,7 @@ Then open http://localhost:4010/ for the dashboard, already connected to this se
 npm test
 ```
 
-runs 17 tests, including one that reads `openapi.yaml` and checks that every listed operation is served, and one that checks the dashboard's embedded mock has not drifted from `src/mock-core.js`.
+runs 32 tests, including one that reads `openapi.yaml` and checks that every listed operation is served, and one that checks the dashboard's embedded mock has not drifted from `src/mock-core.js`.
 
 ## Signing in
 
@@ -44,7 +44,8 @@ A missing or unknown token returns 401. Set `MOCK_DEFAULT_PERSONA=dana` to allow
 ## What it does
 
 - **Roles are enforced.** A client asking for advisor data gets 403. An advisor asking for another advisor's household gets 404. Firm-wide data needs the principal role and `scope=firm`.
-- **The data is consistent.** 4 advisors, 28 households, $217.7M in total. Firm totals equal the sum of the advisors, and every signal count equals the number of items behind it.
+- **The data is consistent.** 4 advisors, 28 households, $217.7M in total. Firm totals equal the sum of the advisors, and every signal count equals the number of items behind it. Allocation drift matches the drift signal, the fee a client sees matches the advisor's fee schedule, and the compliance alert counts the actual draft emails.
+- **Approval gates are real, not decorative.** A draft message cannot be sent without being approved first; a transcript with no recorded consent is withheld rather than labelled; suggested next steps are drafts that create nothing until an advisor posts them to `/tasks`; onboarding will not convert until every step is done.
 - **State changes persist until reset.** Completing a task, dismissing an alert, sharing an item with a client or requesting a meeting all take effect. A client's meeting request becomes a task for their advisor.
 - **Client responses are client-safe.** The `/me` endpoints never return advisor-side fields such as briefs, status flags or contact history.
 - **Dates are relative to today.** Restart the server or call `POST /_mock/reset` to re-anchor them.
@@ -90,7 +91,7 @@ Leave `personaPicker` off so the demo buttons disappear. The dashboard never hol
 ```
 server.js              HTTP layer: routing, sign-in, CORS, failure injection, static files
 src/mock-core.js       the dataset and every operation; createMock() gives a fresh instance
-openapi.yaml           the contract (v0.2 draft)
+openapi.yaml           the contract (v0.3 draft)
 dashboard/index.html   the three-view dashboard
 tools/sync-mock.js     copies createMock() into the dashboard's embedded copy
 test/server.test.js    behaviour and contract tests

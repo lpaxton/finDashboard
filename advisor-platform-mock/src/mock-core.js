@@ -1,6 +1,6 @@
 'use strict';
 /*
- * Mock core for the Advisor Platform API v0.2 (see ../openapi.yaml).
+ * Mock core for the Advisor Platform API v0.3 (see ../openapi.yaml).
  * One consistent dataset behind every operation, with role checks.
  * createMock() returns a fresh, isolated instance, so resetting means creating a new one.
  * handle(method, path, query, body, personaKey) is synchronous and returns { status, data }.
@@ -90,11 +90,16 @@ function createMock() {
     ['m8', 'adv1', 'h7', 1, '15:00', 'Forms follow-up', 'ready', 30, 'Beneficiary form is incomplete.'],
     ['m9', 'adv2', 'h11', 0, '10:00', 'Portfolio check-in', 'ready', 45, 'Rebalance completed last week.'],
     ['m10', 'adv2', 'h12', 0, '14:00', 'Annual review', 'needs_prep', 60, 'Prior-year return not yet received.'],
-    ['m11', 'adv3', 'h19', 0, '09:00', 'Tax planning', 'ready', 45, 'Two harvesting candidates flagged.']
+    ['m11', 'adv3', 'h19', 0, '09:00', 'Tax planning', 'ready', 45, 'Two harvesting candidates flagged.'],
+    // A prospect meeting has no household yet: householdId stays null until they convert.
+    ['m12', 'adv1', null, 0, '15:00', 'Prospect introduction', 'ready', 45, 'Business sale proceeds in cash since March. Lead with the tax consequences, not the portfolio.'],
+    ['m13', 'adv1', 'h4', -9, '10:30', 'Quarterly check-in', 'ready', 45, 'Completed. Concentration discussed.'],
+    ['m14', 'adv1', 'h10', -5, '14:30', 'Portfolio check-in', 'ready', 30, 'Completed.']
   ].map(([id, advisorId, householdId, off, hm, type, prepStatus, durationMinutes, brief]) => {
     const [h, m] = hm.split(':').map(Number);
     return { id, advisorId, householdId, startsAt: dayISO(off, h, m), type, prepStatus, durationMinutes, brief };
   });
+  const hhName = (id) => (id ? hhById(id).name : null);
 
   // id, advisor, title, household, due offset, origin, status
   const TASKS = [
@@ -173,6 +178,137 @@ function createMock() {
   const MEETING_REQUESTS = [];
   let seq = 100;
 
+  /* ---- client engagement, growth and practice operations ---- */
+
+  // id, advisor, household, status, subject, channel, hours old, compliance flag, body
+  // Dana's three drafts are the three emails alert a2 counts: keep them in step.
+  const COMMS = [
+    ['cm1', 'adv1', 'h3', 'draft', 'Following up on your Roth conversion', 'email', 60, true,
+      'Thank you for the time this morning. As discussed, converting a portion of the traditional IRA before year end would let us use the lower bracket you are in this year. I have attached an illustration of three conversion amounts.'],
+    ['cm2', 'adv1', 'h1', 'draft', 'Reducing the technology position', 'email', 72, true,
+      'Your largest holding has grown to 24% of the equity sleeve, above the 20% limit in your policy statement. I would like to trim it back over two quarters to manage the capital gain.'],
+    ['cm3', 'adv1', 'h5', 'draft', 'Overdue for a conversation', 'email', 55, true,
+      'It has been a while since we last spoke and I would like to confirm your goals and beneficiary details are still current.'],
+    ['cm4', 'adv1', 'h2', 'approved', 'Your tax-loss harvesting summary', 'email', 20, false,
+      'Here is a summary of the losses we realised this quarter and what they save you at your marginal rate.'],
+    ['cm5', 'adv1', 'h8', 'sent', 'Thank you for your time', 'email', 50, false,
+      'Good to see you both. I will send the gifting analysis we discussed by the end of next week.'],
+    ['cm6', 'adv2', 'h13', 'draft', 'Margin call, action needed', 'email', 18, true,
+      'Your account has an open margin call past its due date. Please call me today so we can resolve it.'],
+    ['cm7', 'adv2', 'h15', 'draft', 'Documents needed for your account', 'email', 44, false,
+      'Two documents are outstanding before we can lift the restriction on your account.'],
+    ['cm8', 'adv3', 'h22', 'draft', 'Reconnecting', 'email', 30, false,
+      'It has been two months since we last spoke. Would a call in the next fortnight suit you?']
+  ].map(([id, advisorId, householdId, status, subject, channel, age, complianceReview, body]) => ({
+    id, advisorId, householdId, status, subject, channel, body, complianceReview,
+    tone: 'Warm and direct', source: 'platform', draftedBy: 'ai',
+    createdAt: new Date(Date.now() - age * 36e5).toISOString(),
+    approvedBy: status === 'draft' ? null : advName(advisorId),
+    approvedAt: status === 'draft' ? null : new Date(Date.now() - (age - 6) * 36e5).toISOString(),
+    sentAt: status === 'sent' ? new Date(Date.now() - (age - 8) * 36e5).toISOString() : null
+  }));
+
+  const PROSPECT_STAGES = ['lead', 'contacted', 'meeting_scheduled', 'proposal', 'onboarding', 'converted'];
+  // id, advisor, name, stage, estimated assets, source, days old, notes
+  const PROSPECTS = [
+    ['p1', 'adv1', 'Marcus DeLuca', 'meeting_scheduled', 2400000, 'referral', 12,
+      'Referred by the Lindqvists. Sold his engineering business in March; proceeds sitting in cash. Wants to understand the tax consequences before committing.'],
+    ['p2', 'adv1', 'Yusuf Rahman', 'lead', 1100000, 'website', 4, 'Enquiry through the site. No call yet.'],
+    ['p3', 'adv1', 'The Ashworth Family', 'contacted', 3600000, 'referral', 21, 'Introductory call done. Comparing us with two other firms.'],
+    ['p4', 'adv1', 'Nadia Constantin', 'proposal', 5200000, 'event', 34, 'Proposal sent after the estate planning seminar. Waiting on her accountant.'],
+    ['p5', 'adv1', 'Beatriz Okonjo', 'onboarding', 1800000, 'referral', 47, 'Agreement signed. Account opening under way.'],
+    ['p6', 'adv2', 'Halloran Trust', 'proposal', 4400000, 'referral', 26, 'Trustees reviewing the proposal at their next quarterly meeting.'],
+    ['p7', 'adv2', 'Devon Pryce', 'lead', 900000, 'website', 6, 'Downloaded the retirement guide.']
+  ].map(([id, advisorId, name, stage, estimatedAssets, source, days, intakeNotes]) => ({
+    id, advisorId, name, stage, estimatedAssets, source, intakeNotes,
+    createdAt: dayISO(-days, 9), updatedAt: dayISO(-Math.floor(days / 3), 9), meetingId: id === 'p1' ? 'm12' : null
+  }));
+  const prospectName = (meetingId) => PROSPECTS.find(p => p.meetingId === meetingId)?.name ?? null;
+
+  const ONB_STEPS = [
+    ['intake_form', 'Intake form'], ['risk_profile', 'Risk profile'], ['custodian_application', 'Custodian application'],
+    ['agreements', 'Advisory agreement'], ['funding', 'Funding'], ['compliance_review', 'Compliance review']
+  ];
+  // id, advisor, name, days since start, steps completed, per-step detail
+  const ONBOARDING = [
+    ['ob1', 'adv1', 'Renee and Iris Castellano', 18, 4, {
+      intake_form: 'Both forms complete. Joint goals: retire at 62, fund one grandchild college account.',
+      risk_profile: 'Score 54 of 100, balanced growth. Completed by both parties separately, scores within 6 points.',
+      custodian_application: 'Submitted to Green Meadows. Application in good order.',
+      agreements: 'Advisory agreement and fee schedule signed electronically by both parties.',
+      funding: 'Awaiting ACAT transfer from the prior custodian. Nothing received yet.',
+      compliance_review: null }],
+    ['ob2', 'adv1', 'The Ferraro Family', 6, 2, {
+      intake_form: 'Complete for both spouses. Trust documents still outstanding.',
+      risk_profile: 'Score 38 of 100, conservative. One party scored materially lower; reconciled in the review call.',
+      custodian_application: 'Drafted, not yet submitted. Waiting on the trust deed.',
+      agreements: null, funding: null, compliance_review: null }]
+  ].map(([id, advisorId, name, days, done, detail]) => ({
+    id, advisorId, name, startedAt: dayISO(-days, 9), convertedAt: null,
+    steps: ONB_STEPS.map(([sid, label], i) => ({
+      id: sid, label, status: i < done ? 'done' : detail[sid] ? 'open' : 'not_started',
+      detail: detail[sid] || null, completedAt: i < done ? dayISO(-days + i * 2, 11) : null }))
+  }));
+
+  const MIGRATIONS = [];
+
+  // household, model, target and current allocation. Max drift equals that household's drift signal.
+  const ALLOC_CLASSES = ['US equity', 'International equity', 'Fixed income', 'Cash', 'Alternatives'];
+  const ALLOCATIONS = {
+    h1: { modelId: 'mdl_growth', modelName: 'Growth, 70/30', target: [45, 20, 25, 5, 5], current: [52.2, 18, 21, 4.8, 4] },
+    h2: { modelId: 'mdl_balanced', modelName: 'Balanced, 60/40', target: [40, 20, 30, 5, 5], current: [45.4, 18.6, 28, 4, 4] },
+    h3: { modelId: 'mdl_growth', modelName: 'Growth, 70/30', target: [50, 15, 25, 7, 3], current: [56.1, 13.9, 22, 5, 3] }
+  };
+
+  // meeting, kind, author, consent, content
+  const RECORDS = [
+    ['m5', 'notes', 'Dana Whitfield', null,
+      'Annual review. Portfolio up 11% over twelve months. Asked about gifting to the grandchildren before the exemption changes; wants numbers on $50k versus $100k. Mentioned the son is buying a first home next spring and may ask for help.'],
+    ['m6', 'transcript', 'Zocks (meeting capture)', { obtained: true, obtainedAt: dayISO(-1, 13, 58), method: 'verbal, recorded' },
+      'Dana: Before we start, are you happy for me to record this for my notes?\nClient: Yes, that is fine.\nDana: Thank you. So the cash position is the main thing I wanted to raise...\nClient: We have been sitting on it since the house sale fell through.\nDana: That is about 700,000 earning next to nothing. I would like to put most of it to work over three tranches.'],
+    ['m13', 'notes', 'Dana Whitfield', null,
+      'Quarterly check-in. Discussed the concentration in the technology holding. Client reluctant to sell because of the gain; agreed to revisit with a multi-year trim plan.'],
+    ['m14', 'transcript', 'Zocks (meeting capture)', { obtained: false, obtainedAt: null, method: null },
+      'Capture started before consent was confirmed. Transcript withheld pending client consent.']
+  ].map(([meetingId, kind, author, consent, content]) => ({ meetingId, kind, author, consent, content, source: 'platform' }));
+
+  const FEE_TIERS = [
+    { minAssets: 0, maxAssets: 2000000, annualRatePct: 1 },
+    { minAssets: 2000000, maxAssets: 5000000, annualRatePct: 0.85 },
+    { minAssets: 5000000, maxAssets: 10000000, annualRatePct: 0.7 },
+    { minAssets: 10000000, maxAssets: null, annualRatePct: 0.55 }
+  ];
+  const feeRate = (assets) => FEE_TIERS.find(t => assets >= t.minAssets && (t.maxAssets === null || assets < t.maxAssets)).annualRatePct;
+  const quarterlyFee = (assets) => Math.round(assets * (feeRate(assets) / 100) / 4);
+
+  const SUBSCRIPTION = {
+    plan: 'Advisor Desk, firm plan', seats: { purchased: 6, used: ADVISORS.length },
+    renewalDate: dateOnly(64), billingContact: 'Dana Whitfield',
+    meters: [
+      { id: 'ai_drafts', label: 'AI drafts generated', used: 1840, included: 3000, unit: 'drafts' },
+      { id: 'transcription', label: 'Meeting transcription', used: 41, included: 60, unit: 'hours' },
+      { id: 'documents', label: 'Documents processed', used: 312, included: 500, unit: 'documents' }
+    ],
+    // Masked, as everywhere else. A real backend must never hold the full number.
+    paymentMethod: { brand: 'Visa', maskedNumber: '****4242', expiryMonth: 11, expiryYear: 2028 }
+  };
+  // id, period offset (months back), amount, status
+  const INVOICES = [[-0, 4380, 'due'], [-1, 4380, 'paid'], [-2, 4380, 'paid'], [-3, 3920, 'paid']]
+    .map(([back, amount, status], i) => {
+      const d = new Date(T0.getFullYear(), T0.getMonth() + back, 1);
+      const month = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
+      return { id: 'inv' + (i + 1), number: 'MW-' + month.replace('-', ''), periodMonth: month, amount, status,
+        issuedDate: month + '-01', dueDate: month + '-28',
+        lines: [
+          { description: 'Seats, ' + SUBSCRIPTION.seats.used + ' advisors', quantity: SUBSCRIPTION.seats.used, unitAmount: 890, amount: SUBSCRIPTION.seats.used * 890 },
+          { description: 'Meeting transcription over plan', quantity: i === 3 ? 0 : 2, unitAmount: 110, amount: i === 3 ? 0 : 220 },
+          { description: 'Document processing over plan', quantity: i === 3 ? 4 : 6, unitAmount: 100, amount: i === 3 ? 400 : 600 }
+        ] };
+    });
+
+  const BRANDING = { firmName: FIRM.name, advisorDisplayName: 'Dana Whitfield, CFP', markLetter: 'W',
+    accentColor: '#0E5A57', updatedAt: dayISO(-40, 14), updatedBy: 'Dana Whitfield' };
+
   /* ---- helpers ---- */
   const ok = (d) => ({ status: 200, data: d });
   const created = (d) => ({ status: 201, data: d });
@@ -226,6 +362,28 @@ function createMock() {
   }
   const alertOut = ({ advisorId, ...a }) => ({ ...a, householdName: a.householdId ? hhById(a.householdId).name : null });
 
+  // List shapes leave the heavy field out; the by-id operation adds it back.
+  const commRow = ({ advisorId, body, ...c }) => ({ ...c, householdName: hhName(c.householdId), advisorName: advName(advisorId) });
+  const prospectRow = ({ advisorId, intakeNotes, ...p }) => ({ ...p });
+  const onbRow = ({ advisorId, ...o }) => ({ ...o,
+    stepsComplete: o.steps.filter(s => s.status === 'done').length, stepsTotal: o.steps.length,
+    readyToConvert: o.steps.every(s => s.status === 'done') && !o.convertedAt });
+
+  // Illustrative AI output. Drafts only: an advisor turns these into tasks, nothing does it for them.
+  const NEXT_STEPS = {
+    m5: [
+      { title: 'Model gifting at $50k and $100k before the exemption changes', dueDate: dateOnly(5), householdId: 'h8' },
+      { title: 'Note the son\'s spring house purchase in the file', dueDate: dateOnly(2), householdId: 'h8' }
+    ],
+    m6: [
+      { title: 'Draft a three-tranche plan for the idle cash', dueDate: dateOnly(3), householdId: 'h9' },
+      { title: 'Confirm the house sale is not proceeding', dueDate: dateOnly(1), householdId: 'h9' }
+    ],
+    m13: [
+      { title: 'Build a multi-year trim plan for the technology holding', dueDate: dateOnly(6), householdId: 'h4' }
+    ]
+  };
+
   /* ---- routes ---- */
   const routes = [
     ['GET', /^\/session$/, () => { const u = user(); return ok({ id: u.id, name: u.name, role: u.role, roles: u.roles, views: u.views, firm: FIRM }); }],
@@ -267,14 +425,14 @@ function createMock() {
       const from = q.from || dateOnly(0), to = q.to || from;
       const list = meetingsFor(user().advisorId).filter(x => { const d = new Date(x.startsAt); const ds = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); return ds >= from && ds <= to; })
         .sort((a, b) => a.startsAt.localeCompare(b.startsAt))
-        .map(({ advisorId, brief, ...x }) => ({ ...x, householdName: hhById(x.householdId).name, brief: null }));
+        .map(({ advisorId, brief, ...x }) => ({ ...x, householdName: hhName(x.householdId), prospectName: prospectName(x.id), brief: null }));
       return ok({ items: list });
     }],
     ['GET', /^\/meetings\/([^/]+)$/, (m) => {
       if (!isRole('advisor')) return forbid();
       const x = MEETINGS.find(y => y.id === m[1] && y.advisorId === user().advisorId); if (!x) return notFound('Meeting');
       const { advisorId, ...out } = x;
-      return ok({ ...out, householdName: hhById(x.householdId).name, briefSources: ['greenmeadows', 'crm', 'calendar'] });
+      return ok({ ...out, householdName: hhName(x.householdId), prospectName: prospectName(x.id), briefSources: ['greenmeadows', 'crm', 'calendar'] });
     }],
 
     ['GET', /^\/tasks$/, (m, q) => {
@@ -335,6 +493,188 @@ function createMock() {
       return ok({ items: rows.slice(page * size, page * size + size), page, size, totalItems: rows.length });
     }],
 
+    /* ---- communications (COMM-01 to COMM-03). Drafts are AI output; an advisor must approve
+       before anything leaves the firm (X-03), and approval is recorded. ---- */
+    ['GET', /^\/communications$/, (m, q) => {
+      let list;
+      if (q.scope === 'firm') { if (!isRole('principal')) return forbid(); list = COMMS; }
+      else { if (!isRole('advisor')) return forbid(); list = COMMS.filter(c => c.advisorId === user().advisorId); }
+      if (q.status) list = list.filter(c => c.status === q.status);
+      if (q.complianceReview === 'true') list = list.filter(c => c.complianceReview);
+      return ok(paged(list.map(commRow), q, 'createdAt,desc'));
+    }],
+    ['GET', /^\/communications\/([^/]+)$/, (m) => {
+      if (!isRole('advisor') && !isRole('principal')) return forbid();
+      const c = COMMS.find(x => x.id === m[1]); if (!c) return notFound('Message');
+      if (!isRole('principal') && c.advisorId !== user().advisorId) return notFound('Message');
+      return ok({ ...commRow(c), body: c.body });
+    }],
+    ['PATCH', /^\/communications\/([^/]+)$/, (m, q, b) => {
+      if (!isRole('advisor')) return forbid();
+      const c = COMMS.find(x => x.id === m[1] && x.advisorId === user().advisorId); if (!c) return notFound('Message');
+      if (!b || !['approved', 'sent', 'draft'].includes(b.status)) return fail(400, 'bad_request', 'Status must be draft, approved or sent.');
+      if (b.status === 'sent' && c.status === 'draft') return fail(409, 'conflict', 'A draft must be approved before it is sent.');
+      c.status = b.status;
+      if (b.status === 'draft') { c.approvedBy = null; c.approvedAt = null; c.sentAt = null; }
+      else { c.approvedBy = user().name; c.approvedAt = c.approvedAt || NOW(); if (b.status === 'sent') c.sentAt = NOW(); }
+      return ok({ ...commRow(c), body: c.body });
+    }],
+
+    /* ---- prospects (GP-01, GP-02) ---- */
+    ['GET', /^\/prospects$/, (m, q) => {
+      if (!isRole('advisor')) return forbid();
+      let list = PROSPECTS.filter(p => p.advisorId === user().advisorId);
+      if (q.stage) list = list.filter(p => p.stage === q.stage);
+      return ok({ stages: PROSPECT_STAGES, ...paged(list.map(prospectRow), q, 'updatedAt,desc') });
+    }],
+    ['GET', /^\/prospects\/([^/]+)$/, (m) => {
+      if (!isRole('advisor')) return forbid();
+      const p = PROSPECTS.find(x => x.id === m[1] && x.advisorId === user().advisorId); if (!p) return notFound('Prospect');
+      return ok({ ...prospectRow(p), intakeNotes: p.intakeNotes });
+    }],
+    ['PATCH', /^\/prospects\/([^/]+)$/, (m, q, b) => {
+      if (!isRole('advisor')) return forbid();
+      const p = PROSPECTS.find(x => x.id === m[1] && x.advisorId === user().advisorId); if (!p) return notFound('Prospect');
+      if (!b || !PROSPECT_STAGES.includes(b.stage)) return fail(400, 'bad_request', 'Stage must be one of: ' + PROSPECT_STAGES.join(', ') + '.');
+      p.stage = b.stage; p.updatedAt = NOW();
+      return ok({ ...prospectRow(p), intakeNotes: p.intakeNotes });
+    }],
+
+    /* ---- onboarding (AX-01 to AX-04) ---- */
+    ['GET', /^\/onboarding$/, () => {
+      if (!isRole('advisor')) return forbid();
+      return ok({ items: ONBOARDING.filter(o => o.advisorId === user().advisorId).map(onbRow) });
+    }],
+    ['GET', /^\/onboarding\/([^/]+)$/, (m) => {
+      if (!isRole('advisor')) return forbid();
+      const o = ONBOARDING.find(x => x.id === m[1] && x.advisorId === user().advisorId); if (!o) return notFound('Onboarding client');
+      return ok(onbRow(o));
+    }],
+    ['PATCH', /^\/onboarding\/([^/]+)\/steps\/([^/]+)$/, (m, q, b) => {
+      if (!isRole('advisor')) return forbid();
+      const o = ONBOARDING.find(x => x.id === m[1] && x.advisorId === user().advisorId); if (!o) return notFound('Onboarding client');
+      const s = o.steps.find(x => x.id === m[2]); if (!s) return notFound('Step');
+      if (!b || !['done', 'open', 'not_started'].includes(b.status)) return fail(400, 'bad_request', 'Status must be done, open or not_started.');
+      s.status = b.status; s.completedAt = b.status === 'done' ? NOW() : null;
+      return ok(onbRow(o));
+    }],
+    ['POST', /^\/onboarding\/([^/]+)\/convert$/, (m) => {
+      if (!isRole('advisor')) return forbid();
+      const o = ONBOARDING.find(x => x.id === m[1] && x.advisorId === user().advisorId); if (!o) return notFound('Onboarding client');
+      if (o.convertedAt) return fail(409, 'conflict', 'This client has already been converted.');
+      const outstanding = o.steps.filter(s => s.status !== 'done');
+      if (outstanding.length) return fail(409, 'conflict', 'These steps are not complete: ' + outstanding.map(s => s.label).join(', ') + '.');
+      o.convertedAt = NOW();
+      const h = { id: 'h' + (++seq), name: o.name, advisorId: o.advisorId, aum: 0, change30d: 0, status: 'onboarding',
+        accounts: [], lastContactAt: NOW() };
+      HH.push(h);
+      return created({ onboardingId: o.id, householdId: h.id, name: h.name, convertedAt: o.convertedAt });
+    }],
+
+    /* ---- book migration. Not in the 75 requirements: an implementation concern that has to
+       exist before a firm can move its book onto the platform. Real imports are asynchronous. ---- */
+    ['GET', /^\/migrations$/, () => {
+      if (!isRole('advisor')) return forbid();
+      return ok({ items: MIGRATIONS.filter(x => x.advisorId === user().advisorId) });
+    }],
+    ['POST', /^\/migrations$/, (m, q, b) => {
+      if (!isRole('advisor')) return forbid();
+      if (!b || !b.source || !Array.isArray(b.rows)) return fail(400, 'bad_request', 'Source and rows are required.');
+      if (!b.rows.length) return fail(400, 'bad_request', 'At least one row is required.');
+      const valid = [], invalid = [];
+      b.rows.forEach((r, i) => {
+        const problems = [];
+        if (!r || !r.name) problems.push('name is missing');
+        if (r && r.aum != null && !(typeof r.aum === 'number' && r.aum >= 0)) problems.push('aum is not a positive number');
+        (problems.length ? invalid : valid).push(problems.length ? { row: i, problems } : r);
+      });
+      const created_ = valid.map(r => {
+        const h = { id: 'h' + (++seq), name: r.name, advisorId: user().advisorId, aum: Math.round(r.aum || 0), change30d: 0,
+          status: 'needs_review', accounts: [], lastContactAt: null };
+        HH.push(h); return h.id;
+      });
+      const mig = { id: 'mig' + (++seq), advisorId: user().advisorId, source: b.source, status: 'imported',
+        counts: { read: b.rows.length, valid: valid.length, invalid: invalid.length, imported: created_.length },
+        invalidRows: invalid, createdHouseholdIds: created_, createdAt: NOW() };
+      MIGRATIONS.unshift(mig);
+      return created(mig);
+    }],
+
+    /* ---- calendar: meetings are created, moved and cancelled here (MEET-03) ---- */
+    ['POST', /^\/meetings$/, (m, q, b) => {
+      if (!isRole('advisor')) return forbid();
+      if (!b || !b.startsAt || !b.type) return fail(400, 'bad_request', 'startsAt and type are required.');
+      if (Number.isNaN(Date.parse(b.startsAt))) return fail(400, 'bad_request', 'startsAt must be an ISO 8601 date-time.');
+      if (b.householdId && !(hhById(b.householdId) || {}).id) return notFound('Household');
+      if (b.householdId && hhById(b.householdId).advisorId !== user().advisorId) return notFound('Household');
+      const x = { id: 'm' + (++seq), advisorId: user().advisorId, householdId: b.householdId || null,
+        startsAt: new Date(b.startsAt).toISOString(), type: b.type, prepStatus: 'needs_prep',
+        durationMinutes: b.durationMinutes || 30, brief: b.brief || null };
+      MEETINGS.push(x);
+      const { advisorId, ...out } = x;
+      return created({ ...out, householdName: hhName(x.householdId), prospectName: prospectName(x.id) });
+    }],
+    ['PATCH', /^\/meetings\/([^/]+)$/, (m, q, b) => {
+      if (!isRole('advisor')) return forbid();
+      const x = MEETINGS.find(y => y.id === m[1] && y.advisorId === user().advisorId); if (!x) return notFound('Meeting');
+      if (b && b.startsAt && Number.isNaN(Date.parse(b.startsAt))) return fail(400, 'bad_request', 'startsAt must be an ISO 8601 date-time.');
+      for (const k of ['startsAt', 'type', 'durationMinutes', 'prepStatus', 'brief']) if (b && k in b) x[k] = b[k];
+      if (b && b.startsAt) x.startsAt = new Date(b.startsAt).toISOString();
+      const { advisorId, ...out } = x;
+      return ok({ ...out, householdName: hhName(x.householdId), prospectName: prospectName(x.id) });
+    }],
+    ['DELETE', /^\/meetings\/([^/]+)$/, (m) => {
+      if (!isRole('advisor')) return forbid();
+      const i = MEETINGS.findIndex(y => y.id === m[1] && y.advisorId === user().advisorId); if (i < 0) return notFound('Meeting');
+      MEETINGS.splice(i, 1);
+      return { status: 204, data: undefined };
+    }],
+
+    /* ---- meeting records (MEET-04 to MEET-07). A transcript without recorded consent is
+       withheld: consent is a precondition for disclosure, not a label on it. ---- */
+    ['GET', /^\/meetings\/([^/]+)\/record$/, (m) => {
+      if (!isRole('advisor')) return forbid();
+      const x = MEETINGS.find(y => y.id === m[1] && y.advisorId === user().advisorId); if (!x) return notFound('Meeting');
+      const r = RECORDS.find(y => y.meetingId === x.id); if (!r) return notFound('Record');
+      const withheld = r.kind === 'transcript' && !(r.consent && r.consent.obtained);
+      return ok({ meetingId: r.meetingId, kind: r.kind, author: r.author, source: r.source, consent: r.consent,
+        capturedAt: x.startsAt, withheld, content: withheld ? null : r.content,
+        withheldReason: withheld ? 'Recording consent is not on file for this meeting.' : null });
+    }],
+    ['POST', /^\/meetings\/([^/]+)\/record\/next-steps$/, (m) => {
+      if (!isRole('advisor')) return forbid();
+      const x = MEETINGS.find(y => y.id === m[1] && y.advisorId === user().advisorId); if (!x) return notFound('Meeting');
+      const r = RECORDS.find(y => y.meetingId === x.id); if (!r) return notFound('Record');
+      if (r.kind === 'transcript' && !(r.consent && r.consent.obtained)) return fail(409, 'conflict', 'Recording consent is not on file for this meeting.');
+      // Drafts only. Nothing becomes a task until the advisor posts it to /tasks (X-03).
+      return ok({ meetingId: x.id, generatedAt: NOW(), accepted: false, model: 'mock-suggestion-v0',
+        items: NEXT_STEPS[x.id] || [{ title: 'Write up ' + (hhName(x.householdId) || 'the meeting') + ' and file the notes', dueDate: dateOnly(1), householdId: x.householdId }] });
+    }],
+
+    /* ---- allocation against the household's model (PM-02, PM-03) ---- */
+    ['GET', /^\/households\/([^/]+)\/allocation$/, (m) => {
+      if (!isRole('advisor') && !isRole('principal')) return forbid();
+      const h = hhById(m[1]); if (!h) return notFound('Household');
+      if (!isRole('principal') && h.advisorId !== user().advisorId) return notFound('Household');
+      const a = ALLOCATIONS[h.id];
+      if (!a) return ok({ householdId: h.id, householdName: h.name, model: null, lines: [], maxDriftPoints: null, dataAsOf: NOW() });
+      const lines = ALLOC_CLASSES.map((assetClass, i) => ({ assetClass, targetPct: a.target[i], currentPct: a.current[i],
+        driftPct: +(a.current[i] - a.target[i]).toFixed(1) }));
+      return ok({ householdId: h.id, householdName: h.name, model: { id: a.modelId, name: a.modelName },
+        lines, maxDriftPoints: Math.max(...lines.map(l => Math.abs(l.driftPct))), source: 'greenmeadows', dataAsOf: NOW() });
+    }],
+
+    /* ---- what the firm charges its clients (AX-10, AX-11) ---- */
+    ['GET', /^\/billing\/fees$/, (m, q) => {
+      if (!isRole('advisor')) return forbid();
+      const hs = myHH().filter(h => h.aum > 0);
+      const rows = hs.map(h => ({ householdId: h.id, householdName: h.name, billableAssets: h.aum,
+        annualRatePct: feeRate(h.aum), quarterlyFee: quarterlyFee(h.aum) }));
+      return ok({ schedule: FEE_TIERS, nextRunDate: dateOnly(7), currency: 'USD',
+        totalQuarterlyFees: rows.reduce((a, r) => a + r.quarterlyFee, 0), dataAsOf: NOW(),
+        ...paged(rows, q, 'billableAssets,desc') });
+    }],
+
     ['GET', /^\/firm\/summary$/, () => {
       if (!isRole('principal')) return forbid();
       const live = COMPLIANCE.filter(c => c.status !== 'done');
@@ -349,6 +689,35 @@ function createMock() {
       if (q.status) list = list.filter(c => c.status === q.status);
       if (q.advisorId) list = list.filter(c => c.advisorId === q.advisorId);
       return ok(paged(list, q, 'dueDate,asc'));
+    }],
+
+    /* ---- what the firm pays for the platform (PO-10). Principal only: an advisor has no
+       business seeing the firm's payment method or invoices. ---- */
+    ['GET', /^\/firm\/billing\/subscription$/, () => {
+      if (!isRole('principal')) return forbid();
+      const current = INVOICES[0];
+      return ok({ ...SUBSCRIPTION, currentInvoice: { id: current.id, number: current.number, amount: current.amount, dueDate: current.dueDate, status: current.status }, dataAsOf: NOW() });
+    }],
+    ['GET', /^\/firm\/billing\/invoices$/, (m, q) => {
+      if (!isRole('principal')) return forbid();
+      return ok(paged(INVOICES.map(({ lines, ...i }) => i), q, 'issuedDate,desc'));
+    }],
+    ['GET', /^\/firm\/billing\/invoices\/([^/]+)$/, (m) => {
+      if (!isRole('principal')) return forbid();
+      const i = INVOICES.find(x => x.id === m[1]); if (!i) return notFound('Invoice');
+      return ok(i);
+    }],
+
+    /* ---- branding (GP-07, GP-10). Readable by anyone signed in, because the client portal is
+       branded too; only a principal may change it. It holds no client data. ---- */
+    ['GET', /^\/firm\/branding$/, () => ok({ ...BRANDING, firmId: FIRM.id })],
+    ['PATCH', /^\/firm\/branding$/, (m, q, b) => {
+      if (!isRole('principal')) return forbid();
+      if (b && 'accentColor' in b && !/^#[0-9a-fA-F]{6}$/.test(b.accentColor)) return fail(400, 'bad_request', 'accentColor must be a six-digit hex colour, for example #0E5A57.');
+      if (b && 'markLetter' in b && String(b.markLetter).length !== 1) return fail(400, 'bad_request', 'markLetter must be a single character.');
+      for (const k of ['firmName', 'advisorDisplayName', 'markLetter', 'accentColor']) if (b && k in b) BRANDING[k] = b[k];
+      BRANDING.updatedAt = NOW(); BRANDING.updatedBy = user().name;
+      return ok({ ...BRANDING, firmId: FIRM.id });
     }],
 
     ['GET', /^\/me\/household$/, () => {
@@ -372,7 +741,8 @@ function createMock() {
     }],
     ['GET', /^\/me\/fees$/, () => {
       if (!isRole('client')) return forbid();
-      const a = hhById(user().householdId).accounts[0], amt = Math.round(a.balance * 0.0025);
+      // Billed off the same schedule the advisor sees at /billing/fees, so the two agree.
+      const h = hhById(user().householdId), a = h.accounts[0], amt = quarterlyFee(h.aum);
       const q = (o) => ({ periodStart: dateOnly(o), periodEnd: dateOnly(o + 89) });
       return ok({ dataAsOf: NOW(), items: [
         { id: 'f1', maskedAccountNumber: a.maskedNumber, description: 'Advisory fee, prior quarter', amount: amt, ...q(-180), status: 'paid' },

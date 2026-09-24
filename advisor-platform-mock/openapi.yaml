@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Advisor Platform API (dashboard domains)
-  version: 0.2.0-draft
+  version: 0.3.0-draft
   description: |
     Draft contract for the advisor dashboard. Not built yet: this spec is the design.
     The backend service aggregates Green Meadows (custodial data) and other sources
@@ -41,6 +41,11 @@ tags:
   - name: Portfolio signals
   - name: Firm
   - name: Sharing
+  - name: Communications
+  - name: Prospects
+  - name: Onboarding
+  - name: Migrations
+  - name: Billing
   - name: Client portal
 
 paths:
@@ -113,6 +118,18 @@ paths:
       responses:
         '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/MeetingList' } } } }
         '400': { $ref: '#/components/responses/Error' }
+    post:
+      tags: [Meetings]
+      operationId: createMeeting
+      summary: Put a meeting in the calendar
+      description: "Writes to the advisor's calendar. Omit householdId for a prospect meeting. Requirement: MEET-03."
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/MeetingCreate' } } }
+      responses:
+        '201': { description: Created, content: { application/json: { schema: { $ref: '#/components/schemas/Meeting' } } } }
+        '400': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
 
   /meetings/{meetingId}:
     get:
@@ -125,6 +142,62 @@ paths:
       responses:
         '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Meeting' } } } }
         '404': { $ref: '#/components/responses/Error' }
+    patch:
+      tags: [Meetings]
+      operationId: updateMeeting
+      summary: Move or amend a meeting
+      description: "Requirement: MEET-03."
+      parameters:
+        - { $ref: '#/components/parameters/meetingId' }
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/MeetingUpdate' } } }
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Meeting' } } } }
+        '400': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+    delete:
+      tags: [Meetings]
+      operationId: cancelMeeting
+      summary: Cancel a meeting
+      description: "Removes it from the calendar. Requirement: MEET-03."
+      parameters:
+        - { $ref: '#/components/parameters/meetingId' }
+      responses:
+        '204': { description: Cancelled }
+        '404': { $ref: '#/components/responses/Error' }
+
+  /meetings/{meetingId}/record:
+    get:
+      tags: [Meetings]
+      operationId: getMeetingRecord
+      summary: Notes or transcript from a past meeting
+      description: >
+        What was captured in the meeting. A transcript is returned only when recording consent is
+        on file: without it the response carries withheld=true and no content. Consent is a
+        precondition for disclosure, not a label on it.
+        Requirement: MEET-04, MEET-05, MEET-06.
+      parameters:
+        - { $ref: '#/components/parameters/meetingId' }
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/MeetingRecord' } } } }
+        '404': { $ref: '#/components/responses/Error' }
+
+  /meetings/{meetingId}/record/next-steps:
+    post:
+      tags: [Meetings]
+      operationId: suggestNextSteps
+      summary: Draft follow-up actions from a meeting record
+      description: >
+        Returns suggested actions as drafts. Nothing is created: the advisor turns a suggestion
+        into a task by posting it to /tasks. Refused with 409 when the record is a transcript
+        with no consent on file. Requirement: MEET-07, PL-02, X-03.
+      parameters:
+        - { $ref: '#/components/parameters/meetingId' }
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/NextStepDrafts' } } } }
+        '404': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
 
   /tasks:
     get:
@@ -385,6 +458,262 @@ paths:
         '201': { description: Created, content: { application/json: { schema: { $ref: '#/components/schemas/MeetingRequest' } } } }
         '400': { $ref: '#/components/responses/Error' }
 
+  /communications:
+    get:
+      tags: [Communications]
+      operationId: listCommunications
+      summary: Client messages, drafted and sent
+      description: >
+        AI-drafted client messages and their approval state. scope=firm gives a principal the
+        review queue across every advisor. Bodies are omitted here; fetch one message for its text.
+        Requirement: COMM-01, COMM-02, COMM-03.
+      parameters:
+        - { $ref: '#/components/parameters/scope' }
+        - { name: status, in: query, schema: { $ref: '#/components/schemas/CommunicationStatus' } }
+        - { name: complianceReview, in: query, schema: { type: boolean }, description: Only messages flagged for compliance review. }
+        - { $ref: '#/components/parameters/page' }
+        - { $ref: '#/components/parameters/size' }
+        - { $ref: '#/components/parameters/sort' }
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/CommunicationPage' } } } }
+        '403': { $ref: '#/components/responses/Error' }
+
+  /communications/{communicationId}:
+    get:
+      tags: [Communications]
+      operationId: getCommunication
+      summary: One message with its full text
+      parameters:
+        - { $ref: '#/components/parameters/communicationId' }
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Communication' } } } }
+        '404': { $ref: '#/components/responses/Error' }
+    patch:
+      tags: [Communications]
+      operationId: approveCommunication
+      summary: Approve, send or return a message to draft
+      description: >
+        The human-in-the-loop gate on anything that leaves the firm. A draft must be approved
+        before it can be sent; sending an unapproved draft is refused with 409. The approver and
+        the time are recorded. Requirement: COMM-01, X-03, X-05.
+      parameters:
+        - { $ref: '#/components/parameters/communicationId' }
+      requestBody:
+        required: true
+        content: { application/json: { schema: { type: object, required: [status], properties: { status: { $ref: '#/components/schemas/CommunicationStatus' } } } } }
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Communication' } } } }
+        '400': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
+
+  /prospects:
+    get:
+      tags: [Prospects]
+      operationId: listProspects
+      summary: The prospect pipeline
+      description: "Stages are returned with the list so the board can render them in order. Requirement: GP-01, GP-02."
+      parameters:
+        - { name: stage, in: query, schema: { $ref: '#/components/schemas/ProspectStage' } }
+        - { $ref: '#/components/parameters/page' }
+        - { $ref: '#/components/parameters/size' }
+        - { $ref: '#/components/parameters/sort' }
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/ProspectPage' } } } }
+        '403': { $ref: '#/components/responses/Error' }
+
+  /prospects/{prospectId}:
+    get:
+      tags: [Prospects]
+      operationId: getProspect
+      summary: One prospect with intake notes
+      parameters:
+        - { $ref: '#/components/parameters/prospectId' }
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Prospect' } } } }
+        '404': { $ref: '#/components/responses/Error' }
+    patch:
+      tags: [Prospects]
+      operationId: moveProspect
+      summary: Move a prospect to another stage
+      parameters:
+        - { $ref: '#/components/parameters/prospectId' }
+      requestBody:
+        required: true
+        content: { application/json: { schema: { type: object, required: [stage], properties: { stage: { $ref: '#/components/schemas/ProspectStage' } } } } }
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Prospect' } } } }
+        '400': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+
+  /onboarding:
+    get:
+      tags: [Onboarding]
+      operationId: listOnboarding
+      summary: Clients part-way through onboarding
+      description: "Requirement: AX-01, AX-02, AX-04."
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/OnboardingList' } } } }
+        '403': { $ref: '#/components/responses/Error' }
+
+  /onboarding/{onboardingId}:
+    get:
+      tags: [Onboarding]
+      operationId: getOnboarding
+      summary: One onboarding client and every step
+      description: "Step detail covers intake answers, risk score, custodian application, agreements and funding. Requirement: AX-01 to AX-04."
+      parameters:
+        - { $ref: '#/components/parameters/onboardingId' }
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Onboarding' } } } }
+        '404': { $ref: '#/components/responses/Error' }
+
+  /onboarding/{onboardingId}/steps/{stepId}:
+    patch:
+      tags: [Onboarding]
+      operationId: updateOnboardingStep
+      summary: Mark an onboarding step complete or open
+      parameters:
+        - { $ref: '#/components/parameters/onboardingId' }
+        - { name: stepId, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content: { application/json: { schema: { type: object, required: [status], properties: { status: { $ref: '#/components/schemas/OnboardingStepStatus' } } } } }
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Onboarding' } } } }
+        '400': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+
+  /onboarding/{onboardingId}/convert:
+    post:
+      tags: [Onboarding]
+      operationId: convertOnboarding
+      summary: Turn a completed onboarding into a household
+      description: >
+        Refused with 409 until every step is done, and refused again if already converted.
+        Creates the household and returns its id. Requirement: AX-02, AX-04.
+      parameters:
+        - { $ref: '#/components/parameters/onboardingId' }
+      responses:
+        '201': { description: Created, content: { application/json: { schema: { $ref: '#/components/schemas/ConversionResult' } } } }
+        '404': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
+
+  /migrations:
+    get:
+      tags: [Migrations]
+      operationId: listMigrations
+      summary: Past book imports
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/MigrationList' } } } }
+        '403': { $ref: '#/components/responses/Error' }
+    post:
+      tags: [Migrations]
+      operationId: createMigration
+      summary: Import a book of business
+      description: >
+        Validates each row, imports the ones that pass, and returns the invalid rows with their
+        problems rather than failing the whole import. Imported households are marked
+        needs_review: nothing arrives trusted. Not one of the 75 requirements; a firm cannot move
+        onto the platform without it. A real implementation is asynchronous.
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/MigrationRequest' } } }
+      responses:
+        '201': { description: Imported, content: { application/json: { schema: { $ref: '#/components/schemas/Migration' } } } }
+        '400': { $ref: '#/components/responses/Error' }
+
+  /households/{householdId}/allocation:
+    get:
+      tags: [Households]
+      operationId: getHouseholdAllocation
+      summary: Allocation against the household's model
+      description: >
+        Target and current weights per asset class, with the drift between them. model is null
+        when no model is on file. maxDriftPoints matches the allocation_drift portfolio signal.
+        Requirement: PM-02, PM-03.
+      parameters:
+        - { $ref: '#/components/parameters/householdId' }
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Allocation' } } } }
+        '404': { $ref: '#/components/responses/Error' }
+
+  /billing/fees:
+    get:
+      tags: [Billing]
+      operationId: listClientFees
+      summary: What the firm charges its clients
+      description: >
+        The tiered fee schedule and the fee each household attracts under it. The same schedule
+        produces the figures a client sees at /me/fees. Requirement: AX-10, AX-11.
+      parameters:
+        - { $ref: '#/components/parameters/page' }
+        - { $ref: '#/components/parameters/size' }
+        - { $ref: '#/components/parameters/sort' }
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/ClientFees' } } } }
+        '403': { $ref: '#/components/responses/Error' }
+
+  /firm/billing/subscription:
+    get:
+      tags: [Firm]
+      operationId: getSubscription
+      summary: What the firm pays for the platform
+      description: >
+        Seats, usage against plan, and the current invoice. Principal only: this is the firm's
+        own commercial relationship, not an advisor's. The payment method is masked to the last
+        four digits, like every other account number in this API. Requirement: PO-10.
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Subscription' } } } }
+        '403': { $ref: '#/components/responses/Error' }
+
+  /firm/billing/invoices:
+    get:
+      tags: [Firm]
+      operationId: listInvoices
+      summary: Platform invoice history
+      parameters:
+        - { $ref: '#/components/parameters/page' }
+        - { $ref: '#/components/parameters/size' }
+        - { $ref: '#/components/parameters/sort' }
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/InvoicePage' } } } }
+        '403': { $ref: '#/components/responses/Error' }
+
+  /firm/billing/invoices/{invoiceId}:
+    get:
+      tags: [Firm]
+      operationId: getInvoice
+      summary: One invoice, broken down
+      parameters:
+        - { name: invoiceId, in: path, required: true, schema: { type: string } }
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Invoice' } } } }
+        '404': { $ref: '#/components/responses/Error' }
+
+  /firm/branding:
+    get:
+      tags: [Firm]
+      operationId: getBranding
+      summary: Firm identity used across every view
+      description: >
+        Readable by anyone signed in, because the client portal carries the firm's branding too.
+        It holds no client data. Requirement: GP-07, GP-10.
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Branding' } } } }
+    patch:
+      tags: [Firm]
+      operationId: updateBranding
+      summary: Change the firm's branding
+      description: "Principal only. The change is attributed and timestamped. Requirement: GP-07, GP-10, X-05."
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/BrandingUpdate' } } }
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Branding' } } } }
+        '400': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+
 components:
   securitySchemes:
     bearerAuth:
@@ -405,6 +734,14 @@ components:
     taskId: { name: taskId, in: path, required: true, schema: { type: string } }
     alertId: { name: alertId, in: path, required: true, schema: { type: string } }
     signalId: { name: signalId, in: path, required: true, schema: { type: string } }
+    communicationId: { name: communicationId, in: path, required: true, schema: { type: string } }
+    prospectId: { name: prospectId, in: path, required: true, schema: { type: string } }
+    onboardingId: { name: onboardingId, in: path, required: true, schema: { type: string } }
+    sort:
+      name: sort
+      in: query
+      description: "field,direction. Direction is asc or desc; each operation documents its default."
+      schema: { type: string, example: 'createdAt,desc' }
 
   responses:
     Error:
@@ -855,3 +1192,392 @@ components:
         status: { type: string, enum: [requested, confirmed, declined] }
         topic: { type: string }
         createdAt: { type: string, format: date-time }
+
+    # ---- Client engagement, growth and practice operations ----
+
+    CommunicationStatus:
+      type: string
+      description: >
+        draft is AI output awaiting a human. approved means an advisor has accepted it but it has
+        not gone out. sent means it has left the firm. A draft cannot go straight to sent.
+      enum: [draft, approved, sent]
+
+    CommunicationSummary:
+      type: object
+      required: [id, householdId, subject, status, channel, createdAt]
+      properties:
+        id: { type: string }
+        householdId: { type: string, nullable: true }
+        householdName: { type: string, nullable: true }
+        advisorName: { type: string }
+        subject: { type: string }
+        channel: { type: string, enum: [email, letter, portal] }
+        status: { $ref: '#/components/schemas/CommunicationStatus' }
+        tone: { type: string, description: The tone the draft was written in. Requirement COMM-02. }
+        draftedBy: { type: string, enum: [ai, advisor] }
+        complianceReview: { type: boolean, description: Flagged for compliance review before it may be sent. }
+        source: { $ref: '#/components/schemas/Source' }
+        createdAt: { type: string, format: date-time }
+        approvedBy: { type: string, nullable: true }
+        approvedAt: { type: string, format: date-time, nullable: true }
+        sentAt: { type: string, format: date-time, nullable: true }
+
+    Communication:
+      allOf:
+        - $ref: '#/components/schemas/CommunicationSummary'
+        - type: object
+          required: [body]
+          properties:
+            body: { type: string, description: The full message text. }
+
+    CommunicationPage:
+      type: object
+      required: [items, page, size, totalItems]
+      properties:
+        items: { type: array, items: { $ref: '#/components/schemas/CommunicationSummary' } }
+        page: { type: integer }
+        size: { type: integer }
+        totalItems: { type: integer }
+
+    ProspectStage:
+      type: string
+      enum: [lead, contacted, meeting_scheduled, proposal, onboarding, converted]
+
+    ProspectSummary:
+      type: object
+      required: [id, name, stage, createdAt, updatedAt]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        stage: { $ref: '#/components/schemas/ProspectStage' }
+        estimatedAssets: { type: number, nullable: true }
+        source: { type: string, enum: [referral, website, event, other] }
+        meetingId: { type: string, nullable: true, description: The meeting this prospect is booked into, if any. }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+
+    Prospect:
+      allOf:
+        - $ref: '#/components/schemas/ProspectSummary'
+        - type: object
+          properties:
+            intakeNotes: { type: string, nullable: true }
+
+    ProspectPage:
+      type: object
+      required: [items, stages, page, size, totalItems]
+      properties:
+        stages:
+          type: array
+          description: Every stage in board order, so the UI does not hardcode them.
+          items: { $ref: '#/components/schemas/ProspectStage' }
+        items: { type: array, items: { $ref: '#/components/schemas/ProspectSummary' } }
+        page: { type: integer }
+        size: { type: integer }
+        totalItems: { type: integer }
+
+    OnboardingStepStatus:
+      type: string
+      enum: [not_started, open, done]
+
+    OnboardingStep:
+      type: object
+      required: [id, label, status]
+      properties:
+        id: { type: string, example: custodian_application }
+        label: { type: string, example: Custodian application }
+        status: { $ref: '#/components/schemas/OnboardingStepStatus' }
+        detail: { type: string, nullable: true, description: What was captured at this step. Null when not started. }
+        completedAt: { type: string, format: date-time, nullable: true }
+
+    Onboarding:
+      type: object
+      required: [id, name, startedAt, steps, stepsComplete, stepsTotal, readyToConvert]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        startedAt: { type: string, format: date-time }
+        convertedAt: { type: string, format: date-time, nullable: true }
+        stepsComplete: { type: integer }
+        stepsTotal: { type: integer }
+        readyToConvert: { type: boolean, description: Every step done and not yet converted. }
+        steps: { type: array, items: { $ref: '#/components/schemas/OnboardingStep' } }
+
+    OnboardingList:
+      type: object
+      required: [items]
+      properties:
+        items: { type: array, items: { $ref: '#/components/schemas/Onboarding' } }
+
+    ConversionResult:
+      type: object
+      required: [onboardingId, householdId, name, convertedAt]
+      properties:
+        onboardingId: { type: string }
+        householdId: { type: string }
+        name: { type: string }
+        convertedAt: { type: string, format: date-time }
+
+    MigrationRequest:
+      type: object
+      required: [source, rows]
+      properties:
+        source: { type: string, description: Where the book is coming from, for the audit trail., example: Redtail export }
+        rows:
+          type: array
+          minItems: 1
+          items:
+            type: object
+            required: [name]
+            properties:
+              name: { type: string }
+              aum: { type: number, minimum: 0 }
+
+    Migration:
+      type: object
+      required: [id, source, status, counts, createdAt]
+      properties:
+        id: { type: string }
+        source: { type: string }
+        status: { type: string, enum: [validating, imported, failed] }
+        counts:
+          type: object
+          required: [read, valid, invalid, imported]
+          properties:
+            read: { type: integer }
+            valid: { type: integer }
+            invalid: { type: integer }
+            imported: { type: integer }
+        invalidRows:
+          type: array
+          description: Rows that failed validation, with the reason. The import continues without them.
+          items:
+            type: object
+            properties:
+              row: { type: integer, description: Zero-based index in the submitted rows. }
+              problems: { type: array, items: { type: string } }
+        createdHouseholdIds: { type: array, items: { type: string } }
+        createdAt: { type: string, format: date-time }
+
+    MigrationList:
+      type: object
+      required: [items]
+      properties:
+        items: { type: array, items: { $ref: '#/components/schemas/Migration' } }
+
+    MeetingCreate:
+      type: object
+      required: [startsAt, type]
+      properties:
+        startsAt: { type: string, format: date-time }
+        type: { type: string, example: Annual review }
+        householdId: { type: string, nullable: true, description: Omit for a prospect meeting. }
+        durationMinutes: { type: integer, default: 30 }
+        brief: { type: string, nullable: true }
+
+    MeetingUpdate:
+      type: object
+      properties:
+        startsAt: { type: string, format: date-time }
+        type: { type: string }
+        durationMinutes: { type: integer }
+        prepStatus: { type: string, enum: [ready, needs_prep] }
+        brief: { type: string, nullable: true }
+
+    RecordingConsent:
+      type: object
+      description: >
+        Consent to record, as captured at the meeting. Requirement MEET-04, which is flagged for
+        compliance and legal review before build.
+      required: [obtained]
+      properties:
+        obtained: { type: boolean }
+        obtainedAt: { type: string, format: date-time, nullable: true }
+        method: { type: string, nullable: true, example: verbal, recorded }
+
+    MeetingRecord:
+      type: object
+      required: [meetingId, kind, withheld]
+      properties:
+        meetingId: { type: string }
+        kind: { type: string, enum: [notes, transcript] }
+        author: { type: string, description: Who or what captured it. }
+        capturedAt: { type: string, format: date-time }
+        consent: { $ref: '#/components/schemas/RecordingConsent' }
+        withheld: { type: boolean, description: True when consent is not on file for a transcript. }
+        withheldReason: { type: string, nullable: true }
+        content: { type: string, nullable: true, description: Null when withheld. }
+        source: { $ref: '#/components/schemas/Source' }
+
+    NextStepDrafts:
+      type: object
+      required: [meetingId, items, generatedAt, accepted]
+      properties:
+        meetingId: { type: string }
+        generatedAt: { type: string, format: date-time }
+        model: { type: string, description: Which model produced the suggestions, for the audit trail. }
+        accepted:
+          type: boolean
+          description: >
+            Always false. Suggestions are drafts; they become tasks only when the advisor posts
+            them to /tasks. Requirement X-03.
+        items:
+          type: array
+          items:
+            type: object
+            required: [title]
+            properties:
+              title: { type: string }
+              dueDate: { type: string, format: date, nullable: true }
+              householdId: { type: string, nullable: true }
+
+    AllocationLine:
+      type: object
+      required: [assetClass, targetPct, currentPct, driftPct]
+      properties:
+        assetClass: { type: string, example: US equity }
+        targetPct: { type: number, description: Percentage points, not a fraction. }
+        currentPct: { type: number }
+        driftPct: { type: number, description: current minus target, in percentage points. }
+
+    Allocation:
+      type: object
+      required: [householdId, lines, dataAsOf]
+      properties:
+        householdId: { type: string }
+        householdName: { type: string }
+        model:
+          type: object
+          nullable: true
+          description: Null when the household has no model on file; lines is then empty.
+          properties:
+            id: { type: string }
+            name: { type: string }
+        lines: { type: array, items: { $ref: '#/components/schemas/AllocationLine' } }
+        maxDriftPoints:
+          type: number
+          nullable: true
+          description: Largest absolute drift. Matches the allocation_drift portfolio signal for this household.
+        source: { $ref: '#/components/schemas/Source' }
+        dataAsOf: { type: string, format: date-time }
+
+    FeeTier:
+      type: object
+      required: [minAssets, annualRatePct]
+      properties:
+        minAssets: { type: number }
+        maxAssets: { type: number, nullable: true, description: Null on the top tier. }
+        annualRatePct: { type: number, example: 0.85 }
+
+    ClientFees:
+      type: object
+      required: [schedule, items, nextRunDate, dataAsOf]
+      properties:
+        schedule: { type: array, items: { $ref: '#/components/schemas/FeeTier' } }
+        nextRunDate: { type: string, format: date }
+        currency: { type: string, example: USD }
+        totalQuarterlyFees: { type: number }
+        items:
+          type: array
+          items:
+            type: object
+            required: [householdId, billableAssets, annualRatePct, quarterlyFee]
+            properties:
+              householdId: { type: string }
+              householdName: { type: string }
+              billableAssets: { type: number }
+              annualRatePct: { type: number }
+              quarterlyFee: { type: number }
+        page: { type: integer }
+        size: { type: integer }
+        totalItems: { type: integer }
+        dataAsOf: { type: string, format: date-time }
+
+    UsageMeter:
+      type: object
+      required: [id, label, used, included, unit]
+      properties:
+        id: { type: string }
+        label: { type: string }
+        used: { type: number }
+        included: { type: number }
+        unit: { type: string }
+
+    Subscription:
+      type: object
+      required: [plan, seats, meters, renewalDate, dataAsOf]
+      properties:
+        plan: { type: string }
+        seats:
+          type: object
+          required: [purchased, used]
+          properties:
+            purchased: { type: integer }
+            used: { type: integer }
+        meters: { type: array, items: { $ref: '#/components/schemas/UsageMeter' } }
+        renewalDate: { type: string, format: date }
+        billingContact: { type: string }
+        paymentMethod:
+          type: object
+          description: Masked. A backend must never hold or return a full card number.
+          properties:
+            brand: { type: string, example: Visa }
+            maskedNumber: { type: string, example: '****4242' }
+            expiryMonth: { type: integer }
+            expiryYear: { type: integer }
+        currentInvoice: { $ref: '#/components/schemas/InvoiceSummary' }
+        dataAsOf: { type: string, format: date-time }
+
+    InvoiceSummary:
+      type: object
+      required: [id, number, amount, status]
+      properties:
+        id: { type: string }
+        number: { type: string, example: MW-202609 }
+        periodMonth: { type: string, example: '2026-09' }
+        amount: { type: number }
+        status: { type: string, enum: [due, paid, overdue] }
+        issuedDate: { type: string, format: date }
+        dueDate: { type: string, format: date }
+
+    Invoice:
+      allOf:
+        - $ref: '#/components/schemas/InvoiceSummary'
+        - type: object
+          properties:
+            lines:
+              type: array
+              items:
+                type: object
+                properties:
+                  description: { type: string }
+                  quantity: { type: number }
+                  unitAmount: { type: number }
+                  amount: { type: number }
+
+    InvoicePage:
+      type: object
+      required: [items, page, size, totalItems]
+      properties:
+        items: { type: array, items: { $ref: '#/components/schemas/InvoiceSummary' } }
+        page: { type: integer }
+        size: { type: integer }
+        totalItems: { type: integer }
+
+    BrandingUpdate:
+      type: object
+      properties:
+        firmName: { type: string }
+        advisorDisplayName: { type: string }
+        markLetter: { type: string, minLength: 1, maxLength: 1 }
+        accentColor: { type: string, pattern: '^#[0-9a-fA-F]{6}$', example: '#0E5A57' }
+
+    Branding:
+      allOf:
+        - $ref: '#/components/schemas/BrandingUpdate'
+        - type: object
+          required: [firmId, updatedAt]
+          properties:
+            firmId: { type: string }
+            updatedAt: { type: string, format: date-time }
+            updatedBy: { type: string }

@@ -14,6 +14,8 @@ Custodial data comes from the **Green Meadows API** (the reference is at `develo
 
 **Where things stand:** requirements, a draft API contract, a complete mock server, and a three-view dashboard running against that mock all exist. The real backend does not exist. Nothing has been connected to Green Meadows yet, and the owner does not yet have sandbox credentials in this project.
 
+The contract and mock cover 50 operations, including the feature surface ported from the Meridian Wealth Advisor Desk mockup (communications, prospects, onboarding, book migration, calendar and meeting capture, allocation, billing, branding). **The dashboard has not caught up**: it still renders only the v0.2 surface. Wiring the ported operations into the UI is the next piece of work, and the agreed shape is a sub-nav inside the Advisor view rather than a flat left nav, so the role switcher and the client-safe boundary stay visible. Billing and branding belong under Firm.
+
 ## 2. What is in the repo
 
 ```
@@ -22,19 +24,19 @@ advisor-platform-mock/
   README.md               how to run and use the mock server
   package.json            npm start, npm test, npm run sync-mock (no dependencies, Node 18+)
   server.js               HTTP layer: routing, sign-in, CORS, failure injection, static files
-  src/mock-core.js        the dataset and all 26 operations; createMock() gives a fresh instance
-  openapi.yaml            the API contract, v0.2 draft
+  src/mock-core.js        the dataset and all 50 operations; createMock() gives a fresh instance
+  openapi.yaml            the API contract, v0.3 draft
   dashboard/index.html    the three-view dashboard (single file, no build step)
   tools/sync-mock.js      copies createMock() into the dashboard's embedded copy
   tools/mock-source.js    locates that copy, shared by the sync script and the drift test
-  test/server.test.js     17 tests, including a check that every operation in openapi.yaml is served
+  test/server.test.js     32 tests, including a check that every operation in openapi.yaml is served
 ```
 
 Run it (from `advisor-platform-mock/`):
 
 ```
 npm start        # http://localhost:4010 serves the dashboard, connected to the mock
-npm test         # 17 tests
+npm test         # 32 tests
 ```
 
 Sign-in is a persona token in `Authorization: Bearer <token>`: `dana` (principal and advisor), `marcus` (advisor), `grace` (client). See `README.md` for curl examples and failure-injection headers.
@@ -79,20 +81,37 @@ Roles: `principal`, `advisor`, `associate`, `client`. A user can hold several (a
 
 **Regulatory sensitivity (needs review before build):** recording consent (MEET-04), placing trades (PM-05), robo portfolios (PM-04), credit risk (RTI-01), tax strategies (RTI-03), advisor value claims (RTI-09), marketing content (GP-06 to GP-10), and the Client Sentiment Index (COMM-05).
 
-## 6. The API contract (`openapi.yaml`, v0.2 draft)
+## 6. The API contract (`openapi.yaml`, v0.3 draft)
 
 One API, role-scoped: the caller's role decides what each endpoint returns. Firm-wide data uses `scope=firm` (principal only). Client-portal endpoints live under `/me`.
 
-| Level | Operations |
+50 operations across 41 paths.
+
+| Group | Operations |
 | --- | --- |
-| Advisor (13) | `GET /session` · `GET /summary` · `GET /households` · `GET /households/{id}` · `GET /meetings` · `GET /meetings/{id}` · `GET /tasks` · `POST /tasks` · `PATCH /tasks/{id}` · `GET /alerts` · `PATCH /alerts/{id}` · `GET /portfolio-signals` · `GET /portfolio-signals/{id}/items` |
-| Firm (4) | `GET /firm/summary` · `GET /firm/advisors` · `GET /firm/advisors/{id}` · `GET /firm/compliance` |
+| Advisor core (13) | `GET /session` · `GET /summary` · `GET /households` · `GET /households/{id}` · `GET /meetings` · `GET /meetings/{id}` · `GET /tasks` · `POST /tasks` · `PATCH /tasks/{id}` · `GET /alerts` · `PATCH /alerts/{id}` · `GET /portfolio-signals` · `GET /portfolio-signals/{id}/items` |
+| Calendar and meeting capture (5) | `POST /meetings` · `PATCH /meetings/{id}` · `DELETE /meetings/{id}` · `GET /meetings/{id}/record` · `POST /meetings/{id}/record/next-steps` |
+| Communications (3) | `GET /communications` · `GET /communications/{id}` · `PATCH /communications/{id}` |
+| Prospects (3) | `GET /prospects` · `GET /prospects/{id}` · `PATCH /prospects/{id}` |
+| Onboarding (4) | `GET /onboarding` · `GET /onboarding/{id}` · `PATCH /onboarding/{id}/steps/{stepId}` · `POST /onboarding/{id}/convert` |
+| Migration (2) | `GET /migrations` · `POST /migrations` |
+| Portfolio and fees (2) | `GET /households/{id}/allocation` · `GET /billing/fees` |
+| Firm (9) | `GET /firm/summary` · `GET /firm/advisors` · `GET /firm/advisors/{id}` · `GET /firm/compliance` · `GET /firm/billing/subscription` · `GET /firm/billing/invoices` · `GET /firm/billing/invoices/{id}` · `GET /firm/branding` · `PATCH /firm/branding` |
 | Sharing (1) | `POST /households/{id}/shares` |
 | Client (8) | `GET /me/household` · `GET /me/documents` · `GET /me/documents/{id}` · `GET /me/fees` · `GET /me/shared` · `GET /me/preferences` · `PATCH /me/preferences` · `POST /me/meeting-requests` |
+
+Everything from Calendar down to Portfolio and fees was ported from the Meridian Wealth Advisor Desk mockup, which covered a wider feature surface than v0.2 did. `GET /firm/branding` is the one operation any signed-in role may read, because the client portal is branded too; only a principal may change it.
 
 Conventions: ISO 8601 dates, USD numbers, zero-based paging with default size 20 (matches Green Meadows), empty results return 200 with an empty list, summaries carry `dataAsOf`, items carry a `source` (`greenmeadows`, `crm`, `calendar`, `platform`), account numbers are always masked to the last 4 digits, `x-trace-id` is echoed and forwarded to Green Meadows as `x_gm_ext_traceid`.
 
 **The contract is a proposal.** Several shapes are assumptions (see section 9). The mock and the contract are meant to be edited together.
+
+**Four rules the ported operations enforce, which the Meridian mockup illustrated but did not implement.** They are covered by tests, so removing one fails the suite.
+
+1. A communication cannot go from `draft` to `sent`. It must be approved first, and the approver and time are recorded (X-03, X-05).
+2. A transcript is returned only when recording consent is on file. Without it the response carries `withheld: true` and no content, and `POST .../next-steps` is refused with 409 — the model is not run over a transcript the firm has no consent for (MEET-04).
+3. `POST .../next-steps` returns drafts with `accepted: false` and creates nothing. An advisor turns a suggestion into a task by posting it to `/tasks` (X-03).
+4. Onboarding will not convert until every step is done, and the refusal names what is outstanding (AX-02).
 
 ## 7. Green Meadows API: what was learned
 
@@ -188,7 +207,7 @@ Open questions, from the requirements doc:
 ## 10. Suggested order of work
 
 1. **Confirm access with Green Meadows.** Get sandbox credentials, then record real responses for the endpoints in section 7 and replace the assumed shapes in `mock-core.js` and `openapi.yaml`. Raise the advisor-wide token question first: it decides how the book-of-business view gets its data.
-2. **Build the real backend.** Implement the v0.2 contract with Green Meadows adapters. Start with `/session`, `/summary`, `/households`, `/households/{id}` and `/me/*`, since those come almost entirely from Green Meadows. Keep credential handling in one module. Reuse `test/server.test.js` as a contract test that runs against both the mock and the real service.
+2. **Build the real backend.** Implement the v0.3 contract with Green Meadows adapters. Start with `/session`, `/summary`, `/households`, `/households/{id}` and `/me/*`, since those come almost entirely from Green Meadows. Keep credential handling in one module. Reuse `test/server.test.js` as a contract test that runs against both the mock and the real service.
 3. **Turn the dashboard into a proper project.** Split `dashboard/index.html` (numbered sections: config, mock, API client, formatting, shared pieces, advisor view, firm view, client portal, shell) into modules or components. Generate types from `openapi.yaml`. Keep the mock as a dev option, not an embedded copy.
 4. **Decide sources for the missing domains** (calendar, CRM, task store, email) and build adapters behind the same contract shapes.
 5. **Build the platform's own sign-in, roles and audit trail** (X-01, X-05, X-14, X-15). The mock's persona tokens are a stand-in only.
@@ -214,4 +233,4 @@ Open questions, from the requirements doc:
 
 ## 13. A good first prompt
 
-> Read HANDOFF.md, README.md and openapi.yaml, then run `npm test` and `npm start` to confirm everything works. Then propose a plan for step 2: a real backend implementing the v0.2 contract with Green Meadows adapters. Ask me which language and framework to use, and what credentials I have, before writing code.
+> Read HANDOFF.md, README.md and openapi.yaml, then run `npm test` and `npm start` to confirm everything works. Then propose a plan for step 2: a real backend implementing the v0.3 contract with Green Meadows adapters. Ask me which language and framework to use, and what credentials I have, before writing code.

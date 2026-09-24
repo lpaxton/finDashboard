@@ -108,7 +108,9 @@ test('client responses never contain internal fields', async () => {
 // the household-specific check above covers the status field that is not.
 test('no /me endpoint leaks an internal field at any depth', async () => {
   const forbidden = ['advisorId', 'householdId', 'brief', 'briefSources', 'prepStatus', 'openingStatus',
-    'lastContactAt', 'origin', 'originMeetingId', 'sourceId', 'severity', 'sentiment'];
+    'lastContactAt', 'origin', 'originMeetingId', 'sourceId', 'severity', 'sentiment',
+    'intakeNotes', 'stage', 'consent', 'withheld', 'steps', 'complianceReview', 'draftedBy',
+    'approvedBy', 'paymentMethod', 'invalidRows', 'meters'];
   const keysIn = (v, out = []) => {
     if (Array.isArray(v)) v.forEach(x => keysIn(x, out));
     else if (v && typeof v === 'object') for (const [k, x] of Object.entries(v)) { out.push(k); keysIn(x, out); }
@@ -180,8 +182,9 @@ test('every operation in openapi.yaml is served', async () => {
     const p = l.match(/^  (\/[^\s:]+):\s*$/); if (p) { cur = p[1]; continue; }
     const m = l.match(/^    (get|post|patch|put|delete):\s*$/); if (m && cur) ops.push([m[1].toUpperCase(), cur]);
   }
-  assert.equal(ops.length, 26, 'spec should list 26 operations');
-  const params = { householdId: 'h3', meetingId: 'm1', taskId: 't1', alertId: 'a1', signalId: 'sig_idle_cash', advisorId: 'adv2', documentId: 'd1' };
+  assert.equal(ops.length, 50, 'spec should list 50 operations');
+  const params = { householdId: 'h3', meetingId: 'm1', taskId: 't1', alertId: 'a1', signalId: 'sig_idle_cash', advisorId: 'adv2', documentId: 'd1',
+    communicationId: 'cm1', prospectId: 'p1', onboardingId: 'ob1', stepId: 'intake_form', invoiceId: 'inv1' };
   const missing = [];
   for (const [method, p] of ops) {
     const url = p.replace(/\{(\w+)\}/g, (_, k) => params[k]);
@@ -197,4 +200,186 @@ test('serves the dashboard configured for this server', async () => {
   assert.match(html, /ADVISOR_CONFIG = \{ mode: "live"/);
   const spec = await fetch(base + '/openapi.yaml');
   assert.equal(spec.status, 200);
+});
+
+/* ---- ported from the Meridian mockup: client engagement, growth, practice operations ---- */
+
+test('a draft cannot be sent without being approved first', async () => {
+  // X-03: nothing leaves the firm without a human. The gate is the point of this endpoint.
+  assert.equal((await call('dana', 'PATCH', '/communications/cm1', { status: 'sent' })).status, 409);
+  const approved = await call('dana', 'PATCH', '/communications/cm1', { status: 'approved' });
+  assert.equal(approved.status, 200);
+  assert.equal(approved.data.approvedBy, 'Dana Whitfield');
+  assert.ok(approved.data.approvedAt, 'the approval must be timestamped');
+  const sent = await call('dana', 'PATCH', '/communications/cm1', { status: 'sent' });
+  assert.equal(sent.data.status, 'sent');
+  assert.ok(sent.data.sentAt);
+  assert.equal((await call('dana', 'PATCH', '/communications/cm1', { status: 'posted' })).status, 400);
+});
+
+test('the compliance review queue reconciles with the alert that counts it', async () => {
+  const drafts = (await call('dana', 'GET', '/communications?status=draft')).data;
+  const alert = (await call('dana', 'GET', '/alerts')).data.items.find(a => a.title.includes('compliance review'));
+  assert.match(alert.title, new RegExp('^' + drafts.totalItems + ' client emails'), 'alert a2 must count Dana\'s actual drafts');
+  const list = (await call('dana', 'GET', '/communications')).data.items;
+  assert.ok(list.every(c => !('body' in c)), 'the list must not carry message bodies');
+  assert.ok((await call('dana', 'GET', '/communications/cm1')).data.body, 'fetching one message must include its body');
+});
+
+test('firm scope on communications is principal-only', async () => {
+  assert.equal((await call('marcus', 'GET', '/communications?scope=firm')).status, 403);
+  assert.equal((await call('grace', 'GET', '/communications')).status, 403);
+  const firm = (await call('dana', 'GET', '/communications?scope=firm')).data;
+  const mine = (await call('dana', 'GET', '/communications')).data;
+  assert.ok(firm.totalItems > mine.totalItems, 'firm scope must widen the result');
+  assert.equal((await call('marcus', 'GET', '/communications/cm1')).status, 404); // Dana's message
+});
+
+test('prospects move through the pipeline', async () => {
+  const board = (await call('dana', 'GET', '/prospects')).data;
+  assert.deepEqual(board.stages, ['lead', 'contacted', 'meeting_scheduled', 'proposal', 'onboarding', 'converted']);
+  assert.ok(board.items.every(p => !('intakeNotes' in p)), 'the board must not carry intake notes');
+  const one = (await call('dana', 'GET', '/prospects/p1')).data;
+  assert.ok(one.intakeNotes);
+  assert.equal(one.meetingId, 'm12');
+  const moved = await call('dana', 'PATCH', '/prospects/p1', { stage: 'proposal' });
+  assert.equal(moved.data.stage, 'proposal');
+  assert.equal((await call('dana', 'PATCH', '/prospects/p1', { stage: 'nonsense' })).status, 400);
+  assert.equal((await call('marcus', 'GET', '/prospects/p1')).status, 404);
+});
+
+test('a prospect meeting has no household until they convert', async () => {
+  const m = (await call('dana', 'GET', '/meetings')).data.items.find(x => x.id === 'm12');
+  assert.equal(m.householdId, null);
+  assert.equal(m.householdName, null);
+  assert.equal(m.prospectName, 'Marcus DeLuca');
+});
+
+test('onboarding will not convert until every step is done', async () => {
+  const before = (await call('dana', 'GET', '/onboarding/ob1')).data;
+  assert.equal(before.readyToConvert, false);
+  const blocked = await call('dana', 'POST', '/onboarding/ob1/convert', {});
+  assert.equal(blocked.status, 409);
+  assert.match(blocked.data.message, /Funding/, 'the refusal must name what is outstanding');
+  for (const s of before.steps) await call('dana', 'PATCH', `/onboarding/ob1/steps/${s.id}`, { status: 'done' });
+  const ready = (await call('dana', 'GET', '/onboarding/ob1')).data;
+  assert.equal(ready.readyToConvert, true);
+  assert.equal(ready.stepsComplete, ready.stepsTotal);
+  const done = await call('dana', 'POST', '/onboarding/ob1/convert', {});
+  assert.equal(done.status, 201);
+  const hh = (await call('dana', 'GET', '/households?size=100')).data.items;
+  assert.ok(hh.some(h => h.id === done.data.householdId), 'the converted client must appear in the book');
+  assert.equal((await call('dana', 'POST', '/onboarding/ob1/convert', {})).status, 409, 'converting twice must be refused');
+});
+
+test('a book import keeps the good rows and reports the bad ones', async () => {
+  const before = (await call('dana', 'GET', '/households?size=100')).data.totalItems;
+  const r = await call('dana', 'POST', '/migrations', {
+    source: 'Redtail export',
+    rows: [{ name: 'Okonkwo household', aum: 3200000 }, { name: 'Vance Trust', aum: 1400000 }, { aum: 50 }, { name: 'Bad Assets', aum: -3 }]
+  });
+  assert.equal(r.status, 201);
+  assert.deepEqual(r.data.counts, { read: 4, valid: 2, invalid: 2, imported: 2 });
+  assert.equal(r.data.invalidRows.length, 2);
+  assert.match(r.data.invalidRows[0].problems.join(), /name is missing/);
+  const after = (await call('dana', 'GET', '/households?size=100')).data;
+  assert.equal(after.totalItems, before + 2);
+  const imported = after.items.filter(h => r.data.createdHouseholdIds.includes(h.id));
+  assert.ok(imported.every(h => h.status === 'needs_review'), 'imported households must arrive flagged for review');
+  assert.equal((await call('dana', 'POST', '/migrations', { source: 'x', rows: [] })).status, 400);
+  assert.equal((await call('dana', 'GET', '/migrations')).data.items.length, 1);
+});
+
+test('calendar meetings can be created, moved and cancelled', async () => {
+  const made = await call('dana', 'POST', '/meetings', { startsAt: '2026-10-02T14:00:00.000Z', type: 'Estate review', householdId: 'h3', durationMinutes: 45 });
+  assert.equal(made.status, 201);
+  assert.equal(made.data.householdName, 'Okafor household');
+  const moved = await call('dana', 'PATCH', `/meetings/${made.data.id}`, { startsAt: '2026-10-03T15:30:00.000Z' });
+  assert.equal(moved.data.startsAt, '2026-10-03T15:30:00.000Z');
+  assert.equal((await call('dana', 'PATCH', `/meetings/${made.data.id}`, { startsAt: 'not a date' })).status, 400);
+  assert.equal((await call('dana', 'POST', '/meetings', { type: 'No date' })).status, 400);
+  assert.equal((await call('dana', 'POST', '/meetings', { startsAt: '2026-10-02T14:00:00.000Z', type: 'x', householdId: 'h11' })).status, 404); // not Dana's
+  assert.equal((await call('dana', 'DELETE', `/meetings/${made.data.id}`)).status, 204);
+  assert.equal((await call('dana', 'GET', `/meetings/${made.data.id}`)).status, 404);
+});
+
+test('a transcript without recorded consent is withheld, not just labelled', async () => {
+  // MEET-04 is flagged for compliance review. Consent gates disclosure, and it gates the AI too.
+  const consented = (await call('dana', 'GET', '/meetings/m6/record')).data;
+  assert.equal(consented.kind, 'transcript');
+  assert.equal(consented.consent.obtained, true);
+  assert.equal(consented.withheld, false);
+  assert.ok(consented.content);
+
+  const withheld = (await call('dana', 'GET', '/meetings/m14/record')).data;
+  assert.equal(withheld.withheld, true);
+  assert.equal(withheld.content, null, 'withheld content must not be sent at all');
+  assert.ok(withheld.withheldReason);
+  assert.equal((await call('dana', 'POST', '/meetings/m14/record/next-steps', {})).status, 409,
+    'the model must not be run over a transcript with no consent');
+});
+
+test('suggested next steps are drafts, not tasks', async () => {
+  const before = (await call('dana', 'GET', '/tasks')).data.items.length;
+  const s = await call('dana', 'POST', '/meetings/m5/record/next-steps', {});
+  assert.equal(s.status, 200);
+  assert.equal(s.data.accepted, false);
+  assert.ok(s.data.items.length > 0);
+  assert.ok(s.data.model, 'the suggestion must say which model produced it');
+  const after = (await call('dana', 'GET', '/tasks')).data.items.length;
+  assert.equal(after, before, 'suggesting must not create tasks on its own');
+});
+
+test('allocation drift agrees with the portfolio signal', async () => {
+  const items = (await call('dana', 'GET', '/portfolio-signals/sig_allocation_drift/items')).data.items;
+  for (const h of ['h1', 'h2', 'h3']) {
+    const a = (await call('dana', 'GET', `/households/${h}/allocation`)).data;
+    const signal = items.find(i => i.householdId === h);
+    assert.equal(a.maxDriftPoints, parseFloat(signal.detail), `${h} drift must match its signal`);
+    assert.equal(Math.round(a.lines.reduce((t, l) => t + l.currentPct, 0)), 100, `${h} weights must sum to 100`);
+  }
+  const none = (await call('dana', 'GET', '/households/h7/allocation')).data;
+  assert.equal(none.model, null, 'a household with no model on file returns model: null');
+  assert.deepEqual(none.lines, []);
+  assert.equal((await call('marcus', 'GET', '/households/h1/allocation')).status, 404);
+});
+
+test('the fee a client sees is the fee the advisor charges', async () => {
+  const advisorView = (await call('dana', 'GET', '/billing/fees')).data;
+  const h3 = advisorView.items.find(r => r.householdId === 'h3');
+  const clientView = (await call('grace', 'GET', '/me/fees')).data.items[0];
+  assert.equal(h3.quarterlyFee, clientView.amount, 'the two views must agree on the number');
+  const tier = advisorView.schedule.find(t => h3.billableAssets >= t.minAssets && (t.maxAssets === null || h3.billableAssets < t.maxAssets));
+  assert.equal(h3.annualRatePct, tier.annualRatePct, 'the rate must come from the published schedule');
+  assert.equal((await call('grace', 'GET', '/billing/fees')).status, 403);
+});
+
+test('platform billing is principal-only and the card is masked', async () => {
+  assert.equal((await call('marcus', 'GET', '/firm/billing/subscription')).status, 403);
+  assert.equal((await call('marcus', 'GET', '/firm/billing/invoices')).status, 403);
+  const s = (await call('dana', 'GET', '/firm/billing/subscription')).data;
+  assert.equal(s.seats.used, 4);
+  assert.match(s.paymentMethod.maskedNumber, /^\*{4}\d{4}$/, 'only the last four digits may be returned');
+  assert.ok(!JSON.stringify(s).match(/\d{13,19}/), 'no full card number anywhere in the response');
+  const inv = (await call('dana', 'GET', '/firm/billing/invoices/inv1')).data;
+  assert.equal(inv.amount, inv.lines.reduce((t, l) => t + l.amount, 0), 'the invoice must equal its lines');
+});
+
+test('branding is readable by everyone and writable only by a principal', async () => {
+  for (const who of ['dana', 'marcus', 'grace']) {
+    assert.equal((await call(who, 'GET', '/firm/branding')).status, 200, who + ' should see the firm brand');
+  }
+  assert.equal((await call('marcus', 'PATCH', '/firm/branding', { firmName: 'Hijacked' })).status, 403);
+  assert.equal((await call('dana', 'PATCH', '/firm/branding', { accentColor: 'teal' })).status, 400);
+  const r = await call('dana', 'PATCH', '/firm/branding', { accentColor: '#123456', markLetter: 'M' });
+  assert.equal(r.data.accentColor, '#123456');
+  assert.equal(r.data.updatedBy, 'Dana Whitfield', 'the change must be attributed');
+});
+
+test('a client is refused every advisor-side feature ported from Meridian', async () => {
+  const paths = ['/communications', '/prospects', '/onboarding', '/migrations', '/billing/fees',
+    '/households/h3/allocation', '/meetings/m1/record', '/firm/billing/subscription'];
+  for (const p of paths) assert.equal((await call('grace', 'GET', p)).status, 403, p + ' must refuse a client');
+  assert.equal((await call('grace', 'POST', '/meetings', { startsAt: '2026-10-02T14:00:00.000Z', type: 'x' })).status, 403);
+  assert.equal((await call('grace', 'POST', '/migrations', { source: 'x', rows: [{ name: 'y' }] })).status, 403);
 });
