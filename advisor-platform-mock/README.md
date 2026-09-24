@@ -18,7 +18,7 @@ Then open http://localhost:4010/ for the dashboard, already connected to this se
 npm test
 ```
 
-runs 33 tests, including one that reads `openapi.yaml` and checks that every listed operation is served, and one that checks the dashboard's embedded mock has not drifted from `src/mock-core.js`.
+runs 34 tests, including one that reads `openapi.yaml` and checks that every listed operation is served, and one that checks the dashboard's embedded mock has not drifted from `src/mock-core.js`.
 
 ## Signing in
 
@@ -74,7 +74,7 @@ These exist only for development.
 
 ## Pointing the dashboard at the real backend
 
-In `dashboard/index.html`, the `CONFIG` block near the top controls where data comes from.
+`dashboard/js/config.js` controls where data comes from.
 
 ```js
 window.ADVISOR_CONFIG = {
@@ -90,20 +90,17 @@ Leave `personaPicker` off so the demo buttons disappear. The dashboard never hol
 
 ```
 server.js              HTTP layer: routing, sign-in, CORS, failure injection, static files
-src/mock-core.js       the dataset and every operation; createMock() gives a fresh instance
+src/mock-core.js       the dataset and every operation; imported by the server and the dashboard
 openapi.yaml           the contract (v0.3 draft)
-dashboard/index.html   the three-view dashboard
-tools/sync-mock.js     copies createMock() into the dashboard's embedded copy
+dashboard/index.html   a shell: markup, stylesheet, one module script
+dashboard/styles.css   all styling
+dashboard/js/*.js      the dashboard, as native ES modules (no build step)
 test/server.test.js    behaviour and contract tests
 ```
 
-`dashboard/index.html` also embeds a copy of `src/mock-core.js` so it can run offline as a demo. After changing the core, run
+The dashboard imports `src/mock-core.js` directly, so the mock exists in exactly one place. `dashboard/js/api.js` is the only module that knows whether data comes from the mock or a real backend.
 
-```
-npm run sync-mock
-```
-
-to copy it into the dashboard's "MOCK BACKEND" section. `npm test` fails if the two have drifted.
+There is no build step. The browser loads `dashboard/js/*.js` as native ES modules, and the server sends them `no-store` so an edited file is never served stale.
 
 ## Known limits
 

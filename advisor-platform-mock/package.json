@@ -1,14 +1,16 @@
 {
   "name": "advisor-platform-mock",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "Standalone mock server for the Advisor Platform API v0.3 (firm, advisor and client portal), with a bundled dashboard.",
   "private": true,
   "license": "UNLICENSED",
   "main": "server.js",
-  "engines": { "node": ">=18" },
+  "engines": {
+    "node": ">=18"
+  },
   "scripts": {
     "start": "node server.js",
-    "test": "node --test",
-    "sync-mock": "node tools/sync-mock.js"
-  }
+    "test": "node --test"
+  },
+  "type": "module"
 }

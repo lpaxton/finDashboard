@@ -22,21 +22,29 @@ The contract and mock cover 50 operations, including the feature surface ported 
 HANDOFF.md                this file, at the project root
 advisor-platform-mock/
   README.md               how to run and use the mock server
-  package.json            npm start, npm test, npm run sync-mock (no dependencies, Node 18+)
+  package.json            npm start, npm test (no dependencies, Node 18+, ES modules)
   server.js               HTTP layer: routing, sign-in, CORS, failure injection, static files
-  src/mock-core.js        the dataset and all 50 operations; createMock() gives a fresh instance
+  src/mock-core.js        the dataset and all 50 operations; imported by the server AND the dashboard
   openapi.yaml            the API contract, v0.3 draft
-  dashboard/index.html    the three-view dashboard (single file, no build step)
-  tools/sync-mock.js      copies createMock() into the dashboard's embedded copy
-  tools/mock-source.js    locates that copy, shared by the sync script and the drift test
-  test/server.test.js     33 tests, including a check that every operation in openapi.yaml is served
+  dashboard/index.html    a 41-line shell: markup, stylesheet, one module script
+  dashboard/styles.css    all styling; colour tokens defined once in :root
+  dashboard/js/config.js  the only file to edit when connecting to a real backend
+  dashboard/js/api.js     the one place that knows whether data is mock or live
+  dashboard/js/format.js  pure display helpers: no API, no DOM, no state
+  dashboard/js/ui.js      shared DOM layer: panel loading, toasts, tables, dialogs, sub-nav
+  dashboard/js/state.js   the little that crosses view boundaries, including branding
+  dashboard/js/advisor.js the seven advisor sections
+  dashboard/js/firm.js    overview, billing, branding
+  dashboard/js/client.js  the client portal
+  dashboard/js/app.js     entry point: sign in, pick a view, global click handlers
+  test/server.test.js     34 tests, including a check that every operation in openapi.yaml is served
 ```
 
 Run it (from `advisor-platform-mock/`):
 
 ```
 npm start        # http://localhost:4010 serves the dashboard, connected to the mock
-npm test         # 33 tests
+npm test         # 34 tests
 ```
 
 Sign-in is a persona token in `Authorization: Bearer <token>`: `dana` (principal and advisor), `marcus` (advisor), `grace` (client). See `README.md` for curl examples and failure-injection headers.
@@ -208,14 +216,16 @@ Open questions, from the requirements doc:
 
 1. **Confirm access with Green Meadows.** Get sandbox credentials, then record real responses for the endpoints in section 7 and replace the assumed shapes in `mock-core.js` and `openapi.yaml`. Raise the advisor-wide token question first: it decides how the book-of-business view gets its data.
 2. **Build the real backend.** Implement the v0.3 contract with Green Meadows adapters. Start with `/session`, `/summary`, `/households`, `/households/{id}` and `/me/*`, since those come almost entirely from Green Meadows. Keep credential handling in one module. Reuse `test/server.test.js` as a contract test that runs against both the mock and the real service.
-3. **Turn the dashboard into a proper project.** Split `dashboard/index.html` (numbered sections: config, mock, API client, formatting, shared pieces, advisor view, firm view, client portal, shell) into modules or components. Generate types from `openapi.yaml`. Keep the mock as a dev option, not an embedded copy.
+3. ~~**Turn the dashboard into a proper project.**~~ Done. `dashboard/index.html` is a 41-line shell; the application is ten ES modules under `dashboard/js/`, and the mock is imported rather than copied. What is still open from this step: generating types from `openapi.yaml`, and deciding whether the mock ships in a production build at all.
 4. **Decide sources for the missing domains** (calendar, CRM, task store, email) and build adapters behind the same contract shapes.
 5. **Build the platform's own sign-in, roles and audit trail** (X-01, X-05, X-14, X-15). The mock's persona tokens are a stand-in only.
 6. **Then the AI features**, in the phasing proposed in section 9 of the requirements doc: foundation first (data access, meeting capture, tasks), then advisor value (tax and portfolio analysis, reporting, onboarding, content), then the higher-risk features.
 
 ## 11. Conventions and gotchas
 
-- **Mock code is duplicated.** `dashboard/index.html` embeds a copy of `src/mock-core.js` for its offline demo. After changing the core, run `npm run sync-mock`; a test fails if the two drift. Remove the embedded copy, the script and the test together when you restructure the dashboard (step 3).
+- **The mock exists once.** `src/mock-core.js` is an ES module with no Node APIs, imported by both the server and the dashboard. The old embedded copy, the sync script and the drift test are gone. A test fails if a second copy is ever reintroduced.
+- **No build step, and it should stay that way.** The dashboard is native ES modules loaded straight from disk. Adding a bundler means adding a toolchain to a project whose whole point is that it runs with `node server.js` and nothing else.
+- **Dev assets are served `no-store`**, so an edited module is never served stale from a browser cache.
 - **Dates in the mock are relative to the day it starts.** Restart or `POST /_mock/reset` to re-anchor. Weekly counts depend on the current weekday.
 - **Mock-only endpoints** live under `/_mock` and `/healthz`; they are not part of the contract.
 - **Injecting states for testing:** `x-mock-fail: 503`, `x-mock-delay: 1500`; in the dashboard's in-page mock, add `?fail=alerts` to the page URL.

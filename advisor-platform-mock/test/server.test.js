@@ -1,9 +1,11 @@
-'use strict';
-const test = require('node:test');
-const assert = require('node:assert/strict');
-const fs = require('node:fs');
-const path = require('node:path');
-const { createServer } = require('../server');
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { createServer } from '../server.js';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 let server, base;
 test.before(async () => {
@@ -130,17 +132,18 @@ test('the client value chart is sourced, not synthesised in the browser', async 
   assert.ok(Array.isArray(h.trend) && h.trend.length === 12, '/me/household must carry 12 months of history');
   assert.equal(h.trend.at(-1).value, h.aum, 'the last point must be the current value');
   for (const p of h.trend) assert.match(p.month, /^\d{4}-\d{2}$/);
-  const html = fs.readFileSync(path.join(__dirname, '..', 'dashboard', 'index.html'), 'utf8');
-  assert.doesNotMatch(html, /trendFrom/, 'the dashboard must not generate its own trend data');
+  const dir = path.join(__dirname, '..', 'dashboard', 'js');
+  const js = fs.readdirSync(dir).map(f => fs.readFileSync(path.join(dir, f), 'utf8')).join('\n');
+  assert.doesNotMatch(js, /trendFrom/, 'the dashboard must not generate its own trend data');
 });
 
-// The dashboard embeds a copy of createMock() so it can run offline. Run `npm run sync-mock`
-// after changing src/mock-core.js. Delete both when the dashboard loses its embedded copy.
-test('the dashboard mock is an exact copy of src/mock-core.js', () => {
-  const { extractMockCore, extractEmbeddedMock, CORE, DASHBOARD } = require('../tools/mock-source');
-  const read = (f) => fs.readFileSync(path.join(__dirname, '..', f), 'utf8');
-  assert.equal(extractEmbeddedMock(read(DASHBOARD)), extractMockCore(read(CORE)),
-    `${DASHBOARD} has drifted from ${CORE}. Run: npm run sync-mock`);
+// The dashboard imports src/mock-core.js directly, so there is no second copy to drift.
+// This fails if one is ever reintroduced.
+test('the mock exists in exactly one place', () => {
+  const html = fs.readFileSync(path.join(__dirname, '..', 'dashboard', 'index.html'), 'utf8');
+  assert.doesNotMatch(html, /function createMock/, 'the dashboard must import the mock, not embed a copy');
+  const app = fs.readFileSync(path.join(__dirname, '..', 'dashboard', 'js', 'api.js'), 'utf8');
+  assert.match(app, /from '\/src\/mock-core\.js'/, 'the dashboard must import the one mock-core');
 });
 
 test('a client meeting request becomes an advisor task', async () => {
@@ -387,7 +390,8 @@ test('a client is refused every advisor-side feature ported from Meridian', asyn
 // A light guard on the UI: every ported feature must still be wired to its endpoint.
 // It does not prove the screens work, only that a feature was not silently dropped.
 test('the dashboard calls every ported endpoint', () => {
-  const html = fs.readFileSync(path.join(__dirname, '..', 'dashboard', 'index.html'), 'utf8');
+  const dir = path.join(__dirname, '..', 'dashboard', 'js');
+  const html = fs.readdirSync(dir).map(f => fs.readFileSync(path.join(dir, f), 'utf8')).join('\n');
   const wired = ["'/communications'", "'/prospects'", "'/onboarding'", "'/migrations'", "'/billing/fees'",
     "'/firm/billing/subscription'", "'/firm/billing/invoices'", "'/firm/branding'", "'/meetings'", "'/tasks'"];
   for (const w of wired) assert.ok(html.includes(w), 'the dashboard no longer calls ' + w);
@@ -397,4 +401,27 @@ test('the dashboard calls every ported endpoint', () => {
     assert.ok(new RegExp(`\\['${sec}',`).test(html), 'the advisor sub-nav lost ' + sec);
   for (const sec of ['overview', 'billing', 'branding'])
     assert.ok(new RegExp(`\\['${sec}',`).test(html), 'the firm sub-nav lost ' + sec);
+});
+
+// The dashboard is plain ES modules with no build step. Keep it that way.
+test('the dashboard is modules, and every module is served', async () => {
+  const dir = path.join(__dirname, '..', 'dashboard', 'js');
+  const files = fs.readdirSync(dir).filter(f => f.endsWith('.js'));
+  assert.ok(files.length >= 8, 'expected the dashboard to be split into modules, found ' + files.length);
+
+  const html = fs.readFileSync(path.join(__dirname, '..', 'dashboard', 'index.html'), 'utf8');
+  assert.match(html, /<script type="module" src="\/js\/app\.js">/, 'index.html must load app.js as a module');
+  assert.doesNotMatch(html, /<style>/, 'styles belong in styles.css');
+  assert.ok(html.split('\n').length < 60, 'index.html should be a shell, not the application');
+
+  for (const f of files) {
+    const r = await fetch(base + '/js/' + f);
+    assert.equal(r.status, 200, '/js/' + f + ' is not served');
+    assert.match(r.headers.get('content-type'), /javascript/);
+  }
+  for (const p of ['/styles.css', '/src/mock-core.js']) {
+    assert.equal((await fetch(base + p)).status, 200, p + ' is not served');
+  }
+  // No path is resolved from the request, so traversal cannot reach the repo.
+  assert.equal((await fetch(base + '/js/%2e%2e%2f%2e%2e%2fpackage.json')).status, 404);
 });

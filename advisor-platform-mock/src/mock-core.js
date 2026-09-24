@@ -1,10 +1,11 @@
-'use strict';
 /*
  * Mock core for the Advisor Platform API v0.3 (see ../openapi.yaml).
  * One consistent dataset behind every operation, with role checks.
  * createMock() returns a fresh, isolated instance, so resetting means creating a new one.
  * handle(method, path, query, body, personaKey) is synchronous and returns { status, data }.
- * The dashboard embeds a copy of this same code for its offline demo.
+ *
+ * An ES module with no Node APIs, so the server and the dashboard's offline demo both
+ * import this one file. There is no second copy to keep in step.
  */
 function createMock() {
   const T0 = new Date(); T0.setHours(0, 0, 0, 0);
@@ -792,4 +793,4 @@ function createMock() {
   };
 }
 
-module.exports = { createMock };
+export { createMock };

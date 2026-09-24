@@ -1,20 +1,20 @@
 #!/usr/bin/env node
-'use strict';
 /*
  * Standalone mock server for the Advisor Platform API v0.3.
- * No dependencies; needs Node 18 or newer.
+ * No dependencies and no build step; needs Node 18 or newer.
  *
  *   npm start              serves http://localhost:4010
  *   PORT=8080 npm start    use another port
  *
  * Non-spec helpers live under /_mock and are for development only.
  */
-const http = require('node:http');
-const fs = require('node:fs');
-const path = require('node:path');
-const { createMock } = require('./src/mock-core');
+import http from 'node:http';
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { createMock } from './src/mock-core.js';
 
-const ROOT = __dirname;
+const ROOT = path.dirname(fileURLToPath(import.meta.url));
 const MAX_BODY = 1024 * 1024;
 
 function createServer(options = {}) {
@@ -45,10 +45,23 @@ function createServer(options = {}) {
     });
   }
 
+  /* The dashboard is plain ES modules, so its files are served as they are on disk.
+     Only these exact paths are reachable; nothing is resolved from the request. */
+  const STATIC = {
+    '/styles.css': ['dashboard/styles.css', 'text/css; charset=utf-8'],
+    '/src/mock-core.js': ['src/mock-core.js', 'text/javascript; charset=utf-8']
+  };
+  const JS_DIR = 'dashboard/js';
+  const jsFile = (p) => {
+    const m = /^\/js\/([a-z0-9-]+\.js)$/.exec(p);
+    return m ? [JS_DIR + '/' + m[1], 'text/javascript; charset=utf-8'] : null;
+  };
+
   function serveFile(res, file, type, transform) {
     fs.readFile(path.join(ROOT, file), 'utf8', (err, text) => {
       if (err) return error(res, 404, 'not_found', file + ' is missing.');
-      res.writeHead(200, { 'Content-Type': type });
+      // A dev server: never let a browser cache a module you just edited.
+      res.writeHead(200, { 'Content-Type': type, 'Cache-Control': 'no-store' });
       res.end(transform ? transform(text) : text);
     });
   }
@@ -74,6 +87,8 @@ function createServer(options = {}) {
         return done(200);
       }
       if (req.method === 'GET' && p === '/openapi.yaml') { serveFile(res, 'openapi.yaml', 'application/yaml; charset=utf-8'); return done(200); }
+      const asset = req.method === 'GET' ? (STATIC[p] || jsFile(p)) : null;
+      if (asset) { serveFile(res, asset[0], asset[1]); return done(200); }
       if (req.method === 'GET' && p === '/healthz') { send(res, 200, { status: 'ok' }); return done(200); }
       if (req.method === 'GET' && p === '/_mock/personas') { send(res, 200, { items: mock.personas() }); return done(200); }
       if (req.method === 'POST' && p === '/_mock/reset') { mock = createMock(); send(res, 200, { status: 'reset' }); return done(200); }
@@ -108,7 +123,7 @@ function createServer(options = {}) {
   return http.createServer(handler);
 }
 
-if (require.main === module) {
+if (process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.argv[1])) {
   const port = Number(process.env.PORT || 4010);
   createServer().listen(port, () => {
     const mock = createMock();
@@ -120,4 +135,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = { createServer };
+export { createServer };
