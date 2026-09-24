@@ -127,6 +127,36 @@ The adapter cannot assume one house style. Observed so far:
 | recurring transactions | camelCase | **`string`** | `page` |
 | margin admin | camelCase | `integer` | **`pagination`** |
 
+## The adapter
+
+Built against the captured shapes, running on a fake today and on the sandbox when a key
+exists, with nothing above it changing.
+
+| File | Holds |
+| --- | --- |
+| `credentials.js` | The only module that holds a credential. Nothing is returned, logged or put in an error; `redact()` strips secrets by name at any depth. Token refresh with a skew. |
+| `client.js` | Hosts, headers, trace propagation, retry (5xx and 429 only), error translation, and `unwrap()` for the six envelope shapes. |
+| `fake.js` | A fake Green Meadows shaped by `schemas.js`. Reproduces the awkward parts deliberately: four envelopes, mixed account-number types, positions without values, daily balances capped at 30 accounts, flagged points, snake_case rebalances. |
+| `mappers.js` | Green Meadows shapes into contract shapes. The layer most likely to change when recorded responses arrive. Every non-documented assumption is marked ASSUMPTION. |
+| `adapter.js` | Assembles contract shapes, and owns the fan-out, because the fan-out is Green Meadows' constraint rather than any one mapper's. |
+
+Covered by 23 tests in `test/greenmeadows.test.js`. The ones worth knowing about:
+
+- a credential never appears in a log line, an error or `JSON.stringify` of the module
+- a tax ID is redacted by name, so a new secret field is covered by naming it
+- 70 accounts become three balance-history calls, not one
+- tax lots fan out to one call per account per sub-account code
+- a day Green Meadows flagged becomes `estimated: true`, and one unpriced account makes the
+  whole household total an estimate
+- client accounts carry no status of any kind, and a document download link never reaches them
+- when positions come back unpriced, allocation reports why instead of charting zeroes
+
+Each of those was verified by breaking it and watching the test fail.
+
+`pricesPositions` on the fake is a switch, not a guess: the reference marks `currentValue`
+"Not applicable" while offering `includeCurrentValue` as a pricing flag, so the adapter is
+built for both until the sandbox settles it.
+
 ## How to capture the rest
 
 1. Open the endpoint page in a signed-in browser (the reference needs a session).

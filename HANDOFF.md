@@ -25,9 +25,10 @@ advisor-platform-mock/
   package.json            npm start, npm test (no dependencies, Node 18+, ES modules)
   server.js               HTTP layer: routing, sign-in, CORS, failure injection, static files
   src/mock-core.js        the dataset and all 50 operations; imported by the server AND the dashboard
-  src/greenmeadows/       response shapes transcribed from the Green Meadows reference, and
-                          what they change about the contract. Read its README before building
-                          the adapter.
+  src/greenmeadows/       the custodian integration. schemas.js holds shapes transcribed from
+                          the reference; credentials.js, client.js, mappers.js and adapter.js
+                          are the adapter; fake.js is a Green Meadows shaped like the real one.
+                          Read its README first.
   openapi.yaml            the API contract, v0.3 draft
   dashboard/index.html    a 41-line shell: markup, stylesheet, one module script
   dashboard/styles.css    all styling; colour tokens defined once in :root
@@ -44,13 +45,14 @@ advisor-platform-mock/
   tools/gen-types.js      the generator, and a YAML reader for the subset the spec uses
   jsconfig.json           lets editors check JSDoc against the generated types, no build step
   test/server.test.js     38 tests, including a check that every operation in openapi.yaml is served
+  test/greenmeadows.test.js  23 tests for the adapter, against the fake
 ```
 
 Run it (from `advisor-platform-mock/`):
 
 ```
 npm start        # http://localhost:4010 serves the dashboard, connected to the mock
-npm test         # 38 tests
+npm test         # 61 tests
 ```
 
 Sign-in is a persona token in `Authorization: Bearer <token>`: `dana` (principal and advisor), `marcus` (advisor), `grace` (client). See `README.md` for curl examples and failure-injection headers.
@@ -226,7 +228,7 @@ Open questions, from the requirements doc:
 ## 10. Suggested order of work
 
 1. **Confirm access with Green Meadows.** Get sandbox credentials, then record real responses for the endpoints in section 7 and replace the assumed shapes in `mock-core.js` and `openapi.yaml`. Raise the advisor-wide token question first: it decides how the book-of-business view gets its data.
-2. **Build the real backend.** Implement the v0.3 contract with Green Meadows adapters. Start with `/session`, `/summary`, `/households`, `/households/{id}` and `/me/*`, since those come almost entirely from Green Meadows. Keep credential handling in one module. Reuse `test/server.test.js` as a contract test that runs against both the mock and the real service.
+2. **Build the real backend.** The Green Meadows side is started: `src/greenmeadows/` has credential handling, transport, mappers and an adapter for accounts, balances, the trend, performance, positions, models, tax lots and documents, all running against a fake built from the transcribed shapes. What remains is the service around it (sign-in, roles, audit trail) and the domains Green Meadows does not cover. Implement the v0.3 contract with Green Meadows adapters. Start with `/session`, `/summary`, `/households`, `/households/{id}` and `/me/*`, since those come almost entirely from Green Meadows. Keep credential handling in one module. Reuse `test/server.test.js` as a contract test that runs against both the mock and the real service.
 3. ~~**Turn the dashboard into a proper project.**~~ Done. `dashboard/index.html` is a 41-line shell; the application is ten ES modules under `dashboard/js/`, the mock is imported rather than copied, and `types/api.d.ts` is generated from the contract by `npm run types`. What is still open from this step: whether the mock ships in a production build at all, and adopting `// @ts-check` across the remaining modules (about 590 findings, all implicit-any and possibly-null, none of them bugs).
 4. **Decide sources for the missing domains** (calendar, CRM, task store, email) and build adapters behind the same contract shapes.
 5. **Build the platform's own sign-in, roles and audit trail** (X-01, X-05, X-14, X-15). The mock's persona tokens are a stand-in only.
