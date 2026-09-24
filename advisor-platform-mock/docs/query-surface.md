@@ -1,6 +1,7 @@
 # Where the query surface lives
 
-A design note, not a build. Written 24 September 2026 off the back of the coverage audit.
+Written 24 September 2026 off the back of the coverage audit. **Step one is now built** — see the
+last section. Shareable version: https://claude.ai/code/artifact/c7aa4f6b-4c09-4711-ab6b-752afbbfdebe
 
 ## What hangs off this decision
 
@@ -85,8 +86,11 @@ already-shared content, rather than one with the portal's data access and a filt
 
 ## Suggested order
 
-1. Build the contract and the panel over **custodial data and meetings only** — the two sources
-   that exist. `unanswerable[]` covers the rest from day one.
+1. ~~Build the contract and the panel over **custodial data and meetings only**.~~ **Done.**
+   `POST /queries`, `GET /queries`, `GET /queries/{id}`, and the hybrid panel. The mock is a matcher,
+   not a model, and says so in its own unmatched answer; it genuinely answers over cash, contact gaps,
+   harvesting, drift, meetings, fees and the book, and refuses everything else. `unanswerable[]` covers
+   the rest from day one, and a test asserts a query leaves tasks, alerts and communications unchanged.
 2. Add documents when something can read a document; that unblocks IP-05, RTI-02 and AX-03
    together.
 3. Add CRM when a provider is chosen; that unblocks IP-02, MEET-08 and PO-02's sync half.
