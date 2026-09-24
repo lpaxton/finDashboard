@@ -247,3 +247,6 @@ footer { margin-top: 28px; color: var(--muted); font-size: 13px; }
 .answer-gap li, .answer-cites li { padding: 3px 0; }
 .answer-gap { color: var(--warn); }
 .answer-cites .tag { font-size: 11px; }
+
+/* Report and scorecard metric rows */
+.figure-sm { font: 600 15px/1 var(--serif); font-variant-numeric: tabular-nums; min-width: 84px; text-align: right; }

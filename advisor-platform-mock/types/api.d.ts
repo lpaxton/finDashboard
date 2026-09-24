@@ -823,6 +823,94 @@ export interface QueryPage {
   totalItems: number;
 }
 
+export interface ReportMetric {
+  id: string;
+  label: string;
+  unit: 'count' | 'usd';
+  value: number;
+  previousValue?: number;
+  /** value minus previousValue. */
+  change?: number;
+  /** True for overdue work, so a rise is not progress. */
+  lowerIsBetter?: boolean;
+}
+
+export interface PracticeReport {
+  scope: 'own' | 'firm';
+  /** Format: date. */
+  from: string;
+  /** Format: date. */
+  to: string;
+  /** Format: date. */
+  previousFrom?: string;
+  /** Format: date. */
+  previousTo?: string;
+  metrics: ReportMetric[];
+  breakdowns?: {
+    meetingsByType?: LabelCount[];
+    communicationsByStatus?: LabelCount[];
+    complianceByStatus?: LabelCount[];
+  };
+  /** Format: date-time. */
+  dataAsOf: string;
+}
+
+export interface LabelCount {
+  label: string;
+  count: number;
+}
+
+export interface ScorecardMetric {
+  id: string;
+  label: string;
+  unit?: 'count' | 'usd';
+  value: number;
+  firmMedian: number;
+  lowerIsBetter?: boolean;
+  /** Principal only. Absent for an advisor reading their own. */
+  rank?: number;
+  outOf?: number;
+}
+
+export interface Scorecard {
+  advisorId: string;
+  advisorName: string;
+  /** Format: date. */
+  from?: string;
+  /** Format: date. */
+  to?: string;
+  metrics: ScorecardMetric[];
+  /** Format: date-time. */
+  dataAsOf: string;
+}
+
+export interface NextAction {
+  id: string;
+  priority: 'high' | 'medium' | 'low';
+  kind: 'alert' | 'contact' | 'approval' | 'tax' | 'prep' | 'onboarding';
+  title: string;
+  /** Why this is being suggested, in the advisor's terms. */
+  reason: string;
+  householdId?: string | null;
+  householdName?: string | null;
+  citations: Citation[];
+  /** A draft. Post it to /tasks to accept it; nothing is created here. */
+  suggestedTask: {
+    title?: string;
+    /** Format: date. */
+    dueDate?: string;
+    householdId?: string | null;
+  };
+}
+
+export interface NextActionList {
+  items: NextAction[];
+  totalItems: number;
+  note?: string;
+  /** Format: date-time. */
+  dataAsOf: string;
+}
+
 /** Every operation in the contract, by operationId. */
 export interface Operations {
   getSession: {
@@ -1148,6 +1236,24 @@ export interface Operations {
     path: '/queries/{queryId}';
     request: never;
     response: Query;
+  };
+  getPracticeReport: {
+    method: 'GET';
+    path: '/reports/practice';
+    request: never;
+    response: PracticeReport;
+  };
+  getAdvisorScorecard: {
+    method: 'GET';
+    path: '/firm/advisors/{advisorId}/scorecard';
+    request: never;
+    response: Scorecard;
+  };
+  listNextActions: {
+    method: 'GET';
+    path: '/next-actions';
+    request: never;
+    response: NextActionList;
   };
 }
 

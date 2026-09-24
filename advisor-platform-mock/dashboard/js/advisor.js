@@ -2,11 +2,13 @@
 import { api } from './api.js';
 import { $, esc, money, moneyFull, pct, pctClass, fmtTime, fmtDate, localDate, daysAgo, dueLabel, syncBadge, syncNotice } from './format.js';
 import { toast, spark, head, panel, load, alertsList, openHousehold, bookPanel, subnav } from './ui.js';
+import { state } from './state.js';
 
 /* The role switcher stays the top level (X-15). These are sections inside the advisor view,
    so the client-safe boundary is never one click away from an advisor's own sections. */
-export const ADV_SECTIONS = [['today', 'Today'], ['clients', 'Clients'], ['communications', 'Communications'],
-  ['prospects', 'Prospects'], ['onboarding', 'Onboarding'], ['calendar', 'Calendar'], ['followups', 'Follow-ups']];
+export const ADV_SECTIONS = [['today', 'Today'], ['next', 'Next best action'], ['clients', 'Clients'],
+  ['communications', 'Communications'], ['prospects', 'Prospects'], ['onboarding', 'Onboarding'],
+  ['calendar', 'Calendar'], ['followups', 'Follow-ups'], ['reports', 'Reports']];
 export let advSection = 'today';
 
 export function advLoadStrip() {
@@ -362,5 +364,69 @@ export async function openMeeting(id, done) {
   } catch (e) { dlg.innerHTML = `<button class="btn quiet close" data-close>Close</button><p class="err">${esc(e.message)}</p>`; }
 }
 
-export const ADV_RENDER = { today: advToday, clients: advClients, communications: advComms, prospects: advProspects,
-  onboarding: advOnboarding, calendar: advCalendar, followups: advFollowups };
+export const ADV_RENDER = { today: advToday, next: advNext, clients: advClients, communications: advComms,
+  prospects: advProspects, onboarding: advOnboarding, calendar: advCalendar, followups: advFollowups,
+  reports: advReports };
+
+/* ---- Next best action (PL-02) ----------------------------------------------------------
+ * One prioritised list across the book. Every row is a draft: accepting one posts it to
+ * /tasks, which is the only thing that creates anything.
+ */
+export function advNext() {
+  $('section').innerHTML = `<div class="grid">${panel('w-next', 'wide')}</div>`;
+  const run = () => load($('w-next'), 'Next best action', () => api('GET', '/next-actions', { query: { size: 25 } }), (r) =>
+    head('Next best action', r.totalItems + ' suggested') + (r.items.length ? `<ul class="rows">${r.items.map(a => `
+      <li><span class="sev ${esc(a.priority)}" title="${esc(a.priority)} priority"></span>
+      <div class="grow"><div class="title">${esc(a.title)}</div>
+        <div class="meta">${esc(a.reason)}</div>
+        <div class="meta">${esc(a.householdName || 'Practice')} • ${a.citations.map(c => esc(c.source)).join(', ')}</div></div>
+      <div class="actions"><button class="btn" data-accept="${esc(a.id)}">Add as follow-up</button></div></li>`).join('')}</ul>
+      <p class="hint">${esc(r.note)}</p>` : '<p class="empty">Nothing needs doing right now.</p>'),
+  (el, r) => el.querySelectorAll('[data-accept]').forEach(b => b.onclick = async () => {
+    const a = r.items.find(x => x.id === b.dataset.accept);
+    b.disabled = true;
+    try {
+      await api('POST', '/tasks', { body: { title: a.suggestedTask.title, dueDate: a.suggestedTask.dueDate,
+        householdId: a.suggestedTask.householdId || undefined } });
+      toast('Added to your follow-ups.'); b.textContent = 'Added'; advLoadStrip();
+    } catch (e) { toast(e.message); b.disabled = false; }
+  }));
+  run();
+}
+
+/* ---- Reporting and the advisor's own scorecard (PO-07, AX-08) ---- */
+const fmtMetric = (m) => m.unit === 'usd' ? money(m.value) : m.value.toLocaleString('en-US');
+
+export function metricRows(metrics) {
+  return `<ul class="rows">${metrics.map(m => {
+    const better = m.change === 0 ? '' : (m.lowerIsBetter ? (m.change < 0 ? 'up' : 'neg') : (m.change > 0 ? 'up' : 'neg'));
+    return `<li><div class="grow"><div class="title">${esc(m.label)}</div>
+      ${m.previousValue !== undefined ? `<div class="meta">was ${m.unit === 'usd' ? money(m.previousValue) : m.previousValue}</div>` : ''}</div>
+      <span class="figure-sm">${esc(fmtMetric(m))}</span>
+      ${m.change !== undefined ? `<span class="${better}" style="min-width:52px;text-align:right">${m.change > 0 ? '+' : ''}${m.unit === 'usd' ? money(m.change) : m.change}</span>` : ''}
+      ${m.firmMedian !== undefined ? `<span class="meta" style="min-width:110px;text-align:right">firm median ${m.unit === 'usd' ? money(m.firmMedian) : m.firmMedian}</span>` : ''}
+      ${m.rank ? `<span class="badge plain">#${m.rank} of ${m.outOf}</span>` : ''}</li>`;
+  }).join('')}</ul>`;
+}
+
+export function advReports() {
+  $('section').innerHTML = `<div class="grid"><div class="col">${panel('w-report')}</div><div class="col">${panel('w-score')}</div></div>`;
+  let days = 30;
+  const runReport = () => load($('w-report'), 'Practice report', () => api('GET', '/reports/practice', { query: { from: backDate(days) } }), (r) =>
+    `<div class="panel-head"><h2>Practice report</h2><label class="hint">Last <select id="repDays" aria-label="Reporting period">
+      <option value="30">30 days</option><option value="90">90 days</option></select></label></div>`
+    + `<p class="hint">${esc(r.from)} to ${esc(r.to)}, against ${esc(r.previousFrom)} to ${esc(r.previousTo)}.</p>`
+    + metricRows(r.metrics)
+    + Object.entries(r.breakdowns).map(([k, rows]) => rows.length ? `<h3>${esc(BREAKDOWN[k] || k)}</h3><ul class="rows">${rows.map(x => `
+        <li><div class="grow"><div class="title">${esc(x.label)}</div></div><span>${x.count}</span></li>`).join('')}</ul>` : '').join(''),
+  (el) => { const f = el.querySelector('#repDays'); f.value = String(days); f.onchange = () => { days = +f.value; runReport(); }; });
+  runReport();
+
+  load($('w-score'), 'Your scorecard', () => api('GET', '/firm/advisors/' + encodeURIComponent(SCORE_ID()) + '/scorecard'), (s) =>
+    head('Your scorecard', esc(s.advisorName)) + metricRows(s.metrics)
+    + '<p class="hint">Compared with the firm median. Where you sit against named colleagues is shown to a principal only.</p>');
+}
+
+const BREAKDOWN = { meetingsByType: 'Meetings by type', communicationsByStatus: 'Messages by status', complianceByStatus: 'Compliance by status' };
+const backDate = (n) => { const d = new Date(); d.setDate(d.getDate() - n + 1); return localDate(d); };
+const SCORE_ID = () => (state.session && state.session.advisorId) || 'adv1';

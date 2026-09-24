@@ -41,6 +41,7 @@ tags:
   - name: Portfolio signals
   - name: Firm
   - name: Intelligence
+  - name: Reporting
   - name: Sharing
   - name: Communications
   - name: Prospects
@@ -762,6 +763,60 @@ paths:
       responses:
         '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Query' } } } }
         '404': { $ref: '#/components/responses/Error' }
+
+  /reports/practice:
+    get:
+      tags: [Reporting]
+      operationId: getPracticeReport
+      summary: Practice numbers for a period, against the period before it
+      description: >
+        Counts only what the platform can evidence. Every metric carries the previous period's
+        value and the change, and `lowerIsBetter` so a rise in overdue work is not coloured as
+        progress. scope=firm requires the principal role. Requirement PO-07.
+      parameters:
+        - { $ref: '#/components/parameters/scope' }
+        - { name: from, in: query, schema: { type: string, format: date } }
+        - { name: to, in: query, schema: { type: string, format: date } }
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/PracticeReport' } } } }
+        '400': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+
+  /firm/advisors/{advisorId}/scorecard:
+    get:
+      tags: [Firm]
+      operationId: getAdvisorScorecard
+      summary: One advisor against the firm
+      description: >
+        An advisor may read their own; a principal may read anyone's. Only a principal sees
+        `rank`, because placing someone against named peers is a management decision rather
+        than a reporting one. This resolves the open question in HANDOFF section 9 about who
+        sees performance tracking. Requirement AX-08, PO-06.
+      parameters:
+        - { $ref: '#/components/parameters/advisorId' }
+        - { name: from, in: query, schema: { type: string, format: date } }
+        - { name: to, in: query, schema: { type: string, format: date } }
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Scorecard' } } } }
+        '403': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+
+  /next-actions:
+    get:
+      tags: [Reporting]
+      operationId: listNextActions
+      summary: What to do next, across the book
+      description: >
+        One prioritised list drawn from alerts, contact gaps, drafts awaiting approval, tax
+        signals, unprepared meetings and onboarding in progress. Every item is a draft with its
+        reason and its sources; `suggestedTask` is what an advisor posts to /tasks to accept
+        one. Nothing here is created (X-03). Requirement PL-02.
+      parameters:
+        - { $ref: '#/components/parameters/scope' }
+        - { $ref: '#/components/parameters/size' }
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/NextActionList' } } } }
+        '403': { $ref: '#/components/responses/Error' }
 
 components:
   securitySchemes:
@@ -1728,3 +1783,93 @@ components:
         page: { type: integer }
         size: { type: integer }
         totalItems: { type: integer }
+
+    ReportMetric:
+      type: object
+      required: [id, label, value, unit]
+      properties:
+        id: { type: string }
+        label: { type: string }
+        unit: { type: string, enum: [count, usd] }
+        value: { type: number }
+        previousValue: { type: number }
+        change: { type: number, description: 'value minus previousValue.' }
+        lowerIsBetter: { type: boolean, description: 'True for overdue work, so a rise is not progress.' }
+
+    PracticeReport:
+      type: object
+      required: [scope, from, to, metrics, dataAsOf]
+      properties:
+        scope: { type: string, enum: [own, firm] }
+        from: { type: string, format: date }
+        to: { type: string, format: date }
+        previousFrom: { type: string, format: date }
+        previousTo: { type: string, format: date }
+        metrics: { type: array, items: { $ref: '#/components/schemas/ReportMetric' } }
+        breakdowns:
+          type: object
+          properties:
+            meetingsByType: { type: array, items: { $ref: '#/components/schemas/LabelCount' } }
+            communicationsByStatus: { type: array, items: { $ref: '#/components/schemas/LabelCount' } }
+            complianceByStatus: { type: array, items: { $ref: '#/components/schemas/LabelCount' } }
+        dataAsOf: { type: string, format: date-time }
+
+    LabelCount:
+      type: object
+      required: [label, count]
+      properties:
+        label: { type: string }
+        count: { type: integer }
+
+    ScorecardMetric:
+      type: object
+      required: [id, label, value, firmMedian]
+      properties:
+        id: { type: string }
+        label: { type: string }
+        unit: { type: string, enum: [count, usd] }
+        value: { type: number }
+        firmMedian: { type: number }
+        lowerIsBetter: { type: boolean }
+        rank: { type: integer, description: 'Principal only. Absent for an advisor reading their own.' }
+        outOf: { type: integer }
+
+    Scorecard:
+      type: object
+      required: [advisorId, advisorName, metrics, dataAsOf]
+      properties:
+        advisorId: { type: string }
+        advisorName: { type: string }
+        from: { type: string, format: date }
+        to: { type: string, format: date }
+        metrics: { type: array, items: { $ref: '#/components/schemas/ScorecardMetric' } }
+        dataAsOf: { type: string, format: date-time }
+
+    NextAction:
+      type: object
+      required: [id, priority, kind, title, reason, citations, suggestedTask]
+      properties:
+        id: { type: string }
+        priority: { type: string, enum: [high, medium, low] }
+        kind: { type: string, enum: [alert, contact, approval, tax, prep, onboarding] }
+        title: { type: string }
+        reason: { type: string, description: 'Why this is being suggested, in the advisor''s terms.' }
+        householdId: { type: string, nullable: true }
+        householdName: { type: string, nullable: true }
+        citations: { type: array, items: { $ref: '#/components/schemas/Citation' } }
+        suggestedTask:
+          type: object
+          description: 'A draft. Post it to /tasks to accept it; nothing is created here.'
+          properties:
+            title: { type: string }
+            dueDate: { type: string, format: date }
+            householdId: { type: string, nullable: true }
+
+    NextActionList:
+      type: object
+      required: [items, totalItems, dataAsOf]
+      properties:
+        items: { type: array, items: { $ref: '#/components/schemas/NextAction' } }
+        totalItems: { type: integer }
+        note: { type: string }
+        dataAsOf: { type: string, format: date-time }

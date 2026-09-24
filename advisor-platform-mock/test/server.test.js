@@ -186,7 +186,7 @@ test('every operation in openapi.yaml is served', async () => {
     const p = l.match(/^  (\/[^\s:]+):\s*$/); if (p) { cur = p[1]; continue; }
     const m = l.match(/^    (get|post|patch|put|delete):\s*$/); if (m && cur) ops.push([m[1].toUpperCase(), cur]);
   }
-  assert.equal(ops.length, 53, 'spec should list 53 operations');
+  assert.equal(ops.length, 56, 'spec should list 56 operations');
   const params = { householdId: 'h3', meetingId: 'm1', taskId: 't1', alertId: 'a1', signalId: 'sig_idle_cash', advisorId: 'adv2', documentId: 'd1',
     communicationId: 'cm1', prospectId: 'p1', onboardingId: 'ob1', stepId: 'intake_form', invoiceId: 'inv1', queryId: 'q1' };
   const missing = [];
@@ -620,4 +620,83 @@ test('the client portal carries no sync state at all', async () => {
     const body = JSON.stringify((await call('grace', 'GET', p)).data);
     assert.doesNotMatch(body, /"sync"|not_configured/, p + ' leaks internal sync plumbing to a client');
   }
+});
+
+/* ---- reporting, scorecards, next best action ---- */
+
+test('the practice report compares a period with the one before it', async () => {
+  const r = (await call('dana', 'GET', '/reports/practice?from=2026-09-01&to=2026-09-24')).data;
+  assert.equal(r.scope, 'own');
+  assert.equal(r.previousTo, '2026-08-31', 'the previous window must end the day before this one starts');
+  assert.ok(r.metrics.length >= 8);
+  for (const m of r.metrics) {
+    assert.equal(m.change, m.value - m.previousValue, m.label + ' change must equal the difference');
+    assert.ok(['count', 'usd'].includes(m.unit));
+  }
+  const overdue = r.metrics.find(m => m.id === 'tasksOverdue');
+  assert.equal(overdue.lowerIsBetter, true, 'a rise in overdue work must not read as progress');
+  assert.equal(r.metrics.find(m => m.id === 'aum').lowerIsBetter, false);
+  assert.equal((await call('dana', 'GET', '/reports/practice?from=2026-09-24&to=2026-09-01')).status, 400);
+});
+
+test('firm scope on the report is principal-only and widens it', async () => {
+  assert.equal((await call('marcus', 'GET', '/reports/practice?scope=firm')).status, 403);
+  assert.equal((await call('grace', 'GET', '/reports/practice')).status, 403);
+  const own = (await call('dana', 'GET', '/reports/practice')).data;
+  const firm = (await call('dana', 'GET', '/reports/practice?scope=firm')).data;
+  assert.equal(own.metrics.find(m => m.id === 'households').value, 10);
+  assert.equal(firm.metrics.find(m => m.id === 'households').value, 28);
+});
+
+// Resolves the open question in HANDOFF section 9 about who sees performance tracking.
+test('an advisor sees their own scorecard but never a rank, and never a colleague\'s', async () => {
+  const mine = await call('marcus', 'GET', '/firm/advisors/adv2/scorecard');
+  assert.equal(mine.status, 200);
+  assert.ok(mine.data.metrics.length > 0);
+  for (const m of mine.data.metrics) {
+    assert.ok(typeof m.firmMedian === 'number', 'an advisor is compared with the firm median');
+    assert.equal(m.rank, undefined, 'placing an advisor against named peers is a principal-only view');
+  }
+  assert.equal((await call('marcus', 'GET', '/firm/advisors/adv1/scorecard')).status, 403,
+    'an advisor cannot read a colleague\'s scorecard');
+  assert.equal((await call('grace', 'GET', '/firm/advisors/adv1/scorecard')).status, 403);
+
+  const asPrincipal = (await call('dana', 'GET', '/firm/advisors/adv2/scorecard')).data;
+  assert.ok(asPrincipal.metrics.every(m => m.rank >= 1 && m.outOf === 4), 'a principal sees the rank');
+  assert.equal((await call('dana', 'GET', '/firm/advisors/nope/scorecard')).status, 404);
+});
+
+test('rank respects which direction is good', async () => {
+  const cards = await Promise.all(['adv1', 'adv2', 'adv3', 'adv4']
+    .map(id => call('dana', 'GET', `/firm/advisors/${id}/scorecard`).then(r => r.data)));
+  const byAum = cards.slice().sort((a, b) => b.metrics.find(m => m.id === 'aum').value - a.metrics.find(m => m.id === 'aum').value);
+  assert.equal(byAum[0].metrics.find(m => m.id === 'aum').rank, 1, 'most assets ranks first');
+  const gaps = cards.map(c => c.metrics.find(m => m.id === 'contactGaps'));
+  const best = gaps.reduce((a, b) => (a.value <= b.value ? a : b));
+  assert.equal(best.rank, 1, 'fewest contact gaps ranks first, because lower is better');
+});
+
+test('next best action is drafts, prioritised, with reasons and sources', async () => {
+  const r = (await call('dana', 'GET', '/next-actions')).data;
+  assert.ok(r.totalItems > 0);
+  const order = { high: 0, medium: 1, low: 2 };
+  const seen = r.items.map(i => order[i.priority]);
+  assert.deepEqual(seen, [...seen].sort((a, b) => a - b), 'items must come back prioritised');
+  for (const i of r.items) {
+    assert.ok(i.reason, i.title + ' must say why it is being suggested');
+    assert.ok(i.citations.length > 0, i.title + ' must say what it is drawn from');
+    assert.ok(i.suggestedTask && i.suggestedTask.title);
+  }
+  assert.equal((await call('grace', 'GET', '/next-actions')).status, 403);
+  assert.equal((await call('marcus', 'GET', '/next-actions?scope=firm')).status, 403);
+});
+
+test('reading next best action creates nothing', async () => {
+  const before = (await call('dana', 'GET', '/tasks')).data.items.length;
+  const r = (await call('dana', 'GET', '/next-actions')).data;
+  assert.equal((await call('dana', 'GET', '/tasks')).data.items.length, before, 'suggestions are not tasks');
+  // Accepting one is an explicit post, exactly as the note on the response says.
+  const first = r.items[0];
+  await call('dana', 'POST', '/tasks', { title: first.suggestedTask.title, dueDate: first.suggestedTask.dueDate, householdId: first.suggestedTask.householdId || undefined });
+  assert.equal((await call('dana', 'GET', '/tasks')).data.items.length, before + 1);
 });

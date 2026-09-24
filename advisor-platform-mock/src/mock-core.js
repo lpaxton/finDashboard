@@ -402,6 +402,135 @@ function createMock() {
   const BRANDING = { firmName: FIRM.name, advisorDisplayName: 'Dana Whitfield, CFP', markLetter: 'W',
     accentColor: '#0E5A57', updatedAt: dayISO(-40, 14), updatedBy: 'Dana Whitfield' };
 
+  /* ---- reporting, scorecards and next best action (PO-07, AX-08, PL-02) ----------------
+   * All three read data the platform already holds. Nothing here needs a new source, which
+   * is why they were built before the ones that do.
+   */
+  const inPeriod = (iso, from, to) => iso && iso.slice(0, 10) >= from && iso.slice(0, 10) <= to;
+  const shiftDays = (d, n) => { const x = new Date(d + 'T00:00:00'); x.setDate(x.getDate() + n); return dateOnly(Math.round((x - T0) / 864e5)); };
+
+  /* One period's numbers for a set of advisors. Only counts things the dataset can evidence. */
+  function practiceMetrics(advisorIds, from, to) {
+    const hs = HH.filter(h => advisorIds.includes(h.advisorId));
+    const ms = MEETINGS.filter(m => advisorIds.includes(m.advisorId) && inPeriod(m.startsAt, from, to));
+    const ts = TASKS.filter(t => advisorIds.includes(t.advisorId));
+    const cs = COMMS.filter(c => advisorIds.includes(c.advisorId));
+    const comp = COMPLIANCE.filter(c => advisorIds.includes(c.advisorId));
+    return {
+      households: hs.length,
+      aum: hs.reduce((a, h) => a + h.aum, 0),
+      meetingsHeld: ms.filter(m => new Date(m.startsAt) <= new Date()).length,
+      meetingsScheduled: ms.length,
+      tasksCompleted: ts.filter(t => t.status === 'done').length,
+      tasksOverdue: ts.filter(t => t.status === 'open' && t.dueDate < dateOnly(0)).length,
+      messagesSent: cs.filter(c => c.sentAt && inPeriod(c.sentAt, from, to)).length,
+      messagesAwaitingApproval: cs.filter(c => c.status === 'draft').length,
+      complianceOverdue: comp.filter(c => c.status === 'overdue').length,
+      contactGaps: hs.filter(h => h.lastContactAt && (Date.now() - new Date(h.lastContactAt)) / 864e5 > 45).length
+    };
+  }
+
+  const METRIC_LABELS = {
+    households: ['Households', 'count'], aum: ['Assets under management', 'usd'],
+    meetingsHeld: ['Meetings held', 'count'], meetingsScheduled: ['Meetings scheduled', 'count'],
+    tasksCompleted: ['Follow-ups completed', 'count'], tasksOverdue: ['Follow-ups overdue', 'count'],
+    messagesSent: ['Messages sent', 'count'], messagesAwaitingApproval: ['Messages awaiting approval', 'count'],
+    complianceOverdue: ['Compliance items overdue', 'count'], contactGaps: ['Households not contacted in 45 days', 'count']
+  };
+  /* Lower is better for these, so the UI must not colour a rise green. */
+  const LOWER_IS_BETTER = new Set(['tasksOverdue', 'messagesAwaitingApproval', 'complianceOverdue', 'contactGaps']);
+
+  function practiceReport(advisorIds, from, to) {
+    const days = Math.max(1, Math.round((new Date(to) - new Date(from)) / 864e5));
+    const prevFrom = shiftDays(from, -days - 1), prevTo = shiftDays(from, -1);
+    const now = practiceMetrics(advisorIds, from, to), was = practiceMetrics(advisorIds, prevFrom, prevTo);
+    return {
+      from, to, previousFrom: prevFrom, previousTo: prevTo, dataAsOf: NOW(),
+      metrics: Object.keys(METRIC_LABELS).map(id => ({
+        id, label: METRIC_LABELS[id][0], unit: METRIC_LABELS[id][1],
+        value: now[id], previousValue: was[id], change: now[id] - was[id],
+        lowerIsBetter: LOWER_IS_BETTER.has(id)
+      })),
+      breakdowns: {
+        meetingsByType: Object.entries(MEETINGS.filter(m => advisorIds.includes(m.advisorId) && inPeriod(m.startsAt, from, to))
+          .reduce((a, m) => ({ ...a, [m.type]: (a[m.type] || 0) + 1 }), {})).map(([label, count]) => ({ label, count })),
+        communicationsByStatus: ['draft', 'approved', 'sent'].map(st => ({ label: st,
+          count: COMMS.filter(c => advisorIds.includes(c.advisorId) && c.status === st).length })),
+        complianceByStatus: ['open', 'overdue', 'done'].map(st => ({ label: st,
+          count: COMPLIANCE.filter(c => advisorIds.includes(c.advisorId) && c.status === st).length }))
+      }
+    };
+  }
+
+  const median = (ns) => { const a = [...ns].sort((x, y) => x - y); const m = a.length >> 1;
+    return a.length % 2 ? a[m] : Math.round((a[m - 1] + a[m]) / 2); };
+
+  /* A scorecard compares an advisor with the firm. Advisors see their own against the firm
+     median; only a principal sees a rank, because naming where someone sits against named
+     peers is a management decision rather than a reporting one. See HANDOFF section 9. */
+  function scorecard(advisorId, from, to, withRank) {
+    const all = ADVISORS.map(a => ({ id: a.id, m: practiceMetrics([a.id], from, to) }));
+    const mine = all.find(a => a.id === advisorId).m;
+    const ids = ['households', 'aum', 'meetingsHeld', 'tasksCompleted', 'tasksOverdue', 'messagesSent', 'contactGaps', 'complianceOverdue'];
+    return {
+      advisorId, advisorName: advName(advisorId), from, to, dataAsOf: NOW(),
+      metrics: ids.map(id => {
+        const values = all.map(a => a.m[id]);
+        const lower = LOWER_IS_BETTER.has(id);
+        const sorted = [...all].sort((a, b) => lower ? a.m[id] - b.m[id] : b.m[id] - a.m[id]);
+        return { id, label: METRIC_LABELS[id][0], unit: METRIC_LABELS[id][1],
+          value: mine[id], firmMedian: median(values), lowerIsBetter: lower,
+          ...(withRank ? { rank: sorted.findIndex(a => a.id === advisorId) + 1, outOf: all.length } : {}) };
+      })
+    };
+  }
+
+  /* Next best action: one prioritised list across the book, drawn from what is already known.
+     Every item is a DRAFT. suggestedTask is what an advisor would post to /tasks (X-03). */
+  function nextActions(advisorIds) {
+    const out = [];
+    const push = (priority, kind, title, reason, householdId, citations, due) => out.push({
+      id: 'na_' + kind + '_' + (householdId || 'practice'), priority, kind, title, reason,
+      householdId: householdId || null, householdName: hhName(householdId),
+      citations, suggestedTask: { title, dueDate: dateOnly(due), householdId: householdId || null }
+    });
+
+    for (const a of ALERTS.filter(x => advisorIds.includes(x.advisorId) && x.status === 'open' && x.severity === 'high')) {
+      push('high', 'alert', a.title, 'Flagged as high severity ' + daysSince(a.createdAt) + ' days ago.', a.householdId,
+        [{ source: a.source, id: a.id, label: a.title, dataAsOf: NOW() }], 1);
+    }
+    for (const h of HH.filter(x => advisorIds.includes(x.advisorId) && x.lastContactAt && (Date.now() - new Date(x.lastContactAt)) / 864e5 > 45)) {
+      push('high', 'contact', 'Reconnect with ' + h.name,
+        'No contact in ' + Math.floor((Date.now() - new Date(h.lastContactAt)) / 864e5) + ' days.', h.id,
+        [{ source: 'crm', id: h.id, label: h.name + ' last contact', dataAsOf: NOW() }], 3);
+    }
+    for (const c of COMMS.filter(x => advisorIds.includes(x.advisorId) && x.status === 'draft' && x.complianceReview)) {
+      push('medium', 'approval', 'Review the draft to ' + (hhName(c.householdId) || 'the practice'),
+        'Waiting for compliance review since ' + daysSince(c.createdAt) + ' days ago.', c.householdId,
+        [{ source: 'platform', id: c.id, label: c.subject, dataAsOf: NOW() }], 1);
+    }
+    for (const r of SIGNAL_ROWS.filter(x => advisorIds.includes(x.advisorId) && x.kind === 'tax_loss_harvesting' && x.value >= 10000)) {
+      push('medium', 'tax', 'Review harvesting for ' + hhName(r.householdId),
+        'About $' + r.value.toLocaleString('en-US') + ' of unrealised losses.', r.householdId,
+        [{ source: 'greenmeadows', id: r.householdId, label: 'Open tax lots', dataAsOf: NOW() }], 7);
+    }
+    for (const m of MEETINGS.filter(x => advisorIds.includes(x.advisorId) && x.prepStatus === 'needs_prep'
+        && new Date(x.startsAt) >= new Date(dayISO(0)))) {
+      push('medium', 'prep', 'Prepare for ' + (hhName(m.householdId) || prospectName(m.id) || m.type),
+        m.type + ' on ' + m.startsAt.slice(0, 10) + ' has no prep.', m.householdId,
+        [{ source: 'calendar', id: m.id, label: m.type, dataAsOf: NOW() }], 1);
+    }
+    for (const o of ONBOARDING.filter(x => advisorIds.includes(x.advisorId) && !x.convertedAt)) {
+      const open = o.steps.filter(st => st.status !== 'done');
+      if (open.length) push('low', 'onboarding', 'Move ' + o.name + ' forward',
+        open.length + ' of ' + o.steps.length + ' steps outstanding: ' + open.map(st => st.label).join(', ') + '.', null,
+        [{ source: 'platform', id: o.id, label: o.name, dataAsOf: NOW() }], 5);
+    }
+    const order = { high: 0, medium: 1, low: 2 };
+    return out.sort((a, b) => order[a.priority] - order[b.priority]);
+  }
+  const daysSince = (iso) => Math.floor((Date.now() - new Date(iso)) / 864e5);
+
   /* ---- helpers ---- */
   /* The CRM is the system of record; this platform is a working surface (docs/system-of-record.md).
      No CRM is connected, so every syncable record says so rather than implying it reached one. */
@@ -486,7 +615,7 @@ function createMock() {
 
   /* ---- routes ---- */
   const routes = [
-    ['GET', /^\/session$/, () => { const u = user(); return ok({ id: u.id, name: u.name, role: u.role, roles: u.roles, views: u.views, firm: FIRM }); }],
+    ['GET', /^\/session$/, () => { const u = user(); return ok({ id: u.id, name: u.name, role: u.role, roles: u.roles, views: u.views, advisorId: u.advisorId || null, firm: FIRM }); }],
 
     ['GET', /^\/summary$/, () => {
       if (!isRole('advisor')) return forbid();
@@ -804,6 +933,34 @@ function createMock() {
       if (!isRole('advisor') && !isRole('principal')) return forbid();
       const r = QUERIES.find(x => x.id === m[1] && x.askedBy === user().name);
       return r ? ok(r) : notFound('Query');
+    }],
+
+    /* ---- reporting, scorecards, next best action ---- */
+    ['GET', /^\/reports\/practice$/, (m, q) => {
+      let ids;
+      if (q.scope === 'firm') { if (!isRole('principal')) return forbid(); ids = ADVISORS.map(a => a.id); }
+      else { if (!isRole('advisor')) return forbid(); ids = [user().advisorId]; }
+      const to = q.to || dateOnly(0), from = q.from || dateOnly(-29);
+      if (from > to) return fail(400, 'bad_request', 'from must not be after to.');
+      return ok({ scope: q.scope === 'firm' ? 'firm' : 'own', ...practiceReport(ids, from, to) });
+    }],
+    ['GET', /^\/firm\/advisors\/([^/]+)\/scorecard$/, (m, q) => {
+      const id = m[1];
+      const isPrincipal = isRole('principal');
+      // An advisor may see their own. Only a principal sees anyone else's, or a rank.
+      if (!isPrincipal && !(isRole('advisor') && user().advisorId === id)) return forbid();
+      if (!ADVISORS.some(a => a.id === id)) return notFound('Advisor');
+      const to = q.to || dateOnly(0), from = q.from || dateOnly(-29);
+      return ok(scorecard(id, from, to, isPrincipal));
+    }],
+    ['GET', /^\/next-actions$/, (m, q) => {
+      let ids;
+      if (q.scope === 'firm') { if (!isRole('principal')) return forbid(); ids = ADVISORS.map(a => a.id); }
+      else { if (!isRole('advisor')) return forbid(); ids = [user().advisorId]; }
+      const items = nextActions(ids);
+      const size = +q.size || 20;
+      return ok({ items: items.slice(0, size), totalItems: items.length, dataAsOf: NOW(),
+        note: 'Drafts. Nothing here has been created; post a suggestedTask to /tasks to accept one.' });
     }],
 
     ['GET', /^\/firm\/summary$/, () => {
