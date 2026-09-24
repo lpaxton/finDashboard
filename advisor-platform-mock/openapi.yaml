@@ -949,6 +949,7 @@ components:
         origin: { $ref: '#/components/schemas/TaskOrigin' }
         originMeetingId: { type: string, nullable: true }
         createdAt: { type: string, format: date-time }
+        sync: { $ref: '#/components/schemas/SyncState' }
 
     TaskCreate:
       type: object
@@ -1273,6 +1274,7 @@ components:
         approvedBy: { type: string, nullable: true }
         approvedAt: { type: string, format: date-time, nullable: true }
         sentAt: { type: string, format: date-time, nullable: true }
+        sync: { $ref: '#/components/schemas/SyncState' }
 
     Communication:
       allOf:
@@ -1307,6 +1309,7 @@ components:
         meetingId: { type: string, nullable: true, description: 'The meeting this prospect is booked into, if any.' }
         createdAt: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time }
+        sync: { $ref: '#/components/schemas/SyncState' }
 
     Prospect:
       allOf:
@@ -1460,6 +1463,7 @@ components:
         withheldReason: { type: string, nullable: true }
         content: { type: string, nullable: true, description: Null when withheld. }
         source: { $ref: '#/components/schemas/Source' }
+        sync: { $ref: '#/components/schemas/SyncState' }
 
     NextStepDrafts:
       type: object
@@ -1645,6 +1649,30 @@ components:
           default: own
           description: 'firm requires the principal role. household requires a household the caller may see.'
         householdId: { type: string, nullable: true, description: 'Required when scope is household.' }
+
+    SyncState:
+      type: object
+      description: >
+        Whether this record has reached the firm's CRM, which is the system of record.
+        The platform is a working surface: it owns the AI drafts, the approvals and the capture,
+        and writes the result back. See docs/system-of-record.md.
+
+        not_configured is a supported state, not a failure. When no CRM is connected the record
+        says so rather than implying a sync happened, in the same way a query names the sources
+        it could not reach.
+      required: [status]
+      properties:
+        status:
+          type: string
+          enum: [not_configured, pending, synced, failed, conflict]
+          description: >
+            not_configured, no CRM is connected. pending, accepted here and not yet written.
+            synced, the CRM agrees. failed, the write was rejected. conflict, both sides changed
+            since the last sync and nothing resolves that yet.
+        system: { type: string, nullable: true, enum: [salesforce, wealthbox, redtail, null] }
+        externalId: { type: string, nullable: true, description: 'The record in the CRM.' }
+        lastSyncedAt: { type: string, format: date-time, nullable: true }
+        error: { type: string, nullable: true, description: 'Why the last write was rejected.' }
 
     Citation:
       type: object

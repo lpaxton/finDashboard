@@ -131,6 +131,7 @@ export interface Task {
   originMeetingId?: string | null;
   /** Format: date-time. */
   createdAt?: string;
+  sync?: SyncState;
 }
 
 export interface TaskCreate {
@@ -417,6 +418,7 @@ export interface CommunicationSummary {
   approvedAt?: string | null;
   /** Format: date-time. */
   sentAt?: string | null;
+  sync?: SyncState;
 }
 
 export type Communication = CommunicationSummary & {
@@ -445,6 +447,7 @@ export interface ProspectSummary {
   createdAt: string;
   /** Format: date-time. */
   updatedAt: string;
+  sync?: SyncState;
 }
 
 export type Prospect = ProspectSummary & {
@@ -580,6 +583,7 @@ export interface MeetingRecord {
   /** Null when withheld. */
   content?: string | null;
   source?: Source;
+  sync?: SyncState;
 }
 
 export interface NextStepDrafts {
@@ -740,6 +744,29 @@ export interface QueryRequest {
   scope?: 'own' | 'firm' | 'household';
   /** Required when scope is household. */
   householdId?: string | null;
+}
+
+/**
+ * Whether this record has reached the firm's CRM, which is the system of record. The platform
+ * is a working surface: it owns the AI drafts, the approvals and the capture, and writes the
+ * result back. See docs/system-of-record.md. not_configured is a supported state, not a
+ * failure. When no CRM is connected the record says so rather than implying a sync happened,
+ * in the same way a query names the sources it could not reach.
+ */
+export interface SyncState {
+  /**
+   * not_configured, no CRM is connected. pending, accepted here and not yet written. synced, the
+   * CRM agrees. failed, the write was rejected. conflict, both sides changed since the last sync
+   * and nothing resolves that yet.
+   */
+  status: 'not_configured' | 'pending' | 'synced' | 'failed' | 'conflict';
+  system?: 'salesforce' | 'wealthbox' | 'redtail' | null | null;
+  /** The record in the CRM. */
+  externalId?: string | null;
+  /** Format: date-time. */
+  lastSyncedAt?: string | null;
+  /** Why the last write was rejected. */
+  error?: string | null;
 }
 
 /** Where one part of the answer came from. Required by X-04. */

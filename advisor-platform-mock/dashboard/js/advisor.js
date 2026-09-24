@@ -1,6 +1,6 @@
 /* The advisor's own sections. Everything here is internal: none of it may reach a client. */
 import { api } from './api.js';
-import { $, esc, money, moneyFull, pct, pctClass, fmtTime, fmtDate, localDate, daysAgo, dueLabel } from './format.js';
+import { $, esc, money, moneyFull, pct, pctClass, fmtTime, fmtDate, localDate, daysAgo, dueLabel, syncBadge, syncNotice } from './format.js';
 import { toast, spark, head, panel, load, alertsList, openHousehold, bookPanel, subnav } from './ui.js';
 
 /* The role switcher stays the top level (X-15). These are sections inside the advisor view,
@@ -90,8 +90,8 @@ export function advFollowups() {
   $('section').innerHTML = `<div class="grid">${panel('w-tasks', 'wide')}</div>`;
   const run = () => load($('w-tasks'), 'Follow-ups', () => api('GET', '/tasks'), (r) => head('Follow-ups', r.openCount + ' open') + (r.items.length ? `<ul class="rows">${r.items.map(t => { const d = dueLabel(t.dueDate); return `
     <li class="task${t.status === 'done' ? ' done' : ''}"><label><input type="checkbox" data-task="${esc(t.id)}" ${t.status === 'done' ? 'checked' : ''}>
-    <span class="grow"><span class="title">${esc(t.title)}</span>${t.origin === 'meeting' ? '<span class="tag">From meeting</span>' : ''}
-    <span class="meta" style="display:block">${esc(t.householdName || 'Practice')} • <span class="${d.hot && t.status === 'open' ? 'due-hot' : ''}">${esc(d.text)}</span></span></span></label></li>`; }).join('')}</ul>` : '<p class="empty">No follow-ups yet.</p>'),
+    <span class="grow"><span class="title">${esc(t.title)}</span>${t.origin === 'meeting' ? '<span class="tag">From meeting</span>' : ''}${syncBadge(t.sync)}
+    <span class="meta" style="display:block">${esc(t.householdName || 'Practice')} • <span class="${d.hot && t.status === 'open' ? 'due-hot' : ''}">${esc(d.text)}</span></span></span></label></li>`; }).join('')}</ul>` + syncNotice(r.items) : '<p class="empty">No follow-ups yet.</p>'),
   (el) => el.querySelectorAll('[data-task]').forEach(c => c.addEventListener('change', async () => {
     const li = c.closest('.task'); li.classList.toggle('done', c.checked);
     try { await api('PATCH', '/tasks/' + encodeURIComponent(c.dataset.task), { body: { status: c.checked ? 'done' : 'open' } }); toast(c.checked ? 'Done.' : 'Reopened.'); advLoadStrip(); }
@@ -111,8 +111,8 @@ export function advComms() {
       <li><div class="grow"><div class="title">${esc(c.subject)}</div>
       <div class="meta">${esc(c.householdName || 'Practice')} • ${esc(c.channel)} • ${esc(daysAgo(c.createdAt))}${c.draftedBy === 'ai' ? ' • AI draft' : ''}${c.complianceReview ? ' • <span class="due-hot">compliance review</span>' : ''}</div>
       ${c.approvedBy ? `<div class="meta">Approved by ${esc(c.approvedBy)}</div>` : ''}</div>
-      <span class="badge ${cls}">${esc(label)}</span>
-      <button class="btn" data-open="${esc(c.id)}">Open</button></li>`; }).join('')}</ul>` : '<p class="empty">No messages match.</p>'),
+      <span class="badge ${cls}">${esc(label)}</span>${syncBadge(c.sync)}
+      <button class="btn" data-open="${esc(c.id)}">Open</button></li>`; }).join('')}</ul>` + syncNotice(r.items) : '<p class="empty">No messages match.</p>'),
   (el) => {
     const f = el.querySelector('#cmfilter'); f.value = status; f.onchange = () => { status = f.value; run(); };
     el.querySelectorAll('[data-open]').forEach(b => b.onclick = () => openComm(b.dataset.open, run));
@@ -157,7 +157,7 @@ export function advProspects() {
           <div class="title">${esc(p.name)}</div>
           <div class="meta">${p.estimatedAssets ? esc(money(p.estimatedAssets)) : 'Assets unknown'} • ${esc(p.source)}</div>
           ${p.meetingId ? '<div class="meta">Meeting booked</div>' : ''}</article>`).join('') : '<p class="empty">Empty</p>'}</div>`;
-    }).join('')}</div>`;
+    }).join('')}</div>` + syncNotice(r.items);
   }, (el) => el.querySelectorAll('[data-pros]').forEach(c => {
     const open = () => openProspect(c.dataset.pros, run);
     c.onclick = open;

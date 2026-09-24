@@ -582,3 +582,42 @@ test('an unmatched question admits it rather than inventing an answer', async ()
   assert.deepEqual(r.citations, []);
   assert.match(r.answer, /matches phrasing rather than understanding/);
 });
+
+/* ---- system of record (docs/system-of-record.md) ---- */
+
+test('records that will sync say where they stand with the CRM', async () => {
+  const syncable = [
+    ['/tasks', r => r.items],
+    ['/communications', r => r.items],
+    ['/prospects', r => r.items]
+  ];
+  for (const [p, pick] of syncable) {
+    const items = pick((await call('dana', 'GET', p)).data);
+    assert.ok(items.length > 0, p + ' should return something to check');
+    for (const i of items) {
+      assert.ok(i.sync, p + ' record has no sync state');
+      assert.ok(['not_configured', 'pending', 'synced', 'failed', 'conflict'].includes(i.sync.status));
+    }
+  }
+  const record = (await call('dana', 'GET', '/meetings/m5/record')).data;
+  assert.ok(record.sync, 'a meeting record syncs to the CRM as a note (MEET-08)');
+});
+
+test('with no CRM connected, nothing claims to have reached one', async () => {
+  const t = (await call('dana', 'GET', '/tasks')).data.items[0];
+  assert.equal(t.sync.status, 'not_configured');
+  assert.equal(t.sync.externalId, null, 'a record cannot name a CRM id it does not have');
+  assert.equal(t.sync.lastSyncedAt, null);
+  assert.equal(t.sync.system, null);
+
+  const made = await call('dana', 'POST', '/tasks', { title: 'Call the Shahs' });
+  assert.equal(made.data.sync.status, 'not_configured',
+    'a task created here must not imply it was written to a CRM');
+});
+
+test('the client portal carries no sync state at all', async () => {
+  for (const p of ['/me/household', '/me/shared', '/me/documents', '/me/fees']) {
+    const body = JSON.stringify((await call('grace', 'GET', p)).data);
+    assert.doesNotMatch(body, /"sync"|not_configured/, p + ' leaks internal sync plumbing to a client');
+  }
+});

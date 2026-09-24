@@ -28,3 +28,19 @@ export const statusBadge = (s) => { const [t, c] = HH_STATUS[s] || [s, 'plain'];
 export const SHARE_TYPES = { plan: 'Plan', tax_explanation: 'Tax explanation', report: 'Report', proposal: 'Proposal', message: 'Message', document: 'Document' };
 export const CATEGORY = { communications_review: 'Communications review', annual_review: 'Annual review', disclosure: 'Disclosure', restriction: 'Restriction', agreement: 'Agreement' };
 
+/* The CRM is the system of record (docs/system-of-record.md). While none is connected, a badge
+   on every row would be pure noise, so the state shows per record only when it needs attention
+   and the section says once, quietly, that nothing is connected. */
+export const SYNC_LABEL = { pending: 'Not yet in CRM', failed: 'CRM write failed', conflict: 'Differs from CRM' };
+
+export const syncBadge = (sync) => {
+  const label = sync && SYNC_LABEL[sync.status];
+  if (!label) return '';
+  return `<span class="badge ${sync.status === 'synced' ? 'ok' : sync.status === 'pending' ? 'prep' : 'crit'}" title="${esc(sync.error || label)}">${esc(label)}</span>`;
+};
+
+/* One line per section, not one per row. Returns nothing once a CRM is connected. */
+export const syncNotice = (items) => {
+  const off = items.some(i => i.sync && i.sync.status === 'not_configured');
+  return off ? '<p class="hint">No CRM is connected, so nothing here has been written to one. This platform is the working surface; the CRM stays the system of record.</p>' : '';
+};

@@ -95,6 +95,8 @@ Roles: `principal`, `advisor`, `associate`, `client`. A user can hold several (a
 
 **Cross-cutting (X-01 to X-15):** role-based access, client data isolation, human in the loop for anything that leaves the firm or changes a system of record, source citation with data-as-of dates, audit trail, compliance review, security and privacy, managed integrations, AI quality evaluation, performance targets, accessibility (WCAG 2.1 AA), the client-safe boundary, explicit approval for shared content, server-side role enforcement, and a view switcher.
 
+**Books and records:** the platform being a working surface rather than the system of record is partly a compliance decision — leaving the CRM canonical keeps retention and archival obligations where they already sit. Confirm with compliance before anything moves the other way.
+
 **Regulatory sensitivity (needs review before build):** recording consent (MEET-04), placing trades (PM-05), robo portfolios (PM-04), credit risk (RTI-01), tax strategies (RTI-03), advisor value claims (RTI-09), marketing content (GP-06 to GP-10), and the Client Sentiment Index (COMM-05).
 
 **Coverage against the 75, audited 24 September 2026 by reading the code:** 17 built and working (the query surface is now started over the two connected sources), 21 partial, 37 remaining. Every one of the 50 contract operations now has a UI; a test asserts it. Full matrix: https://claude.ai/code/artifact/5611e434-13f5-4262-9562-4881dd3b797d
@@ -228,7 +230,7 @@ Open questions, from the requirements doc:
 - **Sample responses for account fees and user notes**, whose published shapes are unusable.
 - Which Green Meadows token lets an advisor see every client's accounts? Only a user-specific token and a robo advisor system token appear in the reference. If none exists, options are federating every client (needs each client's SSN and consent) or asking Green Meadows for another token type.
 - Does the API have a household concept? Are the margin admin endpoints available to this client? What are the token lifetime and rate limits? What is the sandbox to production timeline (mTLS onboarding)?
-- Which systems supply meetings, email, CRM notes and tasks? Which calendar and CRM providers first?
+- Which systems supply meetings, email, CRM notes and tasks? Which calendar and CRM providers first? **The system-of-record question is decided:** the platform is a working surface and the CRM stays canonical — `advisor-platform-mock/docs/system-of-record.md`. No provider is chosen, and the answer is a port with one adapter per CRM rather than a choice. Syncable records now carry `sync`, which reports `not_configured` while none is connected.
 - Are firm and advisor separate logins, or one person switching views? Can a principal open an advisor's dashboard read-only, and is that access logged?
 - Should the portal offer AI question answering? A recommendation is now written up in `advisor-platform-mock/docs/query-surface.md`: not in the first version, because the client-safe boundary is currently structural (a `/me` endpoint physically cannot return another household's data) and a free-text surface makes it probabilistic. Can clients trade in the portal, or only view?
 - Are performance-tracking features (PO-06, AX-07, AX-08) visible to advisors, principals or both?

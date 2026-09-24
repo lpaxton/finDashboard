@@ -403,6 +403,13 @@ function createMock() {
     accentColor: '#0E5A57', updatedAt: dayISO(-40, 14), updatedBy: 'Dana Whitfield' };
 
   /* ---- helpers ---- */
+  /* The CRM is the system of record; this platform is a working surface (docs/system-of-record.md).
+     No CRM is connected, so every syncable record says so rather than implying it reached one. */
+  const CRM = { connected: false, system: null };
+  const syncState = (externalId = null) => CRM.connected
+    ? { status: externalId ? 'synced' : 'pending', system: CRM.system, externalId, lastSyncedAt: externalId ? NOW() : null, error: null }
+    : { status: 'not_configured', system: null, externalId: null, lastSyncedAt: null, error: null };
+
   const ok = (d) => ({ status: 200, data: d });
   const created = (d) => ({ status: 201, data: d });
   const fail = (status, code, message) => ({ status, data: { code, message } });
@@ -440,7 +447,7 @@ function createMock() {
   const meetingsFor = (advisorId) => MEETINGS.filter(m => m.advisorId === advisorId);
   const tasksFor = (advisorId) => TASKS.filter(t => t.advisorId === advisorId);
   const withName = (t) => ({ ...t, householdName: t.householdId ? hhById(t.householdId).name : null });
-  const publicTask = ({ advisorId, ...t }) => withName(t);
+  const publicTask = ({ advisorId, ...t }) => ({ ...withName(t), sync: syncState() });
 
   function advisorRow(id) {
     const hs = HH.filter(h => h.advisorId === id), aum = hs.reduce((a, h) => a + h.aum, 0);
@@ -456,8 +463,8 @@ function createMock() {
   const alertOut = ({ advisorId, ...a }) => ({ ...a, householdName: a.householdId ? hhById(a.householdId).name : null });
 
   // List shapes leave the heavy field out; the by-id operation adds it back.
-  const commRow = ({ advisorId, body, ...c }) => ({ ...c, householdName: hhName(c.householdId), advisorName: advName(advisorId) });
-  const prospectRow = ({ advisorId, intakeNotes, ...p }) => ({ ...p });
+  const commRow = ({ advisorId, body, ...c }) => ({ ...c, householdName: hhName(c.householdId), advisorName: advName(advisorId), sync: syncState() });
+  const prospectRow = ({ advisorId, intakeNotes, ...p }) => ({ ...p, sync: syncState() });
   const onbRow = ({ advisorId, ...o }) => ({ ...o,
     stepsComplete: o.steps.filter(s => s.status === 'done').length, stepsTotal: o.steps.length,
     readyToConvert: o.steps.every(s => s.status === 'done') && !o.convertedAt });
@@ -730,7 +737,7 @@ function createMock() {
       const x = MEETINGS.find(y => y.id === m[1] && y.advisorId === user().advisorId); if (!x) return notFound('Meeting');
       const r = RECORDS.find(y => y.meetingId === x.id); if (!r) return notFound('Record');
       const withheld = r.kind === 'transcript' && !(r.consent && r.consent.obtained);
-      return ok({ meetingId: r.meetingId, kind: r.kind, author: r.author, source: r.source, consent: r.consent,
+      return ok({ meetingId: r.meetingId, kind: r.kind, author: r.author, source: r.source, consent: r.consent, sync: syncState(),
         capturedAt: x.startsAt, withheld, content: withheld ? null : r.content,
         withheldReason: withheld ? 'Recording consent is not on file for this meeting.' : null });
     }],
