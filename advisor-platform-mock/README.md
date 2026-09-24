@@ -18,7 +18,7 @@ Then open http://localhost:4010/ for the dashboard, already connected to this se
 npm test
 ```
 
-runs 34 tests, including one that reads `openapi.yaml` and checks that every listed operation is served, and one that checks the dashboard's embedded mock has not drifted from `src/mock-core.js`.
+runs 38 tests, including one that reads `openapi.yaml` and checks that every listed operation is served, and one that checks the dashboard's embedded mock has not drifted from `src/mock-core.js`.
 
 ## Signing in
 
@@ -95,12 +95,38 @@ openapi.yaml           the contract (v0.3 draft)
 dashboard/index.html   a shell: markup, stylesheet, one module script
 dashboard/styles.css   all styling
 dashboard/js/*.js      the dashboard, as native ES modules (no build step)
+types/api.d.ts         generated from openapi.yaml; do not edit by hand
+tools/gen-types.js     the generator
 test/server.test.js    behaviour and contract tests
 ```
 
 The dashboard imports `src/mock-core.js` directly, so the mock exists in exactly one place. `dashboard/js/api.js` is the only module that knows whether data comes from the mock or a real backend.
 
 There is no build step. The browser loads `dashboard/js/*.js` as native ES modules, and the server sends them `no-store` so an edited file is never served stale.
+
+## Types
+
+`types/api.d.ts` holds a TypeScript type for every schema in `openapi.yaml`, plus an
+`Operations` map keyed by operationId. It is generated:
+
+```
+npm run types
+```
+
+`npm test` fails if it is out of date, if a schema has no type, or if the contract grows a
+YAML construct the generator does not read.
+
+Nothing is compiled. Editors pick the types up through `jsconfig.json`, so a module can opt
+into checking by starting with `// @ts-check` — `dashboard/js/api.js` and `config.js` do, and
+are clean. `checkJs` is off for the rest: the dashboard predates the checker and turning it on
+reports about 590 implicit-any and possibly-null findings, none of them bugs. Adopt per file.
+
+To run the checker yourself you need TypeScript, which this project deliberately does not
+depend on:
+
+```
+npm install --no-save typescript && npm run typecheck
+```
 
 ## Known limits
 

@@ -784,20 +784,23 @@ components:
             id: { type: string }
             name: { type: string }
 
+    AumBlock:
+      type: object
+      description: Assets under management with its month change and 12-month history.
+      required: [value, changeMtd, trend]
+      properties:
+        value: { type: number, example: 412600000 }
+        changeMtd: { type: number, description: "Fraction, 0.018 = 1.8%", example: 0.018 }
+        trend:
+          type: array
+          description: Last 12 month-end values, oldest first.
+          items: { $ref: '#/components/schemas/TrendPoint' }
+
     Summary:
       type: object
       required: [aum, households, meetingsThisWeek, tasksOpen, tasksDueToday, dataAsOf]
       properties:
-        aum:
-          type: object
-          required: [value, changeMtd, trend]
-          properties:
-            value: { type: number, example: 412600000 }
-            changeMtd: { type: number, description: "Fraction, 0.018 = 1.8%", example: 0.018 }
-            trend:
-              type: array
-              description: Last 12 month-end values, oldest first.
-              items: { $ref: '#/components/schemas/TrendPoint' }
+        aum: { $ref: '#/components/schemas/AumBlock' }
         households: { type: integer }
         meetingsThisWeek: { type: integer }
         tasksOpen: { type: integer }
@@ -936,7 +939,7 @@ components:
       properties:
         type: { type: string, enum: [review, open_queue, draft_email, send_reminder] }
         label: { type: string, example: Review }
-        targetId: { type: string, description: Household, queue or item the action opens. }
+        targetId: { type: string, description: 'Household, queue or item the action opens.' }
 
     Alert:
       type: object
@@ -976,7 +979,7 @@ components:
         kind: { $ref: '#/components/schemas/SignalKind' }
         count: { type: integer }
         label: { type: string }
-        detail: { type: string, example: About $61,200 in unrealized losses }
+        detail: { type: string, example: 'About $61,200 in unrealized losses' }
         dataAsOf: { type: string, format: date-time }
 
     SignalList:
@@ -1008,7 +1011,7 @@ components:
       type: object
       required: [aum, advisors, households, openComplianceItems, dataAsOf]
       properties:
-        aum: { $ref: '#/components/schemas/Summary/properties/aum' }
+        aum: { $ref: '#/components/schemas/AumBlock' }
         advisors: { type: integer }
         households: { type: integer }
         openComplianceItems: { type: integer }
@@ -1252,7 +1255,7 @@ components:
         stage: { $ref: '#/components/schemas/ProspectStage' }
         estimatedAssets: { type: number, nullable: true }
         source: { type: string, enum: [referral, website, event, other] }
-        meetingId: { type: string, nullable: true, description: The meeting this prospect is booked into, if any. }
+        meetingId: { type: string, nullable: true, description: 'The meeting this prospect is booked into, if any.' }
         createdAt: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time }
 
@@ -1322,7 +1325,7 @@ components:
       type: object
       required: [source, rows]
       properties:
-        source: { type: string, description: Where the book is coming from, for the audit trail., example: Redtail export }
+        source: { type: string, description: 'Where the book is coming from, for the audit trail.', example: Redtail export }
         rows:
           type: array
           minItems: 1
@@ -1393,7 +1396,7 @@ components:
       properties:
         obtained: { type: boolean }
         obtainedAt: { type: string, format: date-time, nullable: true }
-        method: { type: string, nullable: true, example: verbal, recorded }
+        method: { type: string, nullable: true, example: 'verbal, recorded' }
 
     MeetingRecord:
       type: object
@@ -1415,7 +1418,7 @@ components:
       properties:
         meetingId: { type: string }
         generatedAt: { type: string, format: date-time }
-        model: { type: string, description: Which model produced the suggestions, for the audit trail. }
+        model: { type: string, description: 'Which model produced the suggestions, for the audit trail.' }
         accepted:
           type: boolean
           description: >
@@ -1436,9 +1439,9 @@ components:
       required: [assetClass, targetPct, currentPct, driftPct]
       properties:
         assetClass: { type: string, example: US equity }
-        targetPct: { type: number, description: Percentage points, not a fraction. }
+        targetPct: { type: number, description: 'Percentage points, not a fraction.' }
         currentPct: { type: number }
-        driftPct: { type: number, description: current minus target, in percentage points. }
+        driftPct: { type: number, description: 'current minus target, in percentage points.' }
 
     Allocation:
       type: object

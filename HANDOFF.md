@@ -37,14 +37,17 @@ advisor-platform-mock/
   dashboard/js/firm.js    overview, billing, branding
   dashboard/js/client.js  the client portal
   dashboard/js/app.js     entry point: sign in, pick a view, global click handlers
-  test/server.test.js     34 tests, including a check that every operation in openapi.yaml is served
+  types/api.d.ts          a type per schema plus an Operations map; generated, never hand-edited
+  tools/gen-types.js      the generator, and a YAML reader for the subset the spec uses
+  jsconfig.json           lets editors check JSDoc against the generated types, no build step
+  test/server.test.js     38 tests, including a check that every operation in openapi.yaml is served
 ```
 
 Run it (from `advisor-platform-mock/`):
 
 ```
 npm start        # http://localhost:4010 serves the dashboard, connected to the mock
-npm test         # 34 tests
+npm test         # 38 tests
 ```
 
 Sign-in is a persona token in `Authorization: Bearer <token>`: `dana` (principal and advisor), `marcus` (advisor), `grace` (client). See `README.md` for curl examples and failure-injection headers.
@@ -216,7 +219,7 @@ Open questions, from the requirements doc:
 
 1. **Confirm access with Green Meadows.** Get sandbox credentials, then record real responses for the endpoints in section 7 and replace the assumed shapes in `mock-core.js` and `openapi.yaml`. Raise the advisor-wide token question first: it decides how the book-of-business view gets its data.
 2. **Build the real backend.** Implement the v0.3 contract with Green Meadows adapters. Start with `/session`, `/summary`, `/households`, `/households/{id}` and `/me/*`, since those come almost entirely from Green Meadows. Keep credential handling in one module. Reuse `test/server.test.js` as a contract test that runs against both the mock and the real service.
-3. ~~**Turn the dashboard into a proper project.**~~ Done. `dashboard/index.html` is a 41-line shell; the application is ten ES modules under `dashboard/js/`, and the mock is imported rather than copied. What is still open from this step: generating types from `openapi.yaml`, and deciding whether the mock ships in a production build at all.
+3. ~~**Turn the dashboard into a proper project.**~~ Done. `dashboard/index.html` is a 41-line shell; the application is ten ES modules under `dashboard/js/`, the mock is imported rather than copied, and `types/api.d.ts` is generated from the contract by `npm run types`. What is still open from this step: whether the mock ships in a production build at all, and adopting `// @ts-check` across the remaining modules (about 590 findings, all implicit-any and possibly-null, none of them bugs).
 4. **Decide sources for the missing domains** (calendar, CRM, task store, email) and build adapters behind the same contract shapes.
 5. **Build the platform's own sign-in, roles and audit trail** (X-01, X-05, X-14, X-15). The mock's persona tokens are a stand-in only.
 6. **Then the AI features**, in the phasing proposed in section 9 of the requirements doc: foundation first (data access, meeting capture, tasks), then advisor value (tax and portfolio analysis, reporting, onboarding, content), then the higher-risk features.
@@ -235,6 +238,11 @@ Open questions, from the requirements doc:
 **Compliance is firm-only.** The Meridian mockup had a compliance list in the advisor's own nav, but `GET /firm/compliance` is principal-scoped, so it lives under Firm here. Giving an advisor their own compliance view needs a contract decision first: either relax that operation's role check with an `advisorId` filter, or add an advisor-scoped equivalent.
 
 **Branding and dark mode.** `accentColor` is stored as a single light-mode colour. Applied unchanged in dark mode it fails contrast, so the dashboard lifts it toward the page ink before use (`forTheme`). A firm that wants exact brand colour reproduction in both themes needs two stored colours, which is a contract change.
+
+**Types are generated, and the generator is strict on purpose.** `tools/gen-types.js` reads only the YAML subset this spec uses and throws on anything else, rather than guessing. Two constructs it refuses, both of which were already in the spec and silently wrong:
+
+- An unquoted value containing a comma inside a flow mapping. YAML reads the comma as a separator, truncating the value and turning the rest of the sentence into a key. Eight descriptions in this contract were corrupted that way before it was caught. Quote any value containing a comma.
+- A `$ref` pointing inside another schema (`#/components/schemas/Summary/properties/aum`). It resolves to no type name. Give the shape its own entry, as `AumBlock` and `TrendPoint` now have.
 
 **Design.** Deliberately not the generic dashboard look. Type: Instrument Sans for interface text, Source Serif 4 for headings and figures, both from Google Fonts with system fallbacks. Colour tokens are defined once in `:root` with light and dark variants (deep teal brand `#0E5A57`, cool grey-green backgrounds, amber and crimson only for warnings). Dark mode follows the system setting. Layout uses hairline dividers instead of card-on-card, and a meeting timeline as the one distinctive element. Keep new work consistent with these tokens. The client portal uses plain language ("Your accounts", "From your advisor"), not internal terms.
 - **Accessibility floor:** visible keyboard focus, reduced-motion respected, semantic tables with sortable column buttons that announce sort state, live region for toasts, dialogs via `<dialog>`.

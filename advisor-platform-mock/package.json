@@ -1,6 +1,6 @@
 {
   "name": "advisor-platform-mock",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "description": "Standalone mock server for the Advisor Platform API v0.3 (firm, advisor and client portal), with a bundled dashboard.",
   "private": true,
   "license": "UNLICENSED",
@@ -10,7 +10,9 @@
   },
   "scripts": {
     "start": "node server.js",
-    "test": "node --test"
+    "test": "node --test",
+    "types": "node tools/gen-types.js",
+    "typecheck": "tsc -p jsconfig.json"
   },
   "type": "module"
 }

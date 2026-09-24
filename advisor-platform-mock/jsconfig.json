@@ -1,0 +1,14 @@
+{
+  "//": "Editors check types/api.d.ts and any file marked // @ts-check against it. checkJs is off because the dashboard predates the checker and turning it on reports ~590 implicit-any and possibly-null findings, none of them bugs. Adopt per file with // @ts-check. No build step: nothing here is compiled and npm start does not read this file.",
+  "compilerOptions": {
+    "target": "es2022",
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "checkJs": false,
+    "strict": true,
+    "noEmit": true,
+    "lib": ["es2022", "dom"],
+    "allowJs": true
+  },
+  "include": ["dashboard/js/**/*.js", "src/**/*.js", "types/**/*.d.ts"]
+}

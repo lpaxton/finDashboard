@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { spawn } from 'node:child_process';
 import { createServer } from '../server.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -424,4 +425,66 @@ test('the dashboard is modules, and every module is served', async () => {
   }
   // No path is resolved from the request, so traversal cannot reach the repo.
   assert.equal((await fetch(base + '/js/%2e%2e%2f%2e%2e%2fpackage.json')).status, 404);
+});
+
+/* ---- generated types ---- */
+
+const runGen = (args = []) => new Promise((resolve) => {
+  const p = spawn(process.execPath, [path.join(__dirname, '..', 'tools', 'gen-types.js'), ...args]);
+  let out = '', err = '';
+  p.stdout.on('data', d => { out += d; });
+  p.stderr.on('data', d => { err += d; });
+  p.on('close', code => resolve({ code, out, err }));
+});
+
+test('types/api.d.ts is up to date with openapi.yaml', async () => {
+  const r = await runGen(['--check']);
+  assert.equal(r.code, 0, r.err.trim() || 'the generator failed');
+});
+
+test('every schema in the contract has a generated type', () => {
+  const spec = fs.readFileSync(path.join(__dirname, '..', 'openapi.yaml'), 'utf8');
+  const types = fs.readFileSync(path.join(__dirname, '..', 'types', 'api.d.ts'), 'utf8');
+  const start = spec.indexOf('\n  schemas:');
+  const names = [...spec.slice(start).matchAll(/^    ([A-Z][A-Za-z0-9_]*):$/gm)].map(m => m[1]);
+  assert.ok(names.length > 70, 'expected the spec to define many schemas, found ' + names.length);
+  const missing = names.filter(n => !new RegExp(`export (interface|type) ${n}\\b`).test(types));
+  assert.deepEqual(missing, [], 'schemas with no generated type: ' + missing.join(', '));
+  for (const op of ['getSession', 'listCommunications', 'suggestNextSteps', 'updateBranding'])
+    assert.match(types, new RegExp(`\\b${op}: \\{`), 'Operations is missing ' + op);
+});
+
+// The generator reads a deliberate subset of YAML. These are the constructs it does not
+// handle; if the spec grows one, the generated types would be wrong, so fail here instead.
+test('the contract stays within the subset the generator reads', () => {
+  const spec = fs.readFileSync(path.join(__dirname, '..', 'openapi.yaml'), 'utf8');
+  const lines = spec.split('\n');
+  lines.forEach((l, i) => {
+    assert.doesNotMatch(l, /^\s*[^#]*\s[&*]\w/, `line ${i + 1} looks like a YAML anchor or alias, which the generator cannot read`);
+    const opens = (l.match(/\{/g) || []).length, closes = (l.match(/\}/g) || []).length;
+    assert.equal(opens, closes, `line ${i + 1} has an unbalanced flow mapping; the generator needs them on one line`);
+  });
+  assert.doesNotMatch(spec, /\$ref: '#\/components\/schemas\/[A-Za-z0-9_]+\//,
+    'a $ref pointing inside another schema has no type name: give it its own entry under components.schemas');
+});
+
+// An unquoted value containing a comma silently truncates in YAML and turns the rest of the
+// sentence into a key. It cost a real bug in this spec, so it is checked.
+test('no flow mapping has an unquoted value containing a comma', async () => {
+  const r = await runGen(['--check']);
+  assert.equal(r.code, 0);
+  const spec = fs.readFileSync(path.join(__dirname, '..', 'openapi.yaml'), 'utf8');
+  for (const [i, line] of spec.split('\n').entries()) {
+    for (const seg of line.match(/\{[^{}]*\}/g) || []) {
+      for (const m of seg.matchAll(/\b(description|example|summary|title):\s*([^,}]*)/g)) {
+        const rest = seg.slice(m.index + m[0].length);
+        const value = m[2].trim();
+        if (!value.startsWith("'") && !value.startsWith('"') && rest.startsWith(',')) {
+          const after = rest.slice(1).trim();
+          assert.ok(/^[A-Za-z_$][\w$]*\s*:/.test(after) || after.startsWith('}'),
+            `line ${i + 1}: "${value}" is followed by a comma but "${after.slice(0, 40)}" is not a key. Quote the value.`);
+        }
+      }
+    }
+  }
 });
