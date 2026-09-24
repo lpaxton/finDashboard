@@ -14,7 +14,7 @@ Custodial data comes from the **Green Meadows API** (the reference is at `develo
 
 **Where things stand:** requirements, a draft API contract, a complete mock server, and a three-view dashboard running against that mock all exist. The real backend does not exist. Nothing has been connected to Green Meadows yet, and the owner does not yet have sandbox credentials in this project.
 
-The contract and mock cover 50 operations, including the feature surface ported from the Meridian Wealth Advisor Desk mockup (communications, prospects, onboarding, book migration, calendar and meeting capture, allocation, billing, branding). The dashboard renders all of it.
+The contract and mock cover 72 operations and the dashboard reaches every one of them; a test fails if an operation is ever left without a UI. That surface includes everything ported from the Meridian Wealth Advisor Desk mockup (communications, prospects, onboarding, book migration, calendar and meeting capture, allocation, billing, branding), a Green Meadows adapter built on transcribed response shapes, a query surface, and a model layer behind the drafting features.
 
 ## 2. What is in the repo
 
@@ -32,30 +32,38 @@ advisor-platform-mock/
                           are the adapter; fake.js is a Green Meadows shaped like the real one.
                           Read its README first.
   openapi.yaml            the API contract, v0.3 draft
-  dashboard/index.html    a 41-line shell: markup, stylesheet, one module script
+  dashboard/index.html    a 42-line shell: markup, stylesheet, one module script
   dashboard/styles.css    all styling; colour tokens defined once in :root
   dashboard/js/config.js  the only file to edit when connecting to a real backend
   dashboard/js/api.js     the one place that knows whether data is mock or live
   dashboard/js/format.js  pure display helpers: no API, no DOM, no state
   dashboard/js/ui.js      shared DOM layer: panel loading, toasts, tables, dialogs, sub-nav
   dashboard/js/state.js   the little that crosses view boundaries, including branding
-  dashboard/js/advisor.js the seven advisor sections
-  dashboard/js/firm.js    overview, billing, branding
+  dashboard/js/advisor.js the ten advisor sections
+  dashboard/js/firm.js    overview, billing, ownership, branding
   dashboard/js/client.js  the client portal
   dashboard/js/app.js     entry point: sign in, pick a view, global click handlers
   types/api.d.ts          a type per schema plus an Operations map; generated, never hand-edited
   tools/gen-types.js      the generator, and a YAML reader for the subset the spec uses
   jsconfig.json           lets editors check JSDoc against the generated types, no build step
-  test/server.test.js     38 tests, including a check that every operation in openapi.yaml is served
-  test/greenmeadows.test.js  23 tests for the adapter, against the fake
+  docs/                   decisions that outlived the conversation that produced them:
+                          query-surface.md and system-of-record.md
+  test/server.test.js     66 tests over the contract, the roles and the client-safe boundary
+  test/greenmeadows.test.js  23 tests for the custodian adapter, against its fake
+  test/model.test.js      7 tests for the model layer, including the request shape
 ```
 
 Run it (from `advisor-platform-mock/`):
 
 ```
 npm start        # http://localhost:4010 serves the dashboard, connected to the mock
-npm test         # 61 tests
+npm test         # 96 tests
+npm run types    # regenerate types/api.d.ts from openapi.yaml
 ```
+
+**Nothing needs installing.** Node 18 or newer is the only requirement. The one optional
+dependency is the Anthropic SDK, which turns the drafting features from offline to live; see
+section 11.
 
 Sign-in is a persona token in `Authorization: Bearer <token>`: `dana` (principal and advisor), `marcus` (advisor), `grace` (client). See `README.md` for curl examples and failure-injection headers.
 
@@ -249,12 +257,59 @@ Open questions, from the requirements doc:
 
 ## 10. Suggested order of work
 
-1. **Confirm access with Green Meadows.** Get sandbox credentials, then record real responses for the endpoints in section 7 and replace the assumed shapes in `mock-core.js` and `openapi.yaml`. Raise the advisor-wide token question first: it decides how the book-of-business view gets its data.
-2. **Build the real backend.** The Green Meadows side is started: `src/greenmeadows/` has credential handling, transport, mappers and an adapter for accounts, balances, the trend, performance, positions, models, tax lots and documents, all running against a fake built from the transcribed shapes. What remains is the service around it (sign-in, roles, audit trail) and the domains Green Meadows does not cover. Implement the v0.3 contract with Green Meadows adapters. Start with `/session`, `/summary`, `/households`, `/households/{id}` and `/me/*`, since those come almost entirely from Green Meadows. Keep credential handling in one module. Reuse `test/server.test.js` as a contract test that runs against both the mock and the real service.
-3. ~~**Turn the dashboard into a proper project.**~~ Done. `dashboard/index.html` is a 41-line shell; the application is ten ES modules under `dashboard/js/`, the mock is imported rather than copied, and `types/api.d.ts` is generated from the contract by `npm run types`. What is still open from this step: whether the mock ships in a production build at all, and adopting `// @ts-check` across the remaining modules (about 590 findings, all implicit-any and possibly-null, none of them bugs).
-4. **Decide sources for the missing domains** (calendar, CRM, task store, email) and build adapters behind the same contract shapes.
-5. **Build the platform's own sign-in, roles and audit trail** (X-01, X-05, X-14, X-15). The mock's persona tokens are a stand-in only.
-6. **Then the AI features**, in the phasing proposed in section 9 of the requirements doc: foundation first (data access, meeting capture, tasks), then advisor value (tax and portfolio analysis, reporting, onboarding, content), then the higher-risk features.
+Steps 1 and 5 are the ones that need someone other than a developer. Everything else is
+buildable now.
+
+1. **Confirm access with Green Meadows.** Still the top of the list, and still blocked on
+   credentials rather than code. Four questions to ask, in order:
+   - Which token lets an advisor see every client's accounts? Only a user-specific token and a
+     robo advisor system token appear in the reference. If neither works, the book-of-business
+     data path changes shape, and so does onboarding: federating every client needs each
+     client's SSN and consent.
+   - Does `includeCurrentValue` actually price positions? The reference marks `currentValue`
+     "Not applicable" while offering the flag, and does not resolve it. It is the only piece of
+     the portfolio signals with no confirmed source.
+   - Can this client reach the margin admin host? It is documented on an internal dev NLB, not
+     the sandbox, and it is the source for the margin-call alert.
+   - Sample responses for account fees and user notes, whose published shapes are unusable.
+
+   Then record real responses and replace `src/greenmeadows/schemas.js`. The adapter above it
+   should not need to change.
+
+2. **Build the real backend.** The custodian side is started: `src/greenmeadows/` has
+   credential handling, transport, mappers and an adapter for accounts, balances, the trend,
+   performance, positions, models, tax lots and documents, all running against a fake built
+   from the transcribed shapes. What remains is the service around it. Start with `/session`,
+   `/summary`, `/households`, `/households/{id}` and `/me/*`, since those come almost entirely
+   from Green Meadows. Reuse `test/server.test.js` as a contract test against both the mock and
+   the real service.
+
+3. ~~**Turn the dashboard into a proper project.**~~ Done. `dashboard/index.html` is a 42-line
+   shell, the application is nine ES modules, the mock is imported rather than copied, and
+   `types/api.d.ts` is generated by `npm run types`. Still open from this step: whether the mock
+   ships in a production build at all, and adopting `// @ts-check` across the remaining modules
+   (about 590 findings, all implicit-any and possibly-null, none of them bugs).
+
+4. **Decide sources for the missing domains.** The system-of-record question is settled — the
+   platform is a working surface and the CRM stays canonical (`docs/system-of-record.md`) — but
+   no provider is chosen, and the answer is a port with one adapter per CRM rather than a
+   choice between them. Syncable records already carry `sync`, reporting `not_configured`.
+   Calendar, email and a task store are still undecided.
+
+5. **Build the platform's own sign-in, roles and audit trail** (X-01, X-05, X-14, X-15). The
+   persona tokens are a stand-in only. This is the largest unstarted piece of real backend, and
+   the approval attributions the platform already records (who approved a message, who changed
+   a fee, who shared a household) have nowhere durable to live until it exists.
+
+6. **The remaining AI features.** The foundation is in: a model layer (`src/model/`), a query
+   surface with citations, and the drafts-not-actions rule enforced across every AI output.
+   What is reachable now without new infrastructure: AX-05 and AX-06 practice conversations,
+   GP-03 to GP-05 proposals and decks, RTI-08 tax explanations, PL-01 planning. What still
+   needs a capability first: anything that reads a document (IP-05, RTI-02, AX-03 share one
+   missing piece), and anything needing CRM, email or market data.
+
+   Nine features are on the regulatory list in section 5 and need compliance review before
+   build, not after.
 
 ## 11. Conventions and gotchas
 
@@ -264,8 +319,19 @@ Open questions, from the requirements doc:
 - **Dates in the mock are relative to the day it starts.** Restart or `POST /_mock/reset` to re-anchor. Weekly counts depend on the current weekday.
 - **Mock-only endpoints** live under `/_mock` and `/healthz`; they are not part of the contract.
 - **Injecting states for testing:** `x-mock-fail: 503`, `x-mock-delay: 1500`; in the dashboard's in-page mock, add `?fail=alerts` to the page URL.
-- **Placeholder actions:** alert buttons such as Review and Draft email only show a "not built yet" message. "Open advisor dashboard read-only" from the firm view is not built; the drill-down shows summary numbers only.
-- **Views and sections.** The role switcher (Firm, Advisor, Client) is the top level, per X-15. Inside the advisor view a sub-nav holds Today, Clients, Communications, Prospects, Onboarding, Calendar and Follow-ups; inside the firm view, Overview, Billing and Branding. Sections were kept below the role switcher deliberately, so an advisor's own work never sits at the same level as the client-safe boundary.
+- **Placeholder actions:** some alert buttons still show a "not built yet" message; Open queue now goes to Communications. "Open advisor dashboard read-only" from the firm view is not built; the drill-down shows summary numbers only.
+- **Views and sections.** The role switcher (Firm, Advisor, Client) is the top level, per X-15. Inside the advisor view a sub-nav holds Today, Next best action, Clients, Communications, Prospects, Onboarding, Calendar, Follow-ups, Playbooks and Reports; inside the firm view, Overview, Billing, Ownership and Branding. Sections were kept below the role switcher deliberately, so an advisor's own work never sits at the same level as the client-safe boundary.
+
+**Every AI output is a draft, and this is structural rather than a rule to remember.** Five surfaces produce them — suggested next steps, next best action, queries, meeting summaries and agendas, and message redrafts — and all five return `accepted: false`, create nothing, and carry provenance saying what produced them and what they read. A draft becomes real only when an advisor acts: posting a task, approving a message. If a new AI feature does not follow that shape, it is the feature that is wrong.
+
+**The model is optional, and the platform must keep working without it.** `src/model/` loads the Anthropic SDK with a dynamic import. With no SDK and no `ANTHROPIC_API_KEY`, every drafting capability falls back to a deterministic offline generator, `GET /ai/status` says so, and the dashboard says so once on the Today section. The offline drafts admit in their own text that no model read anything, deliberately: a fake that improvised fluent prose would let everyone forget nothing was actually read. To go live:
+
+```
+npm install @anthropic-ai/sdk     # the project's only dependency, and optional
+export ANTHROPIC_API_KEY=...      # server-side only; it never reaches the browser
+```
+
+**Prompts are versioned** (`src/model/prompts.js`, e.g. `email_draft/v2`) and the version goes into every draft's provenance, so a draft approved months ago can be traced to the instructions that produced it. Editing a prompt means bumping its version.
 
 **Compliance is firm-only.** The Meridian mockup had a compliance list in the advisor's own nav, but `GET /firm/compliance` is principal-scoped, so it lives under Firm here. Giving an advisor their own compliance view needs a contract decision first: either relax that operation's role check with an `advisorId` filter, or add an advisor-scoped equivalent.
 
@@ -275,6 +341,8 @@ Open questions, from the requirements doc:
 
 - An unquoted value containing a comma inside a flow mapping. YAML reads the comma as a separator, truncating the value and turning the rest of the sentence into a key. Eight descriptions in this contract were corrupted that way before it was caught. Quote any value containing a comma.
 - A `$ref` pointing inside another schema (`#/components/schemas/Summary/properties/aum`). It resolves to no type name. Give the shape its own entry, as `AumBlock` and `TrendPoint` now have.
+
+**Two conventions that look like style and are not.** `lowerIsBetter` on a report metric exists so a rise in overdue work is never coloured as progress; the contract carries it rather than leaving the judgement to whoever writes the UI. And `unanswerable[]` on a query names the sources that could not contribute, so a partial answer never implies it saw everything.
 
 **Design.** Deliberately not the generic dashboard look. Type: Instrument Sans for interface text, Source Serif 4 for headings and figures, both from Google Fonts with system fallbacks. Colour tokens are defined once in `:root` with light and dark variants (deep teal brand `#0E5A57`, cool grey-green backgrounds, amber and crimson only for warnings). Dark mode follows the system setting. Layout uses hairline dividers instead of card-on-card, and a meeting timeline as the one distinctive element. Keep new work consistent with these tokens. The client portal uses plain language ("Your accounts", "From your advisor"), not internal terms.
 - **Accessibility floor:** visible keyboard focus, reduced-motion respected, semantic tables with sortable column buttons that announce sort state, live region for toasts, dialogs via `<dialog>`.
@@ -289,4 +357,13 @@ Open questions, from the requirements doc:
 
 ## 13. A good first prompt
 
-> Read HANDOFF.md, README.md and openapi.yaml, then run `npm test` and `npm start` to confirm everything works. Then propose a plan for step 2: a real backend implementing the v0.3 contract with Green Meadows adapters. Ask me which language and framework to use, and what credentials I have, before writing code.
+> Read HANDOFF.md and `advisor-platform-mock/README.md`, then run `npm test` and `npm start`
+> from `advisor-platform-mock/` to see the three views. Open `src/greenmeadows/README.md` for
+> what is known about the custodian and what is still assumed, and `docs/` for the decisions
+> that have already been made and why. Then tell me what you would do first, and what you would
+> need from me to do it.
+
+If the task is the real backend, expect to be asked which language and framework, and what
+credentials exist, before any code is written. If the task is more features, start from the
+coverage audit linked in section 6 rather than from the feature list in section 5: the list is
+a taxonomy, the audit says what is actually built.

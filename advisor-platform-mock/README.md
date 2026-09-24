@@ -1,6 +1,6 @@
 # Advisor Platform mock server (API v0.3)
 
-A dependency-free mock of the draft Advisor Platform API for the firm, advisor and client-portal views. It implements all 72 operations in `openapi.yaml` on one consistent dataset, enforces roles, and serves the dashboard.
+A mock of the draft Advisor Platform API for the firm, advisor and client-portal views. It implements all 72 operations in `openapi.yaml` on one consistent dataset, enforces roles, and serves the dashboard. Nothing needs installing: Node 18 or newer is the only requirement.
 
 Nothing here is the real backend. It exists so the dashboard can be built and demonstrated before the backend and the Green Meadows connection exist, and so developers have a running example of every shape in the contract.
 
@@ -18,7 +18,7 @@ Then open http://localhost:4010/ for the dashboard, already connected to this se
 npm test
 ```
 
-runs 96 tests, including one that reads `openapi.yaml` and checks that every listed operation is served, and one that checks the dashboard's embedded mock has not drifted from `src/mock-core.js`.
+runs 96 tests across three files: `server.test.js` for the contract, the roles and the client-safe boundary, `greenmeadows.test.js` for the custodian adapter, and `model.test.js` for the model layer. Two of them are worth knowing about — one reads `openapi.yaml` and fails if an operation is not served, and another fails if an operation has no UI, because an endpoint nothing calls is a feature that looks done and does not exist for a user.
 
 ## Signing in
 
@@ -49,6 +49,7 @@ A missing or unknown token returns 401. Set `MOCK_DEFAULT_PERSONA=dana` to allow
 - **State changes persist until reset.** Completing a task, dismissing an alert, sharing an item with a client or requesting a meeting all take effect. A client's meeting request becomes a task for their advisor.
 - **Client responses are client-safe.** The `/me` endpoints never return advisor-side fields such as briefs, status flags or contact history.
 - **Dates are relative to today.** Restart the server or call `POST /_mock/reset` to re-anchor them.
+- **AI output is always a draft.** Suggested next steps, next best action, query answers, meeting summaries, agendas and message redrafts all return `accepted: false`, create nothing, and say what produced them. An advisor turns a draft into something real by posting a task or approving a message.
 
 ## Testing states the real backend will produce
 
@@ -91,13 +92,16 @@ Leave `personaPicker` off so the demo buttons disappear. The dashboard never hol
 ```
 server.js              HTTP layer: routing, sign-in, CORS, failure injection, static files
 src/mock-core.js       the dataset and every operation; imported by the server and the dashboard
+src/greenmeadows/      the custodian integration, and the shapes transcribed from its reference
+src/model/             the model layer: client, versioned prompts, offline generator, drafts
 openapi.yaml           the contract (v0.3 draft)
 dashboard/index.html   a shell: markup, stylesheet, one module script
 dashboard/styles.css   all styling
 dashboard/js/*.js      the dashboard, as native ES modules (no build step)
 types/api.d.ts         generated from openapi.yaml; do not edit by hand
 tools/gen-types.js     the generator
-test/server.test.js    behaviour and contract tests
+docs/                  decisions worth keeping: the query surface, the system of record
+test/*.test.js         contract, custodian and model tests
 ```
 
 The dashboard imports `src/mock-core.js` directly, so the mock exists in exactly one place. `dashboard/js/api.js` is the only module that knows whether data comes from the mock or a real backend.
@@ -128,9 +132,30 @@ depend on:
 npm install --no-save typescript && npm run typecheck
 ```
 
+## Drafting with a real model
+
+The drafting features work out of the box without one: `src/model/` falls back to a
+deterministic offline generator, `GET /ai/status` reports why, and the dashboard says so once.
+Offline drafts admit in their own text that no model read anything.
+
+To make them live:
+
+```
+npm install @anthropic-ai/sdk
+export ANTHROPIC_API_KEY=...
+```
+
+That is the project's only dependency and it stays optional — `npm start` and `npm test` need
+nothing installed. The key is read server-side and never reaches the browser, the same rule
+that applies to Green Meadows credentials.
+
 ## Known limits
 
-- Response shapes for Green Meadows data (balances, positions, tax lots, documents, fees) are assumptions. The Green Meadows reference documents parameters but not response bodies. Replace them with recorded real responses when you have the sandbox key.
-- Some actions are placeholders in the dashboard, such as alert buttons like "Review" and "Draft email".
+- Green Meadows response shapes are transcribed from its published reference, not recorded from
+  the sandbox — see `src/greenmeadows/README.md`. Two endpoints publish shapes that cannot be
+  mapped at all (account fees, user notes), several fields are documented "Not applicable", and
+  the reference contradicts its own example twice. Replace `src/greenmeadows/schemas.js` with
+  recorded responses when the sandbox key exists.
+- Some alert actions are still placeholders in the dashboard.
 - There is no persistence to disk, no pagination beyond `page` and `size`, and no request validation beyond required fields.
 - Not a security model. Do not expose this server to a network you don't control.
