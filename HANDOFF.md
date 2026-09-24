@@ -25,6 +25,9 @@ advisor-platform-mock/
   package.json            npm start, npm test (no dependencies, Node 18+, ES modules)
   server.js               HTTP layer: routing, sign-in, CORS, failure injection, static files
   src/mock-core.js        the dataset and all 50 operations; imported by the server AND the dashboard
+  src/greenmeadows/       response shapes transcribed from the Green Meadows reference, and
+                          what they change about the contract. Read its README before building
+                          the adapter.
   openapi.yaml            the API contract, v0.3 draft
   dashboard/index.html    a 41-line shell: markup, stylesheet, one module script
   dashboard/styles.css    all styling; colour tokens defined once in :root
@@ -166,7 +169,9 @@ Non-mTLS sandbox paths end in `/nonprod`.
 
 Other areas exist and are only mapped by name: account opening, user details, agreements, restrictions, trusted contacts, beneficiaries, funding and money movement, orders and trades (including a review-then-confirm order flow and crypto), IRA inquiries, tax day and tax transaction details, asset search and metadata, fee setup and execution, ACAT transfers, user preferences, and the rest of the RIA customer set.
 
-**The reference documents parameters and status codes but not response bodies.** Every Green Meadows response shape in this repo is an assumption.
+**The reference does document response bodies.** An earlier version of this note said it did not, and that every Green Meadows shape here was an assumption. That was wrong. Each endpoint page carries a full field-by-field **RESPONSE BODY** tree collapsed behind its `200` row, plus a worked example in the right-hand panel. Reaching it needs a signed-in browser session: the site redirects anonymous requests to a ReadMe login, which is what made automated fetching look like a block.
+
+Four endpoints have now been transcribed into `src/greenmeadows/schemas.js`, each tagged with the page it came from: account summaries, balances, balance history and positions. The other 178 still need the same treatment; `src/greenmeadows/README.md` lists the next ones in priority order and describes how.
 
 **Coverage.** Green Meadows covers 30 of the 75 features; the other 45 need different sources.
 
@@ -178,7 +183,7 @@ Other areas exist and are only mapped by name: account opening, user details, ag
 
 | Dashboard data | Green Meadows source |
 | --- | --- |
-| Assets, month change, 12-month trend | Balances (with `accountNetworth`), balances over time |
+| Assets, month change, 12-month trend | Balances (with `accountNetworth`), `POST /ftgw/fcat/bookkeeping/v1/balance-history/search` (daily, max 30 accounts per call, points can be flagged inaccurate) |
 | Household values and 30-day change | Account summaries, balances, performance |
 | Tax-loss harvesting signal | Open tax lots, realized gain/loss, positions |
 | Concentration and idle cash signals | Positions, balances |
@@ -200,13 +205,14 @@ Other areas exist and are only mapped by name: account opening, user details, ag
 Assumptions baked into the code and contract:
 
 - **"Household" is an invented grouping.** Green Meadows has users and accounts, not households. The API returns `households`; the backend must define where households are stored.
-- Green Meadows response shapes for balances, positions, tax lots, documents and fees.
+- ~~Green Meadows response shapes for balances, positions, tax lots, documents and fees.~~ Balances, positions, account summaries and balance history are now transcribed from the reference (`src/greenmeadows/schemas.js`). Tax lots, documents and fees are not yet. What remains assumed is the sandbox's behaviour, not its shapes: several fields are documented as "Not applicable", and the reference contradicted its own example twice in the balances endpoint.
 - **The client portal's 12-month value chart needs a real source.** `ClientHousehold.trend` is in the contract and the mock fills it, but the backend must populate it from custodial balance history (balances over time). The dashboard draws no chart when the field is absent, which is the correct failure: a client-facing performance line the firm cannot evidence must never be generated in the browser.
 - `Preferences` fields are placeholders for the Green Meadows preferences endpoints.
 - Meeting briefs, alert sources and signal thresholds (for example a 20% concentration limit, 5-point drift, 10% idle cash) are illustrative.
 
 Open questions, from the requirements doc:
 
+- **Does the sandbox return position values and asset classes?** The positions reference marks `currentValue`, `totalGainLoss`, `todayGainLoss`, `lastPrice` and both `securityClassification` fields as "Not applicable", while still offering an `includeCurrentValue` pricing flag. If the annotations hold, the client portal has no per-account gain/loss and the allocation-drift and concentration signals have no asset class to work from, so `GET /households/{id}/allocation` has no source. This is the second question to ask, after the token one.
 - Which Green Meadows token lets an advisor see every client's accounts? Only a user-specific token and a robo advisor system token appear in the reference. If none exists, options are federating every client (needs each client's SSN and consent) or asking Green Meadows for another token type.
 - Does the API have a household concept? Are the margin admin endpoints available to this client? What are the token lifetime and rate limits? What is the sandbox to production timeline (mTLS onboarding)?
 - Which systems supply meetings, email, CRM notes and tasks? Which calendar and CRM providers first?
