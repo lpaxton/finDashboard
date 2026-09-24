@@ -234,3 +234,16 @@ footer { margin-top: 28px; color: var(--muted); font-size: 13px; }
   .alloc li { grid-template-columns: 96px 1fr 58px; }
   .alloc-nums { display: none; }
 }
+
+/* Ask: an answer is shown with what it drew on, and with what it could not reach. */
+.btn.ask::before { content: ""; width: 6px; height: 6px; border-radius: 50%;
+  background: var(--brand); display: inline-block; margin-right: 7px; vertical-align: 1px; }
+.answer { margin-top: 16px; }
+.answer-text { font-size: 16px; line-height: 1.5; margin: 0 0 14px; }
+.answer-gap, .answer-cites { border-top: 1px solid var(--line); padding-top: 11px; margin-bottom: 11px; }
+.answer-gap strong, .answer-cites strong { display: block; font-size: 11px; text-transform: uppercase;
+  letter-spacing: 0.06em; color: var(--muted); margin-bottom: 6px; font-weight: 600; }
+.answer-gap ul, .answer-cites ul { list-style: none; margin: 0; padding: 0; font-size: 13.5px; }
+.answer-gap li, .answer-cites li { padding: 3px 0; }
+.answer-gap { color: var(--warn); }
+.answer-cites .tag { font-size: 11px; }

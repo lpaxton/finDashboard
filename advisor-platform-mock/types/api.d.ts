@@ -733,6 +733,69 @@ export type Branding = BrandingUpdate & {
   updatedBy?: string;
 };
 
+export interface QueryRequest {
+  /** Example: "Which clients are holding cash above target?". */
+  question: string;
+  /** firm requires the principal role. household requires a household the caller may see. */
+  scope?: 'own' | 'firm' | 'household';
+  /** Required when scope is household. */
+  householdId?: string | null;
+}
+
+/** Where one part of the answer came from. Required by X-04. */
+export interface Citation {
+  source: Source;
+  /** The record in that source. */
+  id?: string;
+  /** What to show a human. */
+  label?: string;
+  /** Format: date-time. */
+  dataAsOf: string;
+}
+
+/**
+ * A source the question needed that could not contribute. Present so a partial answer can say
+ * what it could not see, rather than implying it saw everything.
+ */
+export interface UnansweredSource {
+  /** Example: "crm". */
+  source: string;
+  /** Example: "No CRM is connected.". */
+  reason: string;
+}
+
+export interface Query {
+  id: string;
+  question: string;
+  scope: 'own' | 'firm' | 'household';
+  householdId?: string | null;
+  answer: string;
+  citations: Citation[];
+  unanswerable: UnansweredSource[];
+  /**
+   * Drafts only. A query never changes anything; an advisor turns a draft into a task by posting
+   * it to /tasks, exactly as with suggested next steps.
+   */
+  actions?: Array<{
+    title?: string;
+    householdId?: string | null;
+  }>;
+  /** What produced the answer, for the audit trail. */
+  model?: string;
+  askedBy?: string;
+  /** Format: date-time. */
+  dataAsOf: string;
+  /** Format: date-time. */
+  createdAt: string;
+}
+
+export interface QueryPage {
+  items: Query[];
+  page: number;
+  size: number;
+  totalItems: number;
+}
+
 /** Every operation in the contract, by operationId. */
 export interface Operations {
   getSession: {
@@ -1040,6 +1103,24 @@ export interface Operations {
     path: '/firm/branding';
     request: BrandingUpdate;
     response: Branding;
+  };
+  listQueries: {
+    method: 'GET';
+    path: '/queries';
+    request: never;
+    response: QueryPage;
+  };
+  ask: {
+    method: 'POST';
+    path: '/queries';
+    request: QueryRequest;
+    response: Query;
+  };
+  getQuery: {
+    method: 'GET';
+    path: '/queries/{queryId}';
+    request: never;
+    response: Query;
   };
 }
 

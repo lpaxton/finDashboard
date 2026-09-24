@@ -24,7 +24,7 @@ advisor-platform-mock/
   README.md               how to run and use the mock server
   package.json            npm start, npm test (no dependencies, Node 18+, ES modules)
   server.js               HTTP layer: routing, sign-in, CORS, failure injection, static files
-  src/mock-core.js        the dataset and all 50 operations; imported by the server AND the dashboard
+  src/mock-core.js        the dataset and all 53 operations; imported by the server AND the dashboard
   src/greenmeadows/       the custodian integration. schemas.js holds shapes transcribed from
                           the reference; credentials.js, client.js, mappers.js and adapter.js
                           are the adapter; fake.js is a Green Meadows shaped like the real one.
@@ -97,7 +97,7 @@ Roles: `principal`, `advisor`, `associate`, `client`. A user can hold several (a
 
 **Regulatory sensitivity (needs review before build):** recording consent (MEET-04), placing trades (PM-05), robo portfolios (PM-04), credit risk (RTI-01), tax strategies (RTI-03), advisor value claims (RTI-09), marketing content (GP-06 to GP-10), and the Client Sentiment Index (COMM-05).
 
-**Coverage against the 75, audited 24 September 2026 by reading the code:** 16 built and working, 21 partial, 38 remaining. Every one of the 50 contract operations now has a UI; a test asserts it. Full matrix: https://claude.ai/code/artifact/5611e434-13f5-4262-9562-4881dd3b797d
+**Coverage against the 75, audited 24 September 2026 by reading the code:** 17 built and working (the query surface is now started over the two connected sources), 21 partial, 37 remaining. Every one of the 50 contract operations now has a UI; a test asserts it. Full matrix: https://claude.ai/code/artifact/5611e434-13f5-4262-9562-4881dd3b797d
 
 The largest gap is structural rather than incremental. Seven of the eleven Intelligence Platform features are "query X" — meetings, CRM, email, custodial data, documents, market information, internal research — and the dashboard has no query surface at all: no chat, no ask box, no cross-source search. Those seven are one missing capability, not seven builds, and deciding where it lives changes the shell rather than filling in a section of it.
 
@@ -109,7 +109,7 @@ Three clusters are untouched: advisor development (AX-05 to AX-09, five features
 
 One API, role-scoped: the caller's role decides what each endpoint returns. Firm-wide data uses `scope=firm` (principal only). Client-portal endpoints live under `/me`.
 
-50 operations across 41 paths.
+53 operations across 43 paths.
 
 | Group | Operations |
 | --- | --- |
@@ -121,6 +121,7 @@ One API, role-scoped: the caller's role decides what each endpoint returns. Firm
 | Migration (2) | `GET /migrations` · `POST /migrations` |
 | Portfolio and fees (2) | `GET /households/{id}/allocation` · `GET /billing/fees` |
 | Firm (9) | `GET /firm/summary` · `GET /firm/advisors` · `GET /firm/advisors/{id}` · `GET /firm/compliance` · `GET /firm/billing/subscription` · `GET /firm/billing/invoices` · `GET /firm/billing/invoices/{id}` · `GET /firm/branding` · `PATCH /firm/branding` |
+| Intelligence (3) | `POST /queries` · `GET /queries` · `GET /queries/{id}` |
 | Sharing (1) | `POST /households/{id}/shares` |
 | Client (8) | `GET /me/household` · `GET /me/documents` · `GET /me/documents/{id}` · `GET /me/fees` · `GET /me/shared` · `GET /me/preferences` · `PATCH /me/preferences` · `POST /me/meeting-requests` |
 

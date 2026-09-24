@@ -1,7 +1,7 @@
 /* Pieces shared by every view: panel loading with its error and retry states, toasts,
    sparklines, sortable tables, the alert list, the household dialog and the book table. */
 import { api } from './api.js';
-import { $, esc, money, moneyFull, pct, pctClass, daysAgo, statusBadge, SHARE_TYPES } from './format.js';
+import { $, esc, money, moneyFull, pct, pctClass, daysAgo, fmtTime, statusBadge, SHARE_TYPES } from './format.js';
 
 let toastTimer;
 export function toast(msg) { const t = $('toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove('show'), 2600); }
@@ -52,6 +52,7 @@ export async function openHousehold(id, canShare) {
     dlg.innerHTML = `<button class="btn quiet close" data-close>Close</button><h2 id="dlgTitle">${esc(h.name)}</h2>
       <div>${statusBadge(h.status)}</div>
       <dl class="defs"><dt>Assets</dt><dd>${moneyFull(h.aum)}</dd><dt>30-day change</dt><dd class="${pctClass(h.change30d)}">${pct(h.change30d)}</dd><dt>Last contact</dt><dd>${esc(daysAgo(h.lastContactAt))}</dd></dl>
+      <div class="actions" style="margin:2px 0 14px"><button class="btn" id="hhAsk">Ask about this household</button></div>
       <h3>Allocation</h3>
       <div id="hhAlloc"><div class="skel"></div></div>
       <h3>Accounts</h3>
@@ -64,6 +65,9 @@ export async function openHousehold(id, canShare) {
       <div class="field"><label for="shMsg">Message (optional)</label><textarea id="shMsg"></textarea></div>
       <button class="btn primary" id="shGo">Approve and share</button>` : ''}`;
     loadAllocation(id);
+    setAskContext('household', id, h.name);
+    const ask = $('hhAsk');
+    if (ask) ask.onclick = () => openAsk(false);
     const go = $('shGo');
     if (go) go.onclick = async () => {
       const title = $('shTitle').value.trim(); if (!title) { toast('Add a title first.'); return; }
@@ -135,4 +139,84 @@ async function loadAllocation(id) {
   } catch (e) {
     el.innerHTML = `<p class="hint">${esc(e.status === 404 ? 'No allocation for this household.' : e.message)}</p>`;
   }
+}
+
+/* ---- the query surface --------------------------------------------------------------
+ * One affordance, seeded by wherever it is opened from: inside a household it scopes to
+ * that household, from a view it scopes to the book, and a principal can widen to the firm.
+ * See docs/query-surface.md for why this shape rather than a global bar or its own section.
+ */
+let askScope = { scope: 'own', householdId: null, label: 'your book' };
+
+export function setAskContext(scope, householdId, label) {
+  askScope = { scope, householdId, label };
+}
+
+export function openAsk(canFirm) {
+  const dlg = $('dlg');
+  dlg.innerHTML = `<button class="btn quiet close" data-close>Close</button>
+    <h2 id="dlgTitle">Ask</h2>
+    <div class="meta">Answering across ${esc(askScope.label)}</div>
+    <div class="field"><label for="askQ">What do you want to know?</label>
+      <input type="text" id="askQ" placeholder="For example, which clients are holding cash above target?" autocomplete="off"></div>
+    ${canFirm && askScope.scope !== 'household' ? `<label class="hint"><input type="checkbox" id="askFirm"> Ask across the whole firm</label>` : ''}
+    <div class="actions" style="margin-top:10px"><button class="btn primary" id="askGo">Ask</button></div>
+    <div id="askOut"></div>
+    <div id="askPast"></div>`;
+  dlg.showModal();
+  loadAskHistory();
+  const q = $('askQ');
+  q.focus();
+  const go = async () => {
+    const question = q.value.trim();
+    if (!question) { toast('Type a question first.'); return; }
+    const btn = $('askGo'); btn.disabled = true;
+    $('askOut').innerHTML = '<div class="skel"></div><div class="skel s"></div>';
+    try {
+      const firm = $('askFirm') && $('askFirm').checked;
+      const r = await api('POST', '/queries', { body: {
+        question,
+        scope: firm ? 'firm' : askScope.scope,
+        householdId: askScope.scope === 'household' ? askScope.householdId : undefined
+      } });
+      $('askOut').innerHTML = renderAnswer(r);
+      loadAskHistory();
+    } catch (e) { $('askOut').innerHTML = `<p class="err">${esc(e.message)}</p>`; }
+    finally { btn.disabled = false; }
+  };
+  $('askGo').onclick = go;
+  q.onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); go(); } };
+}
+
+/* An answer is never shown without what it was drawn from, and never without naming the
+   sources it could not reach. Both are contract fields, not decoration. */
+function renderAnswer(r) {
+  return `<div class="answer">
+    <p class="answer-text">${esc(r.answer)}</p>
+    ${r.unanswerable.length ? `<div class="answer-gap">
+      <strong>Not covered by this answer</strong>
+      <ul>${r.unanswerable.map(u => `<li>${esc(u.reason)}</li>`).join('')}</ul>
+    </div>` : ''}
+    ${r.citations.length ? `<div class="answer-cites">
+      <strong>Drawn from</strong>
+      <ul>${r.citations.map(c => `<li><span class="tag">${esc(c.source)}</span> ${esc(c.label || c.id)}
+        <span class="meta">as of ${esc(fmtTime(c.dataAsOf))}</span></li>`).join('')}</ul>
+    </div>` : '<p class="hint">No sources were used for this answer.</p>'}
+    <p class="hint">Answered by ${esc(r.model)}. A question only reads: nothing here has changed anything.</p>
+  </div>`;
+}
+
+/* Earlier questions, so an answer is a record rather than something that vanishes on close. */
+async function loadAskHistory() {
+  const el = $('askPast');
+  if (!el) return;
+  try {
+    const r = await api('GET', '/queries', { query: { size: 5 } });
+    el.innerHTML = r.items.length ? `<div class="answer-cites"><strong>Earlier questions</strong>
+      <ul>${r.items.map(q => `<li><button class="link" data-q="${esc(q.id)}">${esc(q.question)}</button></li>`).join('')}</ul></div>` : '';
+    el.querySelectorAll('[data-q]').forEach(b => b.onclick = async () => {
+      try { $('askOut').innerHTML = renderAnswer(await api('GET', '/queries/' + encodeURIComponent(b.dataset.q))); }
+      catch (e) { toast(e.message); }
+    });
+  } catch { el.innerHTML = ''; }
 }

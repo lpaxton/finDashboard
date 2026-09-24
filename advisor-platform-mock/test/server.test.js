@@ -186,9 +186,9 @@ test('every operation in openapi.yaml is served', async () => {
     const p = l.match(/^  (\/[^\s:]+):\s*$/); if (p) { cur = p[1]; continue; }
     const m = l.match(/^    (get|post|patch|put|delete):\s*$/); if (m && cur) ops.push([m[1].toUpperCase(), cur]);
   }
-  assert.equal(ops.length, 50, 'spec should list 50 operations');
+  assert.equal(ops.length, 53, 'spec should list 53 operations');
   const params = { householdId: 'h3', meetingId: 'm1', taskId: 't1', alertId: 'a1', signalId: 'sig_idle_cash', advisorId: 'adv2', documentId: 'd1',
-    communicationId: 'cm1', prospectId: 'p1', onboardingId: 'ob1', stepId: 'intake_form', invoiceId: 'inv1' };
+    communicationId: 'cm1', prospectId: 'p1', onboardingId: 'ob1', stepId: 'intake_form', invoiceId: 'inv1', queryId: 'q1' };
   const missing = [];
   for (const [method, p] of ops) {
     const url = p.replace(/\{(\w+)\}/g, (_, k) => params[k]);
@@ -508,4 +508,77 @@ test('no contract operation is left without a UI', () => {
       || (tail && js.includes(tail) && js.includes(base)));
   }).map(([m, p]) => `${m} ${p}`);
   assert.deepEqual(missing, [], 'operations with no UI: ' + missing.join(', '));
+});
+
+/* ---- the query surface ---- */
+
+test('a query is scoped like every other operation', async () => {
+  assert.equal((await call('grace', 'POST', '/queries', { question: 'how much cash' })).status, 403,
+    'a client has no query surface: the client-safe boundary stays structural');
+  assert.equal((await call('marcus', 'POST', '/queries', { question: 'cash', scope: 'firm' })).status, 403);
+  assert.equal((await call('marcus', 'POST', '/queries', { question: 'cash', scope: 'household', householdId: 'h1' })).status, 404,
+    'another advisor\'s household is not visible to a query either');
+  assert.equal((await call('dana', 'POST', '/queries', {})).status, 400);
+  assert.equal((await call('dana', 'POST', '/queries', { question: 'x', scope: 'nonsense' })).status, 400);
+  assert.equal((await call('dana', 'POST', '/queries', { question: 'cash', scope: 'firm' })).status, 201);
+});
+
+test('an answer carries its sources, with a data-as-of date', async () => {
+  const r = await call('dana', 'POST', '/queries', { question: 'which clients are holding idle cash?' });
+  assert.equal(r.status, 201);
+  assert.ok(r.data.citations.length > 0, 'an answer drawn from data must say what it drew on');
+  for (const c of r.data.citations) {
+    assert.ok(['greenmeadows', 'crm', 'calendar', 'platform'].includes(c.source));
+    assert.ok(c.dataAsOf, 'X-04 requires a data-as-of date on every citation');
+  }
+  assert.ok(r.data.model, 'the answer must record what produced it');
+});
+
+test('a question about a source that does not exist says so, and answers nothing', async () => {
+  const r = (await call('dana', 'POST', '/queries', { question: 'what did the Lindqvists email me about?' })).data;
+  assert.equal(r.unanswerable.length, 1);
+  assert.equal(r.unanswerable[0].source, 'email');
+  assert.match(r.unanswerable[0].reason, /No inbox is connected/);
+  assert.deepEqual(r.citations, [], 'nothing may be cited for a source that is not connected');
+  assert.doesNotMatch(r.answer, /Lindqvist/, 'it must not improvise an answer about the household');
+
+  const multi = (await call('dana', 'POST', '/queries', { question: 'what does the CRM say about their sentiment?' })).data;
+  assert.deepEqual(multi.unanswerable.map(u => u.source).sort(), ['crm', 'sentiment']);
+});
+
+test('a query changes nothing', async () => {
+  const before = await Promise.all([
+    call('dana', 'GET', '/tasks'), call('dana', 'GET', '/alerts'), call('dana', 'GET', '/communications')
+  ]);
+  const r = await call('dana', 'POST', '/queries', { question: 'who have I not spoken to in a while?' });
+  assert.deepEqual(r.data.actions, [], 'anything actionable is a draft, never applied here');
+  const after = await Promise.all([
+    call('dana', 'GET', '/tasks'), call('dana', 'GET', '/alerts'), call('dana', 'GET', '/communications')
+  ]);
+  assert.equal(after[0].data.items.length, before[0].data.items.length);
+  assert.equal(after[1].data.items.length, before[1].data.items.length);
+  assert.equal(after[2].data.totalItems, before[2].data.totalItems);
+});
+
+test('firm scope widens the answer, own scope does not', async () => {
+  const own = (await call('dana', 'POST', '/queries', { question: 'how big is the book?' })).data;
+  const firm = (await call('dana', 'POST', '/queries', { question: 'how big is the book?', scope: 'firm' })).data;
+  assert.match(own.answer, /10 households/);
+  assert.match(firm.answer, /28 households/);
+});
+
+test('questions are kept, and only for the person who asked', async () => {
+  await call('dana', 'POST', '/queries', { question: 'idle cash please' });
+  const mine = (await call('dana', 'GET', '/queries')).data;
+  assert.ok(mine.totalItems >= 1);
+  assert.equal((await call('marcus', 'GET', '/queries')).data.totalItems, 0, 'one advisor cannot read another\'s questions');
+  const one = await call('dana', 'GET', '/queries/' + mine.items[0].id);
+  assert.equal(one.status, 200);
+  assert.equal((await call('marcus', 'GET', '/queries/' + mine.items[0].id)).status, 404);
+});
+
+test('an unmatched question admits it rather than inventing an answer', async () => {
+  const r = (await call('dana', 'POST', '/queries', { question: 'what is the airspeed of a swallow' })).data;
+  assert.deepEqual(r.citations, []);
+  assert.match(r.answer, /matches phrasing rather than understanding/);
 });

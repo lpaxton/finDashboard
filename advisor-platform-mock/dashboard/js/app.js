@@ -3,6 +3,7 @@ import { api } from './api.js';
 import { CONFIG, setPersona } from './config.js';
 import { $, esc } from './format.js';
 import { state, applyBranding } from './state.js';
+import { openAsk, setAskContext } from './ui.js';
 import { advisorView } from './advisor.js';
 import { firmView } from './firm.js';
 import { clientView } from './client.js';
@@ -19,6 +20,11 @@ function showView(v) {
   const tabs = $('tabs');
   tabs.hidden = s.views.length < 2;
   tabs.innerHTML = s.views.map(x => `<button role="tab" data-view="${x}" aria-selected="${x === v}">${VIEW_LABEL[x]}</button>`).join('');
+  // The ask affordance is advisor-side only. The client portal deliberately has none:
+  // see docs/query-surface.md on why the client-safe boundary stays structural.
+  const ask = $('askBtn');
+  ask.hidden = v === 'client';
+  setAskContext(v === 'firm' ? 'firm' : 'own', null, v === 'firm' ? 'the whole firm' : 'your book');
   VIEWS[v]();
 }
 
@@ -36,6 +42,7 @@ async function boot() {
 }
 
 document.addEventListener('click', (e) => {
+  if (e.target.closest('#askBtn')) { openAsk(state.session.roles.includes('principal')); return; }
   const t = e.target.closest('[data-view]'); if (t) showView(t.dataset.view);
   const p = e.target.closest('[data-persona]');
   if (p) { setPersona(p.dataset.persona); document.querySelectorAll('[data-persona]').forEach(b => b.setAttribute('aria-pressed', String(b === p))); boot(); }

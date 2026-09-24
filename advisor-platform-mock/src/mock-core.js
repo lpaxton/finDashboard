@@ -252,6 +252,98 @@ function createMock() {
   }));
 
   const MIGRATIONS = [];
+  const QUERIES = [];
+
+  /* ---- the query surface (IP-01 to IP-08, IP-11) --------------------------------------
+   * Only two sources exist: custodial data and the calendar. Everything else has no
+   * connection, so the mock answers what it genuinely can from this dataset and reports the
+   * rest in `unanswerable`. It is a matcher, not a model, and it says so: a mock that
+   * improvised answers would teach the UI the wrong lesson about what to trust.
+   */
+  const NO_SOURCE = [
+    [/\b(email|inbox|mailbox|wrote to|sent me)\b/i, 'email', 'No inbox is connected.'],
+    [/\b(crm|salesforce|wealthbox|redtail)\b/i, 'crm', 'No CRM is connected.'],
+    [/\b(market|news|index|s&p|nasdaq|rate cut|regulat\w*|sec rule)\b/i, 'market', 'No external market or regulatory source is connected.'],
+    [/\b(fidelity internal|deep research|white paper)\b/i, 'research', 'Fidelity internal research is not connected.'],
+    [/\b(sentiment|how does .* feel|mood)\b/i, 'sentiment', 'The Client Sentiment Index is not built.']
+  ];
+
+  const cite = (source, id, label) => ({ source, id, label, dataAsOf: NOW() });
+  const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
+
+  /* Each matcher answers from the dataset or returns null. Order matters: first hit wins. */
+  const ANSWERERS = [
+    { id: 'idle_cash', test: /\b(idle cash|cash|uninvested)\b/i, run: (hs) => {
+      const rows = SIGNAL_ROWS.filter(x => x.kind === 'idle_cash' && hs.some(h => h.id === x.householdId));
+      if (!rows.length) return null;
+      const total = rows.reduce((a, r) => a + r.value, 0);
+      return { answer: `${plural(rows.length, 'household is', 'households are')} holding cash above target, about $${(total / 1e6).toFixed(1)}M in total. The largest is ${hhName(rows.slice().sort((a, b) => b.value - a.value)[0].householdId)}.`,
+        citations: rows.map(r => cite('greenmeadows', r.householdId, hhName(r.householdId) + ' cash balance')) };
+    } },
+    { id: 'overdue_contact', test: /\b(not (spoken|talked|heard)|overdue|last contact|haven'?t (spoken|called)|out of touch)\b/i, run: (hs) => {
+      const stale = hs.filter(h => h.lastContactAt && (Date.now() - new Date(h.lastContactAt)) / 864e5 > 45)
+        .sort((a, b) => a.lastContactAt.localeCompare(b.lastContactAt));
+      if (!stale.length) return { answer: 'Every household has been contacted within the last 45 days.', citations: [] };
+      return { answer: `${plural(stale.length, 'household has', 'households have')} had no contact for more than 45 days: ` +
+        stale.map(h => `${h.name} (${Math.floor((Date.now() - new Date(h.lastContactAt)) / 864e5)} days)`).join(', ') + '.',
+        citations: stale.map(h => cite('crm', h.id, h.name + ' last contact')) };
+    } },
+    { id: 'harvesting', test: /\b(harvest\w*|tax loss|losses to realis|realize losses)\b/i, run: (hs, u) => {
+      const rows = SIGNAL_ROWS.filter(x => x.kind === 'tax_loss_harvesting' && hs.some(h => h.id === x.householdId));
+      if (!rows.length) return null;
+      const total = rows.reduce((a, r) => a + r.value, 0);
+      return { answer: `About $${total.toLocaleString('en-US')} of unrealised losses across ${rows.length} households. Largest: ${hhName(rows.slice().sort((a, b) => b.value - a.value)[0].householdId)}.`,
+        citations: rows.map(r => cite('greenmeadows', r.householdId, hhName(r.householdId) + ' open tax lots')) };
+    } },
+    { id: 'drift', test: /\b(drift|allocation|off target|rebalanc\w*)\b/i, run: (hs) => {
+      const rows = SIGNAL_ROWS.filter(x => x.kind === 'allocation_drift' && hs.some(h => h.id === x.householdId));
+      if (!rows.length) return null;
+      const worst = rows.slice().sort((a, b) => b.value - a.value)[0];
+      return { answer: `${plural(rows.length, 'household is', 'households are')} outside their target allocation. The largest drift is ${hhName(worst.householdId)} at ${worst.value} points.`,
+        citations: rows.map(r => cite('greenmeadows', r.householdId, hhName(r.householdId) + ' positions against model')) };
+    } },
+    { id: 'meetings', test: /\b(meeting|calendar|schedule|who am i seeing|diary)\b/i, run: (hs, u, ctx) => {
+      const mine = meetingsFor(ctx.advisorId).filter(m => new Date(m.startsAt) >= new Date(dayISO(0)));
+      if (!mine.length) return { answer: 'Nothing is scheduled from today onwards.', citations: [] };
+      const today = mine.filter(m => m.startsAt.slice(0, 10) === dateOnly(0));
+      return { answer: `${plural(today.length, 'meeting', 'meetings')} today and ${mine.length} from today onwards. Today: ` +
+        (today.map(m => `${hhName(m.householdId) || prospectName(m.id) || 'no client attached'} at ${m.startsAt.slice(11, 16)}`).join(', ') || 'none') + '.',
+        citations: mine.slice(0, 6).map(m => cite('calendar', m.id, m.type)) };
+    } },
+    { id: 'fees', test: /\b(fee|billing|charge|revenue)\b/i, run: (hs) => {
+      const billable = hs.filter(h => h.aum > 0);
+      const total = billable.reduce((a, h) => a + quarterlyFee(h.aum), 0);
+      return { answer: `This quarter bills about $${total.toLocaleString('en-US')} across ${billable.length} households, off the published tier schedule.`,
+        citations: [cite('platform', 'fee-schedule', 'Firm fee schedule')] };
+    } },
+    { id: 'book', test: /\b(book|assets under management|aum|how (much|many)|total)\b/i, run: (hs) => ({
+      answer: `${plural(hs.length, 'household', 'households')}, $${(hs.reduce((a, h) => a + h.aum, 0) / 1e6).toFixed(1)}M in assets.`,
+      citations: [cite('greenmeadows', 'balances', 'Account balances')]
+    }) }
+  ];
+
+  function runQuery(question, scope, householdId) {
+    const u = user();
+    const hs = scope === 'firm' ? HH : (householdId ? HH.filter(h => h.id === householdId) : myHH());
+    const unanswerable = NO_SOURCE.filter(([re]) => re.test(question))
+      .map(([, source, reason]) => ({ source, reason }));
+
+    let hit = null;
+    for (const a of ANSWERERS) {
+      if (!a.test.test(question)) continue;
+      const got = a.run(hs, u, { advisorId: u.advisorId });
+      if (got) { hit = { ...got, matched: a.id }; break; }
+    }
+
+    if (!hit) {
+      return { answer: unanswerable.length
+          ? 'Nothing in the connected sources answers this.'
+          : "This mock answers questions about cash, contact gaps, harvesting, drift, meetings, fees and the book. It matches phrasing rather than understanding it, so a real question may need rewording.",
+        citations: [], unanswerable, matched: null };
+    }
+    return { ...hit, unanswerable };
+  }
+
 
   // household, model, target and current allocation. Max drift equals that household's drift signal.
   const ALLOC_CLASSES = ['US equity', 'International equity', 'Fixed income', 'Cash', 'Alternatives'];
@@ -674,6 +766,37 @@ function createMock() {
       return ok({ schedule: FEE_TIERS, nextRunDate: dateOnly(7), currency: 'USD',
         totalQuarterlyFees: rows.reduce((a, r) => a + r.quarterlyFee, 0), dataAsOf: NOW(),
         ...paged(rows, q, 'billableAssets,desc') });
+    }],
+
+    /* ---- query surface ---- */
+    ['POST', /^\/queries$/, (m, q, b) => {
+      if (!isRole('advisor') && !isRole('principal')) return forbid();
+      if (!b || !b.question || !String(b.question).trim()) return fail(400, 'bad_request', 'A question is required.');
+      const scope = b.scope || 'own';
+      if (!['own', 'firm', 'household'].includes(scope)) return fail(400, 'bad_request', 'Scope must be own, firm or household.');
+      if (scope === 'firm' && !isRole('principal')) return forbid();
+      if (scope === 'household') {
+        const h = hhById(b.householdId);
+        if (!h) return notFound('Household');
+        if (!isRole('principal') && h.advisorId !== user().advisorId) return notFound('Household');
+      }
+      const r = runQuery(String(b.question), scope, b.householdId);
+      const rec = { id: 'q' + (++seq), question: String(b.question).trim(), scope,
+        householdId: scope === 'household' ? b.householdId : null,
+        answer: r.answer, citations: r.citations, unanswerable: r.unanswerable,
+        // A query reads. Anything actionable comes back as a draft the advisor accepts (X-03).
+        actions: [], model: 'mock-matcher-v0', askedBy: user().name, dataAsOf: NOW(), createdAt: NOW() };
+      QUERIES.unshift(rec);
+      return created(rec);
+    }],
+    ['GET', /^\/queries$/, (m, q) => {
+      if (!isRole('advisor') && !isRole('principal')) return forbid();
+      return ok(paged(QUERIES.filter(x => x.askedBy === user().name), q, 'createdAt,desc'));
+    }],
+    ['GET', /^\/queries\/([^/]+)$/, (m) => {
+      if (!isRole('advisor') && !isRole('principal')) return forbid();
+      const r = QUERIES.find(x => x.id === m[1] && x.askedBy === user().name);
+      return r ? ok(r) : notFound('Query');
     }],
 
     ['GET', /^\/firm\/summary$/, () => {

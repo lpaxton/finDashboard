@@ -40,6 +40,7 @@ tags:
   - name: Alerts
   - name: Portfolio signals
   - name: Firm
+  - name: Intelligence
   - name: Sharing
   - name: Communications
   - name: Prospects
@@ -713,6 +714,54 @@ paths:
         '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Branding' } } } }
         '400': { $ref: '#/components/responses/Error' }
         '403': { $ref: '#/components/responses/Error' }
+
+  /queries:
+    get:
+      tags: [Intelligence]
+      operationId: listQueries
+      summary: Questions this user has asked
+      parameters:
+        - { $ref: '#/components/parameters/page' }
+        - { $ref: '#/components/parameters/size' }
+        - { $ref: '#/components/parameters/sort' }
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/QueryPage' } } } }
+        '403': { $ref: '#/components/responses/Error' }
+    post:
+      tags: [Intelligence]
+      operationId: ask
+      summary: Ask a question of the connected sources
+      description: >
+        The query surface behind IP-01 to IP-08 and IP-11. Scoped like every other operation:
+        own is the caller's book, firm needs the principal role, household is one household the
+        caller may already see.
+
+        Three properties this contract commits to. Citations are part of the answer, not a
+        footnote, and carry a source and a data-as-of date (X-04). `unanswerable` names the
+        sources that could not contribute and why, because most sources are not connected yet
+        and a confident answer with no source is the failure that ends pilots. And a query only
+        reads: anything actionable comes back in `actions` as a draft the advisor accepts, the
+        same shape as suggested next steps (X-03).
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/QueryRequest' } } }
+      responses:
+        '201': { description: Answered, content: { application/json: { schema: { $ref: '#/components/schemas/Query' } } } }
+        '400': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+
+  /queries/{queryId}:
+    get:
+      tags: [Intelligence]
+      operationId: getQuery
+      summary: One answered question
+      description: Also the poll target for a question that takes long enough to answer asynchronously.
+      parameters:
+        - { name: queryId, in: path, required: true, schema: { type: string } }
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Query' } } } }
+        '404': { $ref: '#/components/responses/Error' }
 
 components:
   securitySchemes:
@@ -1584,3 +1633,70 @@ components:
             firmId: { type: string }
             updatedAt: { type: string, format: date-time }
             updatedBy: { type: string }
+
+    QueryRequest:
+      type: object
+      required: [question]
+      properties:
+        question: { type: string, minLength: 1, example: 'Which clients are holding cash above target?' }
+        scope:
+          type: string
+          enum: [own, firm, household]
+          default: own
+          description: 'firm requires the principal role. household requires a household the caller may see.'
+        householdId: { type: string, nullable: true, description: 'Required when scope is household.' }
+
+    Citation:
+      type: object
+      description: Where one part of the answer came from. Required by X-04.
+      required: [source, dataAsOf]
+      properties:
+        source: { $ref: '#/components/schemas/Source' }
+        id: { type: string, description: 'The record in that source.' }
+        label: { type: string, description: 'What to show a human.' }
+        dataAsOf: { type: string, format: date-time }
+
+    UnansweredSource:
+      type: object
+      description: >
+        A source the question needed that could not contribute. Present so a partial answer can
+        say what it could not see, rather than implying it saw everything.
+      required: [source, reason]
+      properties:
+        source: { type: string, example: crm }
+        reason: { type: string, example: 'No CRM is connected.' }
+
+    Query:
+      type: object
+      required: [id, question, scope, answer, citations, unanswerable, dataAsOf, createdAt]
+      properties:
+        id: { type: string }
+        question: { type: string }
+        scope: { type: string, enum: [own, firm, household] }
+        householdId: { type: string, nullable: true }
+        answer: { type: string }
+        citations: { type: array, items: { $ref: '#/components/schemas/Citation' } }
+        unanswerable: { type: array, items: { $ref: '#/components/schemas/UnansweredSource' } }
+        actions:
+          type: array
+          description: >
+            Drafts only. A query never changes anything; an advisor turns a draft into a task
+            by posting it to /tasks, exactly as with suggested next steps.
+          items:
+            type: object
+            properties:
+              title: { type: string }
+              householdId: { type: string, nullable: true }
+        model: { type: string, description: 'What produced the answer, for the audit trail.' }
+        askedBy: { type: string }
+        dataAsOf: { type: string, format: date-time }
+        createdAt: { type: string, format: date-time }
+
+    QueryPage:
+      type: object
+      required: [items, page, size, totalItems]
+      properties:
+        items: { type: array, items: { $ref: '#/components/schemas/Query' } }
+        page: { type: integer }
+        size: { type: integer }
+        totalItems: { type: integer }
