@@ -101,6 +101,8 @@ Roles: `principal`, `advisor`, `associate`, `client`. A user can hold several (a
 
 The largest gap is structural rather than incremental. Seven of the eleven Intelligence Platform features are "query X" — meetings, CRM, email, custodial data, documents, market information, internal research — and the dashboard has no query surface at all: no chat, no ask box, no cross-source search. Those seven are one missing capability, not seven builds, and deciding where it lives changes the shell rather than filling in a section of it.
 
+Where that query surface should live, what its contract needs from day one, and why `unanswerable[]` is the field that makes a partial one shippable: `advisor-platform-mock/docs/query-surface.md`.
+
 Three clusters are untouched: advisor development (AX-05 to AX-09, five features), marketing and sales enablement (GP-04 to GP-10, seven), and everything downstream of reading a document (IP-05, RTI-02, AX-03). Five of the marketing ones are on the regulatory list in section 5, so that order starts with compliance, not code.
 
 ## 6. The API contract (`openapi.yaml`, v0.3 draft)
@@ -227,7 +229,7 @@ Open questions, from the requirements doc:
 - Does the API have a household concept? Are the margin admin endpoints available to this client? What are the token lifetime and rate limits? What is the sandbox to production timeline (mTLS onboarding)?
 - Which systems supply meetings, email, CRM notes and tasks? Which calendar and CRM providers first?
 - Are firm and advisor separate logins, or one person switching views? Can a principal open an advisor's dashboard read-only, and is that access logged?
-- Should the portal offer AI question answering? Can clients trade in the portal, or only view?
+- Should the portal offer AI question answering? A recommendation is now written up in `advisor-platform-mock/docs/query-surface.md`: not in the first version, because the client-safe boundary is currently structural (a `/me` endpoint physically cannot return another household's data) and a free-text surface makes it probabilistic. Can clients trade in the portal, or only view?
 - Are performance-tracking features (PO-06, AX-07, AX-08) visible to advisors, principals or both?
 - Should signal counts be computed live or refreshed on a schedule? Live needs many Green Meadows calls per advisor (open tax lots need one call per account and sub-account).
 
