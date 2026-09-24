@@ -14,7 +14,7 @@ Custodial data comes from the **Green Meadows API** (the reference is at `develo
 
 **Where things stand:** requirements, a draft API contract, a complete mock server, and a three-view dashboard running against that mock all exist. The real backend does not exist. Nothing has been connected to Green Meadows yet, and the owner does not yet have sandbox credentials in this project.
 
-The contract and mock cover 50 operations, including the feature surface ported from the Meridian Wealth Advisor Desk mockup (communications, prospects, onboarding, book migration, calendar and meeting capture, allocation, billing, branding). **The dashboard has not caught up**: it still renders only the v0.2 surface. Wiring the ported operations into the UI is the next piece of work, and the agreed shape is a sub-nav inside the Advisor view rather than a flat left nav, so the role switcher and the client-safe boundary stay visible. Billing and branding belong under Firm.
+The contract and mock cover 50 operations, including the feature surface ported from the Meridian Wealth Advisor Desk mockup (communications, prospects, onboarding, book migration, calendar and meeting capture, allocation, billing, branding). The dashboard renders all of it.
 
 ## 2. What is in the repo
 
@@ -29,14 +29,14 @@ advisor-platform-mock/
   dashboard/index.html    the three-view dashboard (single file, no build step)
   tools/sync-mock.js      copies createMock() into the dashboard's embedded copy
   tools/mock-source.js    locates that copy, shared by the sync script and the drift test
-  test/server.test.js     32 tests, including a check that every operation in openapi.yaml is served
+  test/server.test.js     33 tests, including a check that every operation in openapi.yaml is served
 ```
 
 Run it (from `advisor-platform-mock/`):
 
 ```
 npm start        # http://localhost:4010 serves the dashboard, connected to the mock
-npm test         # 32 tests
+npm test         # 33 tests
 ```
 
 Sign-in is a persona token in `Authorization: Bearer <token>`: `dana` (principal and advisor), `marcus` (advisor), `grace` (client). See `README.md` for curl examples and failure-injection headers.
@@ -220,7 +220,13 @@ Open questions, from the requirements doc:
 - **Mock-only endpoints** live under `/_mock` and `/healthz`; they are not part of the contract.
 - **Injecting states for testing:** `x-mock-fail: 503`, `x-mock-delay: 1500`; in the dashboard's in-page mock, add `?fail=alerts` to the page URL.
 - **Placeholder actions:** alert buttons such as Review and Draft email only show a "not built yet" message. "Open advisor dashboard read-only" from the firm view is not built; the drill-down shows summary numbers only.
-- **Design.** Deliberately not the generic dashboard look. Type: Instrument Sans for interface text, Source Serif 4 for headings and figures, both from Google Fonts with system fallbacks. Colour tokens are defined once in `:root` with light and dark variants (deep teal brand `#0E5A57`, cool grey-green backgrounds, amber and crimson only for warnings). Dark mode follows the system setting. Layout uses hairline dividers instead of card-on-card, and a meeting timeline as the one distinctive element. Keep new work consistent with these tokens. The client portal uses plain language ("Your accounts", "From your advisor"), not internal terms.
+- **Views and sections.** The role switcher (Firm, Advisor, Client) is the top level, per X-15. Inside the advisor view a sub-nav holds Today, Clients, Communications, Prospects, Onboarding, Calendar and Follow-ups; inside the firm view, Overview, Billing and Branding. Sections were kept below the role switcher deliberately, so an advisor's own work never sits at the same level as the client-safe boundary.
+
+**Compliance is firm-only.** The Meridian mockup had a compliance list in the advisor's own nav, but `GET /firm/compliance` is principal-scoped, so it lives under Firm here. Giving an advisor their own compliance view needs a contract decision first: either relax that operation's role check with an `advisorId` filter, or add an advisor-scoped equivalent.
+
+**Branding and dark mode.** `accentColor` is stored as a single light-mode colour. Applied unchanged in dark mode it fails contrast, so the dashboard lifts it toward the page ink before use (`forTheme`). A firm that wants exact brand colour reproduction in both themes needs two stored colours, which is a contract change.
+
+**Design.** Deliberately not the generic dashboard look. Type: Instrument Sans for interface text, Source Serif 4 for headings and figures, both from Google Fonts with system fallbacks. Colour tokens are defined once in `:root` with light and dark variants (deep teal brand `#0E5A57`, cool grey-green backgrounds, amber and crimson only for warnings). Dark mode follows the system setting. Layout uses hairline dividers instead of card-on-card, and a meeting timeline as the one distinctive element. Keep new work consistent with these tokens. The client portal uses plain language ("Your accounts", "From your advisor"), not internal terms.
 - **Accessibility floor:** visible keyboard focus, reduced-motion respected, semantic tables with sortable column buttons that announce sort state, live region for toasts, dialogs via `<dialog>`.
 
 ## 12. Guardrails

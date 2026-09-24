@@ -172,6 +172,62 @@ footer { margin-top: 28px; color: var(--muted); font-size: 13px; }
   details.brief { margin-left: 0; }
 }
 @media (prefers-reduced-motion: reduce) { .toast { transition: none; } }
+
+/* Sections inside a view, and the components the ported features need. */
+.subnav { display: flex; flex-wrap: wrap; gap: 2px; margin: 0 0 18px; border-bottom: 1px solid var(--line); }
+.subnav button { appearance: none; background: none; border: 0; border-bottom: 2px solid transparent; color: var(--muted);
+  font: 500 14px/1 var(--sans); padding: 10px 14px; cursor: pointer; }
+.subnav button:hover { color: var(--ink); }
+.subnav button[aria-selected="true"] { color: var(--brand); border-bottom-color: var(--brand); }
+.subnav button:focus-visible { outline: 2px solid var(--brand); outline-offset: -2px; }
+
+.draft { white-space: pre-wrap; background: var(--bg); border: 1px solid var(--line); border-radius: 8px;
+  padding: 12px 14px; margin: 8px 0 14px; font-size: 14px; line-height: 1.55; }
+
+.kanban { display: grid; grid-template-columns: repeat(6, minmax(150px, 1fr)); gap: 10px; overflow-x: auto; padding-bottom: 4px; }
+.kcol h3 { font: 600 12px/1 var(--sans); text-transform: uppercase; letter-spacing: .04em; color: var(--muted);
+  margin: 0 0 8px; display: flex; justify-content: space-between; align-items: center; }
+.kcol .empty { font-size: 12px; padding: 8px 0; }
+.kcard { border: 1px solid var(--line); border-radius: 8px; padding: 10px; margin-bottom: 8px; cursor: pointer; background: var(--surface); }
+.kcard:hover { border-color: var(--brand); }
+.kcard:focus-visible { outline: 2px solid var(--brand); outline-offset: 1px; }
+.kcard .title { font-size: 14px; font-weight: 500; }
+
+.onb { border-bottom: 1px solid var(--line); padding: 14px 0; }
+.onb:last-child { border-bottom: 0; }
+.onb-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
+.steps { list-style: none; margin: 10px 0 0; padding: 0; }
+.step { padding: 4px 0; font-size: 14px; }
+.step label { display: flex; gap: 8px; align-items: center; cursor: pointer; }
+.step.not_started .link { color: var(--muted); }
+
+.calgrid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.cdow { background: var(--surface); color: var(--muted); font: 600 11px/1 var(--sans); text-transform: uppercase;
+  letter-spacing: .04em; padding: 8px 6px; text-align: center; }
+.cday { background: var(--surface); min-height: 88px; padding: 6px; position: relative; }
+.cday.out { background: var(--bg); }
+.cday.today .dnum { background: var(--brand); color: var(--on-brand); border-radius: 50%; }
+.dnum { font-size: 12px; color: var(--muted); width: 20px; height: 20px; display: grid; place-items: center; }
+.cmeet { display: block; width: 100%; text-align: left; font: 500 11px/1.3 var(--sans); background: var(--brand-soft);
+  color: var(--ink); border: 0; border-radius: 4px; padding: 3px 5px; margin-top: 3px; cursor: pointer;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cmeet:hover { outline: 1px solid var(--brand); }
+.cadd { position: absolute; top: 4px; right: 4px; opacity: 0; background: none; border: 0; color: var(--muted);
+  font-size: 15px; cursor: pointer; line-height: 1; padding: 2px 5px; }
+.cday:hover .cadd, .cadd:focus-visible { opacity: 1; }
+
+.meters { list-style: none; margin: 0; padding: 0; }
+.meters li { margin-bottom: 12px; }
+.meter-top { display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 5px; }
+.meter { height: 6px; background: var(--bg); border-radius: 3px; overflow: hidden; }
+.meter span { display: block; height: 100%; background: var(--brand); }
+.meter span.hot { background: var(--warn); }
+
+@media (max-width: 860px) {
+  .kanban { grid-template-columns: repeat(6, 160px); }
+  .cday { min-height: 64px; }
+  .cadd { opacity: 1; }
+}
 </style>
 </head>
 <body>
@@ -1139,22 +1195,42 @@ async function openHousehold(id, canShare) {
 /* =====================================================================
    6. ADVISOR VIEW
    ===================================================================== */
-function advisorView() {
-  $('view').innerHTML = `<dl class="strip" id="strip"></dl>
-    <div class="grid">
-      <div class="col">${panel('w-meetings')}${panel('w-tasks')}</div>
-      <div class="col">${panel('w-alerts')}${panel('w-signals')}</div>
-      ${panel('w-book', 'wide')}
-    </div>`;
+/* The role switcher stays the top level (X-15). These are sections inside the advisor view,
+   so the client-safe boundary is never one click away from an advisor's own sections. */
+const ADV_SECTIONS = [['today', 'Today'], ['clients', 'Clients'], ['communications', 'Communications'],
+  ['prospects', 'Prospects'], ['onboarding', 'Onboarding'], ['calendar', 'Calendar'], ['followups', 'Follow-ups']];
+let advSection = 'today';
 
-  const loadStrip = () => api('GET', '/summary').then(s => {
+function subnav(el, items, active, go) {
+  el.innerHTML = items.map(([k, label]) => `<button role="tab" data-sec="${esc(k)}" aria-selected="${k === active}">${esc(label)}</button>`).join('');
+  el.querySelectorAll('[data-sec]').forEach(b => b.onclick = () => go(b.dataset.sec));
+}
+
+function advLoadStrip() {
+  return api('GET', '/summary').then(s => {
     $('strip').innerHTML = `
       <div class="stat"><dt>Assets under management</dt><dd><div class="figure">${money(s.aum.value)}</div><div class="sub"><span class="${pctClass(s.aum.changeMtd)}">${pct(s.aum.changeMtd)}</span> this month</div>${spark(s.aum.trend, 'Assets under management, last 12 months')}</dd></div>
       <div class="stat"><dt>Households</dt><dd><div class="figure">${s.households}</div></dd></div>
       <div class="stat"><dt>Meetings this week</dt><dd><div class="figure">${s.meetingsThisWeek}</div></dd></div>
       <div class="stat"><dt>Open tasks</dt><dd><div class="figure">${s.tasksOpen}</div><div class="sub">${s.tasksDueToday} due today</div></dd></div>`;
   }).catch(e => { $('strip').innerHTML = `<div class="err" style="padding:16px 0">${esc(e.message)}</div>`; });
-  loadStrip();
+}
+
+function advisorView() {
+  $('view').innerHTML = `<dl class="strip" id="strip"></dl>
+    <nav class="subnav" id="advnav" role="tablist" aria-label="Advisor sections"></nav>
+    <div id="section"></div>`;
+  advLoadStrip();
+  const go = (k) => { advSection = k; subnav($('advnav'), ADV_SECTIONS, k, go); ADV_RENDER[k](); };
+  go(advSection);
+}
+
+/* ---- Today ---- */
+function advToday() {
+  $('section').innerHTML = `<div class="grid">
+    <div class="col">${panel('w-meetings')}</div>
+    <div class="col">${panel('w-alerts')}${panel('w-signals')}</div>
+  </div>`;
 
   load($('w-meetings'), "Today's meetings", () => api('GET', '/meetings'), (r) => {
     const list = r.items, nextIdx = list.findIndex(m => new Date(m.startsAt) > new Date());
@@ -1164,25 +1240,18 @@ function advisorView() {
       <details class="brief" data-id="${esc(m.id)}"><summary>Prep brief</summary><p></p></details></li>`).join('')}</ol>` : '<p class="empty">No meetings today.</p>');
   }, (el) => el.querySelectorAll('details.brief').forEach(d => d.addEventListener('toggle', async () => {
     if (!d.open || d.dataset.loaded) return;
-    d.dataset.loaded = '1'; const p = d.querySelector('p'); p.textContent = 'Loading\u2026';
+    d.dataset.loaded = '1'; const p = d.querySelector('p'); p.textContent = 'Loading…';
     try { const m = await api('GET', '/meetings/' + encodeURIComponent(d.dataset.id)); p.textContent = (m.brief || 'No brief yet.') + (m.briefSources ? ' Sources: ' + m.briefSources.join(', ') + '.' : ''); }
     catch { p.textContent = "Couldn't load the brief."; d.dataset.loaded = ''; }
-  })));
-
-  load($('w-tasks'), 'Tasks', () => api('GET', '/tasks'), (r) => head('Tasks', r.openCount + ' open') + (r.items.length ? `<ul class="rows">${r.items.map(t => { const d = dueLabel(t.dueDate); return `
-    <li class="task${t.status === 'done' ? ' done' : ''}"><label><input type="checkbox" data-task="${esc(t.id)}" ${t.status === 'done' ? 'checked' : ''}>
-    <span class="grow"><span class="title">${esc(t.title)}</span>${t.origin === 'meeting' ? '<span class="tag">From meeting</span>' : ''}
-    <span class="meta" style="display:block">${esc(t.householdName || 'Practice')} \u2022 <span class="${d.hot && t.status === 'open' ? 'due-hot' : ''}">${esc(d.text)}</span></span></span></label></li>`; }).join('')}</ul>` : '<p class="empty">No tasks yet.</p>'),
-  (el) => el.querySelectorAll('[data-task]').forEach(c => c.addEventListener('change', async () => {
-    const li = c.closest('.task'); li.classList.toggle('done', c.checked);
-    try { await api('PATCH', '/tasks/' + encodeURIComponent(c.dataset.task), { body: { status: c.checked ? 'done' : 'open' } }); toast(c.checked ? 'Task marked done.' : 'Task reopened.'); loadStrip(); }
-    catch (e) { c.checked = !c.checked; li.classList.toggle('done', c.checked); toast(e.message); }
   })));
 
   const alertsLoader = () => api('GET', '/alerts');
   const renderAlerts = (r) => head('Needs attention', r.items.length + ' items') + alertsList(r.items, { dismiss: true });
   const afterAlerts = (el) => {
-    el.querySelectorAll('[data-alert-action]').forEach(b => b.onclick = () => toast(b.dataset.alertAction + ' is not built yet.'));
+    el.querySelectorAll('[data-alert-action]').forEach(b => b.onclick = () => {
+      if (b.dataset.alertAction === 'Open queue') { advSection = 'communications'; advisorView(); return; }
+      toast(b.dataset.alertAction + ' is not built yet.');
+    });
     el.querySelectorAll('[data-dismiss]').forEach(b => b.onclick = async () => {
       b.disabled = true;
       try { await api('PATCH', '/alerts/' + encodeURIComponent(b.dataset.dismiss), { body: { status: 'dismissed' } }); toast('Alert dismissed.'); load(el, 'Needs attention', alertsLoader, renderAlerts, afterAlerts); }
@@ -1205,9 +1274,279 @@ function advisorView() {
       b.setAttribute('aria-expanded', 'true'); b.textContent = 'Hide';
     } catch (e) { toast(e.message); } finally { b.disabled = false; }
   }));
-
-  bookPanel({ scope: 'own', canShare: true, id: 'w-book', title: 'Book of business' });
 }
+
+/* ---- Clients ---- */
+function advClients() {
+  $('section').innerHTML = `<div class="grid">${panel('w-book', 'wide')}</div>`;
+  bookPanel({ scope: 'own', canShare: true, id: 'w-book', title: 'Book of business', size: 10 });
+}
+
+/* ---- Follow-ups ---- */
+function advFollowups() {
+  $('section').innerHTML = `<div class="grid">${panel('w-tasks', 'wide')}</div>`;
+  const run = () => load($('w-tasks'), 'Follow-ups', () => api('GET', '/tasks'), (r) => head('Follow-ups', r.openCount + ' open') + (r.items.length ? `<ul class="rows">${r.items.map(t => { const d = dueLabel(t.dueDate); return `
+    <li class="task${t.status === 'done' ? ' done' : ''}"><label><input type="checkbox" data-task="${esc(t.id)}" ${t.status === 'done' ? 'checked' : ''}>
+    <span class="grow"><span class="title">${esc(t.title)}</span>${t.origin === 'meeting' ? '<span class="tag">From meeting</span>' : ''}
+    <span class="meta" style="display:block">${esc(t.householdName || 'Practice')} • <span class="${d.hot && t.status === 'open' ? 'due-hot' : ''}">${esc(d.text)}</span></span></span></label></li>`; }).join('')}</ul>` : '<p class="empty">No follow-ups yet.</p>'),
+  (el) => el.querySelectorAll('[data-task]').forEach(c => c.addEventListener('change', async () => {
+    const li = c.closest('.task'); li.classList.toggle('done', c.checked);
+    try { await api('PATCH', '/tasks/' + encodeURIComponent(c.dataset.task), { body: { status: c.checked ? 'done' : 'open' } }); toast(c.checked ? 'Done.' : 'Reopened.'); advLoadStrip(); }
+    catch (e) { c.checked = !c.checked; li.classList.toggle('done', c.checked); toast(e.message); }
+  })));
+  run();
+}
+
+/* ---- Communications: the approval gate. Nothing leaves the firm without a human (X-03). ---- */
+const COMM_BADGE = { draft: ['prep', 'Awaiting approval'], approved: ['ready', 'Approved, queued'], sent: ['plain', 'Sent'] };
+function advComms() {
+  $('section').innerHTML = `<div class="grid">${panel('w-comms', 'wide')}</div>`;
+  let status = '';
+  const run = () => load($('w-comms'), 'Communications', () => api('GET', '/communications', { query: { status, size: 20 } }), (r) =>
+    `<div class="panel-head"><h2>Communications</h2><label class="hint">Show <select id="cmfilter" aria-label="Filter messages by status"><option value="">All</option><option value="draft">Awaiting approval</option><option value="approved">Approved</option><option value="sent">Sent</option></select></label></div>`
+    + (r.items.length ? `<ul class="rows">${r.items.map(c => { const [cls, label] = COMM_BADGE[c.status]; return `
+      <li><div class="grow"><div class="title">${esc(c.subject)}</div>
+      <div class="meta">${esc(c.householdName || 'Practice')} • ${esc(c.channel)} • ${esc(daysAgo(c.createdAt))}${c.draftedBy === 'ai' ? ' • AI draft' : ''}${c.complianceReview ? ' • <span class="due-hot">compliance review</span>' : ''}</div>
+      ${c.approvedBy ? `<div class="meta">Approved by ${esc(c.approvedBy)}</div>` : ''}</div>
+      <span class="badge ${cls}">${esc(label)}</span>
+      <button class="btn" data-open="${esc(c.id)}">Open</button></li>`; }).join('')}</ul>` : '<p class="empty">No messages match.</p>'),
+  (el) => {
+    const f = el.querySelector('#cmfilter'); f.value = status; f.onchange = () => { status = f.value; run(); };
+    el.querySelectorAll('[data-open]').forEach(b => b.onclick = () => openComm(b.dataset.open, run));
+  });
+  run();
+}
+
+async function openComm(id, done) {
+  const dlg = $('dlg');
+  dlg.innerHTML = '<p class="empty">Loading…</p>'; dlg.showModal();
+  try {
+    const c = await api('GET', '/communications/' + encodeURIComponent(id));
+    const [cls, label] = COMM_BADGE[c.status];
+    dlg.innerHTML = `<button class="btn quiet close" data-close>Close</button><h2 id="dlgTitle">${esc(c.subject)}</h2>
+      <div><span class="badge ${cls}">${esc(label)}</span>${c.complianceReview ? ' <span class="badge crit">Compliance review</span>' : ''}</div>
+      <dl class="defs"><dt>To</dt><dd>${esc(c.householdName || 'Practice')}</dd><dt>Channel</dt><dd>${esc(c.channel)}</dd><dt>Tone</dt><dd>${esc(c.tone || 'Not set')}</dd><dt>Drafted</dt><dd>${esc(c.draftedBy === 'ai' ? 'By AI, ' + daysAgo(c.createdAt).toLowerCase() : daysAgo(c.createdAt))}</dd>${c.approvedBy ? `<dt>Approved</dt><dd>${esc(c.approvedBy)}</dd>` : ''}</dl>
+      <h3>Draft</h3><p class="draft">${esc(c.body)}</p>
+      <p class="hint">${c.status === 'draft' ? 'This is a draft. It cannot be sent until an advisor approves it, and the approval is recorded.' : c.status === 'approved' ? 'Approved and queued. Sending is the last step.' : 'This message has been sent.'}</p>
+      <div class="actions">${c.status === 'draft' ? '<button class="btn primary" data-act="approved">Approve</button>' : ''}
+      ${c.status === 'approved' ? '<button class="btn primary" data-act="sent">Send now</button><button class="btn" data-act="draft">Return to draft</button>' : ''}</div>`;
+    dlg.querySelectorAll('[data-act]').forEach(b => b.onclick = async () => {
+      b.disabled = true;
+      try {
+        await api('PATCH', '/communications/' + encodeURIComponent(id), { body: { status: b.dataset.act } });
+        toast(b.dataset.act === 'approved' ? 'Approved. It is queued, not sent.' : b.dataset.act === 'sent' ? 'Sent.' : 'Returned to draft.');
+        dlg.close(); done();
+      } catch (e) { toast(e.message); b.disabled = false; }
+    });
+  } catch (e) { dlg.innerHTML = `<button class="btn quiet close" data-close>Close</button><p class="err">${esc(e.message)}</p>`; }
+}
+
+/* ---- Prospects ---- */
+const STAGE_LABEL = { lead: 'Lead', contacted: 'Contacted', meeting_scheduled: 'Meeting scheduled', proposal: 'Proposal', onboarding: 'Onboarding', converted: 'Converted' };
+function advProspects() {
+  $('section').innerHTML = `<div class="grid">${panel('w-pros', 'wide')}</div>`;
+  const run = () => load($('w-pros'), 'Prospects', () => api('GET', '/prospects', { query: { size: 100 } }), (r) => {
+    const total = r.items.reduce((a, p) => a + (p.estimatedAssets || 0), 0);
+    return head('Prospects', r.totalItems + ' in the pipeline, about ' + money(total)) + `<div class="kanban">${r.stages.map(st => {
+      const col = r.items.filter(p => p.stage === st);
+      return `<div class="kcol"><h3>${esc(STAGE_LABEL[st])} <span class="count">${col.length}</span></h3>
+        ${col.length ? col.map(p => `<article class="kcard" data-pros="${esc(p.id)}" tabindex="0" role="button" aria-label="Open ${esc(p.name)}">
+          <div class="title">${esc(p.name)}</div>
+          <div class="meta">${p.estimatedAssets ? esc(money(p.estimatedAssets)) : 'Assets unknown'} • ${esc(p.source)}</div>
+          ${p.meetingId ? '<div class="meta">Meeting booked</div>' : ''}</article>`).join('') : '<p class="empty">Empty</p>'}</div>`;
+    }).join('')}</div>`;
+  }, (el) => el.querySelectorAll('[data-pros]').forEach(c => {
+    const open = () => openProspect(c.dataset.pros, run);
+    c.onclick = open;
+    c.onkeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(); } };
+  }));
+  run();
+}
+
+async function openProspect(id, done) {
+  const dlg = $('dlg');
+  dlg.innerHTML = '<p class="empty">Loading…</p>'; dlg.showModal();
+  try {
+    const p = await api('GET', '/prospects/' + encodeURIComponent(id));
+    const stages = Object.keys(STAGE_LABEL), i = stages.indexOf(p.stage), next = stages[i + 1];
+    dlg.innerHTML = `<button class="btn quiet close" data-close>Close</button><h2 id="dlgTitle">${esc(p.name)}</h2>
+      <div><span class="badge plain">${esc(STAGE_LABEL[p.stage])}</span></div>
+      <dl class="defs"><dt>Estimated assets</dt><dd>${p.estimatedAssets ? moneyFull(p.estimatedAssets) : 'Unknown'}</dd><dt>Source</dt><dd>${esc(p.source)}</dd><dt>First seen</dt><dd>${esc(daysAgo(p.createdAt))}</dd></dl>
+      <h3>Intake notes</h3><p class="draft">${esc(p.intakeNotes || 'No notes yet.')}</p>
+      ${next ? `<div class="actions"><button class="btn primary" id="prAdv">Move to ${esc(STAGE_LABEL[next])}</button></div>` : '<p class="hint">This prospect has converted.</p>'}`;
+    const adv = $('prAdv');
+    if (adv) adv.onclick = async () => {
+      adv.disabled = true;
+      try { await api('PATCH', '/prospects/' + encodeURIComponent(id), { body: { stage: next } }); toast('Moved to ' + STAGE_LABEL[next] + '.'); dlg.close(); done(); }
+      catch (e) { toast(e.message); adv.disabled = false; }
+    };
+  } catch (e) { dlg.innerHTML = `<button class="btn quiet close" data-close>Close</button><p class="err">${esc(e.message)}</p>`; }
+}
+
+/* ---- Onboarding, and importing a book ---- */
+function advOnboarding() {
+  $('section').innerHTML = `<div class="grid"><div class="col">${panel('w-onb')}</div><div class="col">${panel('w-mig')}</div></div>`;
+  const run = () => load($('w-onb'), 'New clients', () => api('GET', '/onboarding'), (r) =>
+    head('New clients', r.items.length + ' in progress') + (r.items.length ? r.items.map(o => `
+      <article class="onb" data-onb="${esc(o.id)}"><div class="onb-head"><div><div class="title">${esc(o.name)}</div>
+      <div class="meta">Started ${esc(daysAgo(o.startedAt).toLowerCase())} • ${o.stepsComplete} of ${o.stepsTotal} steps</div></div>
+      <button class="btn primary" data-convert="${esc(o.id)}" ${o.readyToConvert ? '' : 'disabled'}>Convert to client</button></div>
+      <ul class="steps">${o.steps.map(s => `<li class="step ${esc(s.status)}">
+        <label><input type="checkbox" data-step="${esc(o.id)}:${esc(s.id)}" ${s.status === 'done' ? 'checked' : ''}>
+        <span class="grow"><button class="link" data-detail="${esc(o.id)}:${esc(s.id)}">${esc(s.label)}</button></span></label></li>`).join('')}</ul></article>`).join('')
+      : '<p class="empty">Nobody is onboarding right now.</p>'),
+  (el) => {
+    el.querySelectorAll('[data-step]').forEach(c => c.addEventListener('change', async () => {
+      const [oid, sid] = c.dataset.step.split(':');
+      try { await api('PATCH', `/onboarding/${encodeURIComponent(oid)}/steps/${encodeURIComponent(sid)}`, { body: { status: c.checked ? 'done' : 'open' } }); run(); }
+      catch (e) { c.checked = !c.checked; toast(e.message); }
+    }));
+    el.querySelectorAll('[data-detail]').forEach(b => b.onclick = async () => {
+      const [oid, sid] = b.dataset.detail.split(':');
+      const dlg = $('dlg'); dlg.innerHTML = '<p class="empty">Loading…</p>'; dlg.showModal();
+      try {
+        const o = await api('GET', '/onboarding/' + encodeURIComponent(oid));
+        const s = o.steps.find(x => x.id === sid);
+        dlg.innerHTML = `<button class="btn quiet close" data-close>Close</button><h2 id="dlgTitle">${esc(s.label)}</h2>
+          <div class="meta">${esc(o.name)}</div>
+          <p class="draft">${esc(s.detail || 'Not started yet. Nothing has been captured for this step.')}</p>
+          ${s.completedAt ? `<p class="hint">Completed ${esc(fmtDate(localDate(new Date(s.completedAt))))}.</p>` : ''}`;
+      } catch (e) { dlg.innerHTML = `<button class="btn quiet close" data-close>Close</button><p class="err">${esc(e.message)}</p>`; }
+    });
+    el.querySelectorAll('[data-convert]').forEach(b => b.onclick = async () => {
+      b.disabled = true;
+      try { const r = await api('POST', `/onboarding/${encodeURIComponent(b.dataset.convert)}/convert`); toast(r.name + ' is now in your book.'); run(); advLoadStrip(); }
+      catch (e) { toast(e.message); b.disabled = false; }
+    });
+  });
+  run();
+
+  load($('w-mig'), 'Import a book', () => Promise.resolve(null), () =>
+    head('Import a book', 'Migrate from another system') + `
+    <p class="hint">Paste one household per line as <code>Name, assets</code>. Rows that fail validation are reported and skipped; the rest are imported and flagged for review.</p>
+    <div class="field"><label for="migSrc">Where is it coming from?</label><input type="text" id="migSrc" value="Redtail export"></div>
+    <div class="field"><label for="migRows">Households</label><textarea id="migRows" rows="6">Okonkwo household, 3200000
+Vance Trust, 1400000
+, 50
+Bad Assets, -3</textarea></div>
+    <button class="btn primary" id="migGo">Validate and import</button>
+    <div id="migOut"></div>`,
+  () => {
+    $('migGo').onclick = async () => {
+      const rows = $('migRows').value.split('\n').map(l => l.trim()).filter(Boolean).map(l => {
+        const i = l.lastIndexOf(','), name = (i < 0 ? l : l.slice(0, i)).trim(), n = i < 0 ? NaN : Number(l.slice(i + 1).trim());
+        const row = {}; if (name) row.name = name; if (!Number.isNaN(n)) row.aum = n; return row;
+      });
+      if (!rows.length) { toast('Add at least one row.'); return; }
+      const b = $('migGo'); b.disabled = true;
+      try {
+        const r = await api('POST', '/migrations', { body: { source: $('migSrc').value.trim() || 'Unknown', rows } });
+        $('migOut').innerHTML = `<dl class="defs"><dt>Read</dt><dd>${r.counts.read}</dd><dt>Imported</dt><dd>${r.counts.imported}</dd><dt>Rejected</dt><dd>${r.counts.invalid}</dd></dl>`
+          + (r.invalidRows.length ? `<ul class="rows">${r.invalidRows.map(x => `<li><div class="grow"><div class="title">Row ${x.row + 1}</div><div class="meta">${esc(x.problems.join('; '))}</div></div></li>`).join('')}</ul>` : '');
+        toast(r.counts.imported + ' imported, flagged for review.');
+        advLoadStrip();
+      } catch (e) { toast(e.message); } finally { b.disabled = false; }
+    };
+  });
+}
+
+/* ---- Calendar ---- */
+let calMonth = null;
+function advCalendar() {
+  const now = new Date();
+  if (!calMonth) calMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+  $('section').innerHTML = `<div class="grid">${panel('w-cal', 'wide')}</div>`;
+  const run = () => {
+    const first = new Date(calMonth), last = new Date(calMonth.getFullYear(), calMonth.getMonth() + 1, 0);
+    const from = localDate(first), to = localDate(last);
+    load($('w-cal'), 'Calendar', () => api('GET', '/meetings', { query: { from, to } }), (r) => {
+      const byDay = {};
+      for (const m of r.items) (byDay[localDate(new Date(m.startsAt))] ||= []).push(m);
+      const lead = (first.getDay() + 6) % 7, cells = [];
+      for (let i = 0; i < lead; i++) cells.push('<div class="cday out"></div>');
+      for (let d = 1; d <= last.getDate(); d++) {
+        const date = new Date(calMonth.getFullYear(), calMonth.getMonth(), d), key = localDate(date);
+        const list = byDay[key] || [], today = key === localDate(now);
+        cells.push(`<div class="cday${today ? ' today' : ''}"><div class="dnum">${d}</div>
+          ${list.map(m => `<button class="cmeet" data-meet="${esc(m.id)}" title="${esc(m.type)}">${esc(fmtTime(m.startsAt))} ${esc(m.householdName || m.prospectName || m.type)}</button>`).join('')}
+          <button class="cadd" data-add="${esc(key)}" aria-label="Add a meeting on ${esc(fmtDate(key))}">+</button></div>`);
+      }
+      return `<div class="panel-head"><h2>${esc(calMonth.toLocaleDateString('en-US', { month: 'long', year: 'numeric' }))}</h2>
+        <span class="actions"><button class="btn" data-mv="-1">Previous</button><button class="btn" data-mv="1">Next</button></span></div>
+        <div class="calgrid">${['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map(d => `<div class="cdow">${d}</div>`).join('')}${cells.join('')}</div>
+        <p class="hint">Past meetings hold notes or a transcript. Select one to read it and draft follow-ups.</p>`;
+    }, (el) => {
+      el.querySelectorAll('[data-mv]').forEach(b => b.onclick = () => { calMonth = new Date(calMonth.getFullYear(), calMonth.getMonth() + (+b.dataset.mv), 1); run(); });
+      el.querySelectorAll('[data-meet]').forEach(b => b.onclick = () => openMeeting(b.dataset.meet, run));
+      el.querySelectorAll('[data-add]').forEach(b => b.onclick = () => addMeeting(b.dataset.add, run));
+    });
+  };
+  run();
+}
+
+async function addMeeting(date, done) {
+  const dlg = $('dlg');
+  dlg.innerHTML = '<p class="empty">Loading…</p>'; dlg.showModal();
+  try {
+    const hh = await api('GET', '/households', { query: { size: 100, sort: 'name,asc' } });
+    dlg.innerHTML = `<button class="btn quiet close" data-close>Close</button><h2 id="dlgTitle">New meeting</h2>
+      <div class="field"><label for="nmType">What is it?</label><input type="text" id="nmType" placeholder="For example, Annual review"></div>
+      <div class="field"><label for="nmHh">Client</label><select id="nmHh"><option value="">No client attached (prospect)</option>${hh.items.map(h => `<option value="${esc(h.id)}">${esc(h.name)}</option>`).join('')}</select></div>
+      <div class="field"><label for="nmTime">Time</label><input type="time" id="nmTime" value="10:00"></div>
+      <div class="field"><label for="nmMins">Minutes</label><input type="number" id="nmMins" value="45" min="15" step="15"></div>
+      <button class="btn primary" id="nmGo">Add to ${esc(fmtDate(date))}</button>`;
+    $('nmGo').onclick = async () => {
+      const type = $('nmType').value.trim(); if (!type) { toast('Give the meeting a name.'); return; }
+      const b = $('nmGo'); b.disabled = true;
+      try {
+        await api('POST', '/meetings', { body: { startsAt: new Date(date + 'T' + ($('nmTime').value || '10:00') + ':00').toISOString(), type,
+          householdId: $('nmHh').value || undefined, durationMinutes: Number($('nmMins').value) || 30 } });
+        toast('Meeting added.'); dlg.close(); done();
+      } catch (e) { toast(e.message); b.disabled = false; }
+    };
+  } catch (e) { dlg.innerHTML = `<button class="btn quiet close" data-close>Close</button><p class="err">${esc(e.message)}</p>`; }
+}
+
+async function openMeeting(id, done) {
+  const dlg = $('dlg');
+  dlg.innerHTML = '<p class="empty">Loading…</p>'; dlg.showModal();
+  try {
+    const m = await api('GET', '/meetings/' + encodeURIComponent(id));
+    let record = null;
+    try { record = await api('GET', '/meetings/' + encodeURIComponent(id) + '/record'); } catch { /* most meetings have none */ }
+    dlg.innerHTML = `<button class="btn quiet close" data-close>Close</button><h2 id="dlgTitle">${esc(m.type)}</h2>
+      <div class="meta">${esc(m.householdName || m.prospectName || 'No client attached')} • ${esc(fmtDate(localDate(new Date(m.startsAt))))} at ${esc(fmtTime(m.startsAt))} • ${m.durationMinutes} minutes</div>
+      <h3>Prep brief</h3><p class="draft">${esc(m.brief || 'No brief yet.')}</p>
+      ${record ? `<h3>${record.kind === 'transcript' ? 'Transcript' : 'Notes'}</h3>
+        ${record.consent ? `<p class="hint">Recording consent: ${record.consent.obtained ? 'on file' + (record.consent.method ? ', ' + esc(record.consent.method) : '') : '<strong>not on file</strong>'}.</p>` : ''}
+        ${record.withheld ? `<p class="err">${esc(record.withheldReason)}</p>`
+          : `<p class="draft">${esc(record.content)}</p><div class="actions"><button class="btn primary" id="mtNext">Suggest next steps</button></div><div id="mtOut"></div>`}`
+        : '<p class="hint">No notes or transcript for this meeting.</p>'}
+      <div class="actions"><button class="btn quiet" id="mtDel">Cancel meeting</button></div>`;
+    const nx = $('mtNext');
+    if (nx) nx.onclick = async () => {
+      nx.disabled = true;
+      try {
+        const s = await api('POST', '/meetings/' + encodeURIComponent(id) + '/record/next-steps');
+        $('mtOut').innerHTML = `<p class="hint">Drafts only. Nothing is created until you add one as a follow-up.</p>
+          <ul class="rows">${s.items.map((it, i) => `<li><div class="grow"><div class="title">${esc(it.title)}</div><div class="meta">${it.dueDate ? 'Suggested due ' + esc(fmtDate(it.dueDate)) : 'No date'}</div></div>
+          <button class="btn" data-accept="${i}">Add as follow-up</button></li>`).join('')}</ul>`;
+        $('mtOut').querySelectorAll('[data-accept]').forEach(b => b.onclick = async () => {
+          const it = s.items[+b.dataset.accept]; b.disabled = true;
+          try { await api('POST', '/tasks', { body: { title: it.title, householdId: it.householdId || undefined, dueDate: it.dueDate || undefined, origin: 'meeting', originMeetingId: id } }); toast('Added to your follow-ups.'); b.textContent = 'Added'; advLoadStrip(); }
+          catch (e) { toast(e.message); b.disabled = false; }
+        });
+      } catch (e) { toast(e.message); nx.disabled = false; }
+    };
+    $('mtDel').onclick = async () => {
+      try { await api('DELETE', '/meetings/' + encodeURIComponent(id)); toast('Meeting cancelled.'); dlg.close(); done(); advLoadStrip(); }
+      catch (e) { toast(e.message); }
+    };
+  } catch (e) { dlg.innerHTML = `<button class="btn quiet close" data-close>Close</button><p class="err">${esc(e.message)}</p>`; }
+}
+
+const ADV_RENDER = { today: advToday, clients: advClients, communications: advComms, prospects: advProspects,
+  onboarding: advOnboarding, calendar: advCalendar, followups: advFollowups };
 
 /* Book / households table: sorting and paging are done by the API. */
 function bookPanel({ scope, canShare, id, title, size = 8 }) {
@@ -1228,19 +1567,32 @@ function bookPanel({ scope, canShare, id, title, size = 8 }) {
 /* =====================================================================
    7. FIRM VIEW
    ===================================================================== */
-function firmView() {
-  $('view').innerHTML = `<dl class="strip" id="strip"></dl>
-    <div class="grid even">
-      ${panel('f-advisors', 'wide')}${panel('f-compliance')}${panel('f-alerts')}${panel('f-book', 'wide')}
-    </div>`;
+const FIRM_SECTIONS = [['overview', 'Overview'], ['billing', 'Billing'], ['branding', 'Branding']];
+let firmSection = 'overview';
 
-  api('GET', '/firm/summary').then(s => {
+function firmLoadStrip() {
+  return api('GET', '/firm/summary').then(s => {
     $('strip').innerHTML = `
       <div class="stat"><dt>Firm assets under management</dt><dd><div class="figure">${money(s.aum.value)}</div><div class="sub"><span class="${pctClass(s.aum.changeMtd)}">${pct(s.aum.changeMtd)}</span> this month</div>${spark(s.aum.trend, 'Firm assets, last 12 months')}</dd></div>
       <div class="stat"><dt>Advisors</dt><dd><div class="figure">${s.advisors}</div></dd></div>
       <div class="stat"><dt>Households</dt><dd><div class="figure">${s.households}</div></dd></div>
       <div class="stat"><dt>Open compliance items</dt><dd><div class="figure">${s.openComplianceItems}</div><div class="sub">${s.overdueComplianceItems} overdue</div></dd></div>`;
   }).catch(e => { $('strip').innerHTML = `<div class="err" style="padding:16px 0">${esc(e.message)}</div>`; });
+}
+
+function firmView() {
+  $('view').innerHTML = `<dl class="strip" id="strip"></dl>
+    <nav class="subnav" id="firmnav" role="tablist" aria-label="Firm sections"></nav>
+    <div id="section"></div>`;
+  firmLoadStrip();
+  const go = (k) => { firmSection = k; subnav($('firmnav'), FIRM_SECTIONS, k, go); FIRM_RENDER[k](); };
+  go(firmSection);
+}
+
+function firmOverview() {
+  $('section').innerHTML = `<div class="grid even">
+      ${panel('f-advisors', 'wide')}${panel('f-compliance')}${panel('f-alerts')}${panel('f-book', 'wide')}
+    </div>`;
 
   const st = { sort: 'aum,desc' };
   const cols = [{ key: 'name', label: 'Advisor' }, { key: 'households', label: 'Households', num: true }, { key: 'aum', label: 'Assets', num: true }, { key: 'change30d', label: '30-day change', num: true, nosort: true }, { key: 'meetingsThisWeek', label: 'Meetings this week', num: true, nosort: true }, { key: 'tasksOverdue', label: 'Overdue tasks', num: true }, { key: 'openAlerts', label: 'Open alerts', num: true }];
@@ -1271,6 +1623,95 @@ function firmView() {
 
   bookPanel({ scope: 'firm', canShare: false, id: 'f-book', title: 'Households across the firm', size: 6 });
 }
+
+/* Billing holds two unrelated concerns: what the firm pays for the platform, and what the
+   firm charges its clients. They share a section because that is where people look for both. */
+function firmBilling() {
+  $('section').innerHTML = `<div class="grid"><div class="col">${panel('b-sub')}${panel('b-inv')}</div><div class="col">${panel('b-fees')}</div></div>`;
+
+  load($('b-sub'), 'Platform subscription', () => api('GET', '/firm/billing/subscription'), (s) =>
+    head('Platform subscription', s.plan) + `
+    <dl class="defs"><dt>Seats</dt><dd>${s.seats.used} of ${s.seats.purchased} in use</dd>
+      <dt>Renews</dt><dd>${esc(fmtDate(s.renewalDate))}</dd>
+      <dt>Payment method</dt><dd>${esc(s.paymentMethod.brand)} ${esc(s.paymentMethod.maskedNumber)}, expires ${s.paymentMethod.expiryMonth}/${s.paymentMethod.expiryYear}</dd>
+      <dt>This invoice</dt><dd>${moneyFull(s.currentInvoice.amount)}, ${esc(s.currentInvoice.status)} ${esc(fmtDate(s.currentInvoice.dueDate))}</dd></dl>
+    <h3>Usage this period</h3>
+    <ul class="meters">${s.meters.map(m => { const p = Math.min(100, Math.round(m.used / m.included * 100)); return `
+      <li><div class="meter-top"><span>${esc(m.label)}</span><span class="meta">${m.used.toLocaleString('en-US')} of ${m.included.toLocaleString('en-US')} ${esc(m.unit)}</span></div>
+      <div class="meter"><span style="width:${p}%" class="${p >= 90 ? 'hot' : ''}"></span></div></li>`; }).join('')}</ul>`);
+
+  load($('b-inv'), 'Invoices', () => api('GET', '/firm/billing/invoices'), (r) =>
+    head('Invoices', r.totalItems + ' on file') + `<ul class="rows">${r.items.map(i => `
+      <li><div class="grow"><div class="title">${esc(i.number)}</div><div class="meta">Issued ${esc(fmtDate(i.issuedDate))}</div></div>
+      <span>${moneyFull(i.amount)}</span><span class="badge ${i.status === 'paid' ? 'ok' : i.status === 'overdue' ? 'crit' : 'plain'}">${esc(i.status)}</span>
+      <button class="btn" data-inv="${esc(i.id)}">Breakdown</button></li>`).join('')}</ul>`,
+  (el) => el.querySelectorAll('[data-inv]').forEach(b => b.onclick = async () => {
+    const dlg = $('dlg'); dlg.innerHTML = '<p class="empty">Loading…</p>'; dlg.showModal();
+    try {
+      const i = await api('GET', '/firm/billing/invoices/' + encodeURIComponent(b.dataset.inv));
+      dlg.innerHTML = `<button class="btn quiet close" data-close>Close</button><h2 id="dlgTitle">${esc(i.number)}</h2>
+        <div class="meta">Issued ${esc(fmtDate(i.issuedDate))} • due ${esc(fmtDate(i.dueDate))}</div>
+        <div class="tablewrap"><table><thead><tr><th>Item</th><th class="num">Quantity</th><th class="num">Each</th><th class="num">Amount</th></tr></thead>
+        <tbody>${i.lines.map(l => `<tr><td>${esc(l.description)}</td><td class="num">${l.quantity}</td><td class="num">${moneyFull(l.unitAmount)}</td><td class="num">${moneyFull(l.amount)}</td></tr>`).join('')}
+        <tr><td colspan="3"><strong>Total</strong></td><td class="num"><strong>${moneyFull(i.amount)}</strong></td></tr></tbody></table></div>`;
+    } catch (e) { dlg.innerHTML = `<button class="btn quiet close" data-close>Close</button><p class="err">${esc(e.message)}</p>`; }
+  }));
+
+  // The principal is also an advisor here, so /billing/fees resolves to their own book.
+  load($('b-fees'), 'Client fees', () => api('GET', '/billing/fees', { query: { size: 100 } }), (r) =>
+    head('Client fees', 'Next run ' + fmtDate(r.nextRunDate)) + `
+    <h3>Schedule</h3>
+    <div class="tablewrap"><table><thead><tr><th>Assets</th><th class="num">Annual rate</th></tr></thead><tbody>
+    ${r.schedule.map(t => `<tr><td>${money(t.minAssets)}${t.maxAssets ? ' to ' + money(t.maxAssets) : ' and above'}</td><td class="num">${t.annualRatePct}%</td></tr>`).join('')}
+    </tbody></table></div>
+    <h3>This quarter</h3>
+    <div class="tablewrap"><table><thead><tr><th>Household</th><th class="num">Billable</th><th class="num">Rate</th><th class="num">Fee</th></tr></thead><tbody>
+    ${r.items.map(f => `<tr><td>${esc(f.householdName)}</td><td class="num">${money(f.billableAssets)}</td><td class="num">${f.annualRatePct}%</td><td class="num">${moneyFull(f.quarterlyFee)}</td></tr>`).join('')}
+    <tr><td colspan="3"><strong>Total</strong></td><td class="num"><strong>${moneyFull(r.totalQuarterlyFees)}</strong></td></tr></tbody></table></div>
+    <p class="hint">Clients see their own fee from this same schedule in the portal.</p>`);
+}
+
+function firmBranding() {
+  $('section').innerHTML = `<div class="grid"><div class="col">${panel('b-brand')}</div></div>`;
+  load($('b-brand'), 'Branding', () => api('GET', '/firm/branding'), (b) =>
+    head('Branding', 'Applies to every view, including the client portal') + `
+    <div class="field"><label for="brFirm">Firm name</label><input type="text" id="brFirm" value="${esc(b.firmName)}"></div>
+    <div class="field"><label for="brAdv">Advisor name and credential</label><input type="text" id="brAdv" value="${esc(b.advisorDisplayName || '')}"></div>
+    <div class="field"><label for="brMark">Mark letter</label><input type="text" id="brMark" maxlength="1" value="${esc(b.markLetter)}"></div>
+    <div class="field"><label for="brColor">Accent colour</label><input type="color" id="brColor" value="${esc(b.accentColor)}"></div>
+    <button class="btn primary" id="brSave">Save branding</button>
+    <p class="hint">Last changed by ${esc(b.updatedBy || 'nobody')} ${esc(daysAgo(b.updatedAt).toLowerCase())}. Only a principal can change this; every advisor and client sees the result.</p>`,
+  () => {
+    $('brSave').onclick = async () => {
+      const btn = $('brSave'); btn.disabled = true;
+      try {
+        const b = await api('PATCH', '/firm/branding', { body: { firmName: $('brFirm').value.trim(), advisorDisplayName: $('brAdv').value.trim(), markLetter: $('brMark').value.trim() || 'W', accentColor: $('brColor').value } });
+        applyBranding(b); toast('Branding saved.');
+      } catch (e) { toast(e.message); } finally { btn.disabled = false; }
+    };
+  });
+}
+
+/* Branding is the one thing every role reads, so it is applied in the shell, not per view.
+   The stored accent is a light-mode colour. Used as-is in dark mode it fails contrast against
+   the dark ground, so it is lifted toward the page ink first. */
+const isDark = () => document.documentElement.dataset.theme === 'dark'
+  || (document.documentElement.dataset.theme !== 'light' && matchMedia('(prefers-color-scheme: dark)').matches);
+
+function forTheme(hex) {
+  const m = /^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(hex || '');
+  if (!m || !isDark()) return hex;
+  const mix = (c, t) => Math.round(parseInt(c, 16) + (t - parseInt(c, 16)) * 0.55);
+  return '#' + [mix(m[1], 230), mix(m[2], 238), mix(m[3], 236)].map(v => v.toString(16).padStart(2, '0')).join('');
+}
+
+function applyBranding(b) {
+  if (!b) return;
+  if (b.accentColor) document.documentElement.style.setProperty('--brand', forTheme(b.accentColor));
+  if (b.firmName && SESSION) { SESSION.firm.name = b.firmName; $('subhead').textContent = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' }) + ' • ' + b.firmName; }
+}
+
+const FIRM_RENDER = { overview: firmOverview, billing: firmBilling, branding: firmBranding };
 
 /* =====================================================================
    8. CLIENT PORTAL: plain language, factual account data only.
@@ -1343,6 +1784,7 @@ async function boot() {
   try { SESSION = await api('GET', '/session'); }
   catch (e) { $('view').innerHTML = `<p class="err">${esc(e.message || "Couldn't sign you in.")}</p>`; return; }
   $('avatar').textContent = SESSION.name.split(' ').map(p => p[0]).slice(0, 2).join('');
+  try { applyBranding(await api('GET', '/firm/branding')); } catch { /* branding is decoration; never block the app */ }
   showView(SESSION.views[0]);
 }
 

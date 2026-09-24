@@ -18,7 +18,7 @@ Then open http://localhost:4010/ for the dashboard, already connected to this se
 npm test
 ```
 
-runs 32 tests, including one that reads `openapi.yaml` and checks that every listed operation is served, and one that checks the dashboard's embedded mock has not drifted from `src/mock-core.js`.
+runs 33 tests, including one that reads `openapi.yaml` and checks that every listed operation is served, and one that checks the dashboard's embedded mock has not drifted from `src/mock-core.js`.
 
 ## Signing in
 

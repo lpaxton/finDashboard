@@ -383,3 +383,18 @@ test('a client is refused every advisor-side feature ported from Meridian', asyn
   assert.equal((await call('grace', 'POST', '/meetings', { startsAt: '2026-10-02T14:00:00.000Z', type: 'x' })).status, 403);
   assert.equal((await call('grace', 'POST', '/migrations', { source: 'x', rows: [{ name: 'y' }] })).status, 403);
 });
+
+// A light guard on the UI: every ported feature must still be wired to its endpoint.
+// It does not prove the screens work, only that a feature was not silently dropped.
+test('the dashboard calls every ported endpoint', () => {
+  const html = fs.readFileSync(path.join(__dirname, '..', 'dashboard', 'index.html'), 'utf8');
+  const wired = ["'/communications'", "'/prospects'", "'/onboarding'", "'/migrations'", "'/billing/fees'",
+    "'/firm/billing/subscription'", "'/firm/billing/invoices'", "'/firm/branding'", "'/meetings'", "'/tasks'"];
+  for (const w of wired) assert.ok(html.includes(w), 'the dashboard no longer calls ' + w);
+  for (const frag of ['/record', '/record/next-steps', '/convert', '/steps/'])
+    assert.ok(html.includes(frag), 'the dashboard no longer calls ' + frag);
+  for (const sec of ['today', 'clients', 'communications', 'prospects', 'onboarding', 'calendar', 'followups'])
+    assert.ok(new RegExp(`\\['${sec}',`).test(html), 'the advisor sub-nav lost ' + sec);
+  for (const sec of ['overview', 'billing', 'branding'])
+    assert.ok(new RegExp(`\\['${sec}',`).test(html), 'the firm sub-nav lost ' + sec);
+});
