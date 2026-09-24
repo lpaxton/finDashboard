@@ -5,7 +5,7 @@ import { $, esc, money, moneyFull, pct, pctClass, fmtDate, daysAgo, CATEGORY } f
 import { toast, spark, head, panel, load, sortTable, nextSort, alertsList, bookPanel, subnav } from './ui.js';
 import { applyBranding } from './state.js';
 
-export const FIRM_SECTIONS = [['overview', 'Overview'], ['billing', 'Billing'], ['branding', 'Branding']];
+export const FIRM_SECTIONS = [['overview', 'Overview'], ['billing', 'Billing'], ['ownership', 'Ownership'], ['branding', 'Branding']];
 export let firmSection = 'overview';
 
 export function firmLoadStrip() {
@@ -65,7 +65,7 @@ export function firmOverview() {
 /* Billing holds two unrelated concerns: what the firm pays for the platform, and what the
    firm charges its clients. They share a section because that is where people look for both. */
 export function firmBilling() {
-  $('section').innerHTML = `<div class="grid"><div class="col">${panel('b-sub')}${panel('b-inv')}</div><div class="col">${panel('b-fees')}</div></div>`;
+  $('section').innerHTML = `<div class="grid"><div class="col">${panel('b-sub')}${panel('b-inv')}</div><div class="col">${panel('b-plan')}${panel('b-fees')}</div></div>`;
 
   load($('b-sub'), 'Platform subscription', () => api('GET', '/firm/billing/subscription'), (s) =>
     head('Platform subscription', s.plan) + `
@@ -94,6 +94,8 @@ export function firmBilling() {
         <tr><td colspan="3"><strong>Total</strong></td><td class="num"><strong>${moneyFull(i.amount)}</strong></td></tr></tbody></table></div>`;
     } catch (e) { dlg.innerHTML = `<button class="btn quiet close" data-close>Close</button><p class="err">${esc(e.message)}</p>`; }
   }));
+
+  runFeePlan();
 
   // The principal is also an advisor here, so /billing/fees resolves to their own book.
   load($('b-fees'), 'Client fees', () => api('GET', '/billing/fees', { query: { size: 100 } }), (r) =>
@@ -130,4 +132,48 @@ export function firmBranding() {
   });
 }
 
-export const FIRM_RENDER = { overview: firmOverview, billing: firmBilling, branding: firmBranding };
+export const FIRM_RENDER = { overview: firmOverview, billing: firmBilling, ownership: firmOwnership, branding: firmBranding };
+
+/* Who owns the practice (PO-12). Principal only, and the API enforces that. */
+export function firmOwnership() {
+  $('section').innerHTML = `<div class="grid">${panel('f-cap', 'wide')}</div>`;
+  load($('f-cap'), 'Ownership', () => api('GET', '/firm/cap-table'), (c) =>
+    head('Ownership', c.totalShares.toLocaleString('en-US') + ' shares as at ' + fmtDate(c.asOf))
+    + `<div class="tablewrap"><table><thead><tr><th>Holder</th><th>Class</th><th class="num">Shares</th><th class="num">Vested</th><th class="num">Ownership</th><th>Vesting ends</th></tr></thead><tbody>
+      ${c.holders.map(h => `<tr><td>${esc(h.holder)}<div class="meta">${esc(h.role)}</div></td>
+        <td>${esc((c.shareClasses.find(s2 => s2.id === h.shareClass) || {}).name || h.shareClass)}</td>
+        <td class="num">${h.shares.toLocaleString('en-US')}</td>
+        <td class="num">${h.unvested ? h.vested.toLocaleString('en-US') : '—'}</td>
+        <td class="num">${h.ownershipPct}%</td>
+        <td>${h.vestingEndsOn ? esc(fmtDate(h.vestingEndsOn)) : '—'}</td></tr>`).join('')}
+      </tbody></table></div>
+    <p class="hint">The firm's own ownership, not a client's. Visible to a principal only.</p>`);
+}
+
+/* The schedule is the firm's, so only a principal may change it. Tiers must meet exactly:
+   the API refuses a gap, and the UI says why before you try. */
+function runFeePlan() {
+  load($('b-plan'), 'Fee schedule', () => api('GET', '/billing/fee-plan'), (p) =>
+    head('Fee schedule', p.canEditSchedule ? 'Editable' : 'Set by the principal')
+    + `<ul class="tiers" id="tierList">${p.schedule.map((t, i) => `<li>
+        <span>${money(t.minAssets)}${t.maxAssets ? ' to ' + money(t.maxAssets) : ' and above'}</span>
+        ${p.canEditSchedule
+          ? `<input type="number" step="0.05" min="0" max="5" value="${t.annualRatePct}" data-tier="${i}" aria-label="Annual rate for this tier"> <span class="meta">%</span>`
+          : `<span>${t.annualRatePct}%</span>`}
+      </li>`).join('')}</ul>
+    ${p.canEditSchedule ? '<button class="btn primary" id="planSave">Save schedule</button>' : ''}
+    <p class="hint">Last changed by ${esc(p.updatedBy || 'nobody')} ${esc(daysAgo(p.updatedAt).toLowerCase())}. Tiers must meet exactly, so no household is left without a rate.</p>
+    ${p.overrides.length ? `<h3>Overrides</h3><ul class="rows">${p.overrides.map(o => `
+      <li><div class="grow"><div class="title">${esc(o.householdName)}</div><div class="meta">${esc(o.reason)} • ${esc(o.setBy)}</div></div>
+      <span>${o.annualRatePct}%</span></li>`).join('')}</ul>` : ''}`,
+  (el, p) => {
+    const btn = el.querySelector('#planSave');
+    if (!btn) return;
+    btn.onclick = async () => {
+      const schedule = p.schedule.map((t, i) => ({ ...t, annualRatePct: Number(el.querySelector(`[data-tier="${i}"]`).value) }));
+      btn.disabled = true;
+      try { await api('PATCH', '/billing/fee-plan', { body: { schedule } }); toast('Schedule saved.'); runFeePlan(); }
+      catch (e) { toast(e.message); btn.disabled = false; }
+    };
+  });
+}

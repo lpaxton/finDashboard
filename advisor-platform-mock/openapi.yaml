@@ -42,6 +42,7 @@ tags:
   - name: Firm
   - name: Intelligence
   - name: Reporting
+  - name: Playbooks
   - name: Sharing
   - name: Communications
   - name: Prospects
@@ -817,6 +818,172 @@ paths:
       responses:
         '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/NextActionList' } } } }
         '403': { $ref: '#/components/responses/Error' }
+
+  /firm/cap-table:
+    get:
+      tags: [Firm]
+      operationId: getCapTable
+      summary: Who owns the firm
+      description: >
+        The firm's own ownership, not a client's. Principal only: this is the most sensitive
+        non-client data the platform holds. Requirement PO-12.
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/CapTable' } } } }
+        '403': { $ref: '#/components/responses/Error' }
+
+  /team-shares:
+    get:
+      tags: [Sharing]
+      operationId: listTeamShares
+      summary: Households shared with you, and by you
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/TeamShareList' } } } }
+        '403': { $ref: '#/components/responses/Error' }
+    post:
+      tags: [Sharing]
+      operationId: shareWithColleague
+      summary: Give a colleague read access to one household
+      description: >
+        Widens who may see a household, so it is recorded and revocable rather than implicit.
+        Read access only; the owning advisor stays the owner. Requirement PO-04.
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/TeamShareCreate' } } }
+      responses:
+        '201': { description: Shared, content: { application/json: { schema: { $ref: '#/components/schemas/TeamShare' } } } }
+        '400': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
+
+  /team-shares/{teamShareId}:
+    delete:
+      tags: [Sharing]
+      operationId: revokeTeamShare
+      summary: End a team share
+      description: Either side may end it, and the revocation is recorded.
+      parameters:
+        - { name: teamShareId, in: path, required: true, schema: { type: string } }
+      responses:
+        '204': { description: Revoked }
+        '404': { $ref: '#/components/responses/Error' }
+
+  /billing/fee-plan:
+    get:
+      tags: [Billing]
+      operationId: getFeePlan
+      summary: The fee schedule and any per-household overrides
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/FeePlan' } } } }
+        '403': { $ref: '#/components/responses/Error' }
+    patch:
+      tags: [Billing]
+      operationId: updateFeePlan
+      summary: Change the firm's fee schedule
+      description: >
+        Principal only: the schedule is the firm's, and an advisor changes one client's rate
+        rather than everyone's. Tiers must start at zero, meet exactly with no gap or overlap,
+        and end open-ended, so no household can fall through without a rate. The change is
+        attributed. Requirement AX-11, X-05.
+      requestBody:
+        required: true
+        content: { application/json: { schema: { type: object, required: [schedule], properties: { schedule: { type: array, items: { $ref: '#/components/schemas/FeeTier' } } } } } }
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/FeePlan' } } } }
+        '400': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+
+  /billing/fees/{householdId}:
+    patch:
+      tags: [Billing]
+      operationId: setHouseholdFee
+      summary: Override one household's rate
+      description: >
+        An advisor may set a rate for their own household that differs from the schedule. A
+        reason is required, because the change alters what a client is billed and the record
+        has to say why. Send annualRatePct null to remove the override. Requirement AX-11.
+      parameters:
+        - { $ref: '#/components/parameters/householdId' }
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/FeeOverrideUpdate' } } }
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/FeeOverride' } } } }
+        '400': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+
+  /models:
+    get:
+      tags: [Households]
+      operationId: listModels
+      summary: Model portfolios available to compare against
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/ModelList' } } } }
+        '403': { $ref: '#/components/responses/Error' }
+
+  /households/{householdId}/model-comparison:
+    post:
+      tags: [Households]
+      operationId: compareToModel
+      summary: What would change if this household moved to another model
+      description: >
+        Per asset class, the current weight against the proposed one, the change in points and
+        in dollars, and the resulting turnover. A comparison, not an instruction: `placed` is
+        always false and no trade can be sent from here. Placing a trade is PM-05, which is on
+        the regulatory review list. Requirement PM-03.
+      parameters:
+        - { $ref: '#/components/parameters/householdId' }
+      requestBody:
+        required: true
+        content: { application/json: { schema: { type: object, required: [modelId], properties: { modelId: { type: string } } } } }
+      responses:
+        '201': { description: Compared, content: { application/json: { schema: { $ref: '#/components/schemas/ModelComparison' } } } }
+        '400': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
+
+  /playbooks:
+    get:
+      tags: [Playbooks]
+      operationId: listPlaybooks
+      summary: Reusable sequences of follow-ups
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/PlaybookList' } } } }
+        '403': { $ref: '#/components/responses/Error' }
+
+  /playbooks/{playbookId}/runs:
+    post:
+      tags: [Playbooks]
+      operationId: runPlaybook
+      summary: Run a playbook and create its follow-ups
+      description: >
+        Unlike a suggestion, running a playbook is itself the advisor's explicit action, so the
+        follow-ups are created rather than drafted. Each step's due date is its offset from the
+        anchor date. Requirement AX-09.
+      parameters:
+        - { name: playbookId, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/PlaybookRunRequest' } } }
+      responses:
+        '201': { description: Created, content: { application/json: { schema: { $ref: '#/components/schemas/PlaybookRun' } } } }
+        '400': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+
+  /prospects/{prospectId}/matches:
+    get:
+      tags: [Prospects]
+      operationId: matchProspect
+      summary: Which advisor fits this prospect
+      description: >
+        Ranked by how close the prospect's assets are to each advisor's typical client and how
+        much capacity they have, with the reasoning stated. A suggestion: reassigning is a human
+        decision and nothing here moves the prospect. Requirement GP-01.
+      parameters:
+        - { $ref: '#/components/parameters/prospectId' }
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/MatchList' } } } }
+        '403': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
 
 components:
   securitySchemes:
@@ -1871,5 +2038,203 @@ components:
       properties:
         items: { type: array, items: { $ref: '#/components/schemas/NextAction' } }
         totalItems: { type: integer }
+        note: { type: string }
+        dataAsOf: { type: string, format: date-time }
+
+    CapTableHolder:
+      type: object
+      required: [id, holder, shareClass, shares, ownershipPct]
+      properties:
+        id: { type: string }
+        holder: { type: string }
+        role: { type: string }
+        shareClass: { type: string }
+        shares: { type: number }
+        vested: { type: number }
+        unvested: { type: number }
+        vestingEndsOn: { type: string, format: date, nullable: true }
+        ownershipPct: { type: number }
+        fullyDilutedPct: { type: number }
+
+    CapTable:
+      type: object
+      required: [asOf, totalShares, holders, dataAsOf]
+      properties:
+        asOf: { type: string, format: date }
+        totalShares: { type: number }
+        shareClasses:
+          type: array
+          items:
+            type: object
+            properties:
+              id: { type: string }
+              name: { type: string }
+              votesPerShare: { type: number }
+              liquidationPreference: { type: number }
+        holders: { type: array, items: { $ref: '#/components/schemas/CapTableHolder' } }
+        dataAsOf: { type: string, format: date-time }
+
+    TeamShareCreate:
+      type: object
+      required: [householdId, advisorId]
+      properties:
+        householdId: { type: string }
+        advisorId: { type: string, description: 'The colleague being given read access.' }
+        reason: { type: string, nullable: true }
+
+    TeamShare:
+      type: object
+      required: [id, householdId, sharedBy, sharedWith, access, sharedAt]
+      properties:
+        id: { type: string }
+        householdId: { type: string }
+        householdName: { type: string }
+        sharedBy: { type: string }
+        sharedByName: { type: string }
+        sharedWith: { type: string }
+        sharedWithName: { type: string }
+        access: { type: string, enum: [read], description: 'Read only. The owning advisor stays the owner.' }
+        direction: { type: string, enum: [in, out] }
+        reason: { type: string, nullable: true }
+        sharedAt: { type: string, format: date-time }
+        revokedAt: { type: string, format: date-time, nullable: true }
+        revokedBy: { type: string, nullable: true }
+
+    TeamShareList:
+      type: object
+      required: [items]
+      properties:
+        items: { type: array, items: { $ref: '#/components/schemas/TeamShare' } }
+
+    FeeOverrideUpdate:
+      type: object
+      properties:
+        annualRatePct: { type: number, nullable: true, minimum: 0, maximum: 5, description: 'Null removes the override.' }
+        reason: { type: string, description: 'Required when setting a rate.' }
+
+    FeeOverride:
+      type: object
+      required: [householdId, overridden]
+      properties:
+        householdId: { type: string }
+        householdName: { type: string }
+        overridden: { type: boolean }
+        annualRatePct: { type: number }
+        scheduleRate: { type: number, description: 'What the schedule would have charged.' }
+        reason: { type: string }
+        setBy: { type: string }
+        setAt: { type: string, format: date-time }
+
+    FeePlan:
+      type: object
+      required: [schedule, canEditSchedule, dataAsOf]
+      properties:
+        schedule: { type: array, items: { $ref: '#/components/schemas/FeeTier' } }
+        currency: { type: string }
+        overrides: { type: array, items: { $ref: '#/components/schemas/FeeOverride' } }
+        canEditSchedule: { type: boolean, description: 'True for a principal only.' }
+        updatedAt: { type: string, format: date-time }
+        updatedBy: { type: string }
+        dataAsOf: { type: string, format: date-time }
+
+    Model:
+      type: object
+      required: [id, name]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        riskLevel: { type: string, enum: [Conservative, Moderate, Aggressive] }
+        target: { type: array, items: { type: number }, description: 'Target weights, in the order of the allocation asset classes.' }
+
+    ModelList:
+      type: object
+      required: [items]
+      properties:
+        items: { type: array, items: { $ref: '#/components/schemas/Model' } }
+
+    ModelComparison:
+      type: object
+      required: [householdId, fromModel, toModel, lines, turnoverPct, placed]
+      properties:
+        householdId: { type: string }
+        householdName: { type: string }
+        aum: { type: number }
+        fromModel: { type: object, nullable: true, properties: { id: { type: string }, name: { type: string } } }
+        toModel: { type: object, properties: { id: { type: string }, name: { type: string } } }
+        lines:
+          type: array
+          items:
+            type: object
+            properties:
+              assetClass: { type: string }
+              currentPct: { type: number }
+              targetPct: { type: number }
+              changePct: { type: number }
+              changeValue: { type: number, description: 'The change in dollars at current assets.' }
+        turnoverPct: { type: number, description: 'Half the sum of absolute changes.' }
+        placed: { type: boolean, description: 'Always false. No trade can be placed from here.' }
+        note: { type: string }
+        dataAsOf: { type: string, format: date-time }
+
+    PlaybookStep:
+      type: object
+      required: [id, title, dayOffset]
+      properties:
+        id: { type: string }
+        title: { type: string }
+        dayOffset: { type: integer, description: 'Days from the anchor date. Negative runs before it.' }
+
+    Playbook:
+      type: object
+      required: [id, name, steps]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        description: { type: string }
+        steps: { type: array, items: { $ref: '#/components/schemas/PlaybookStep' } }
+
+    PlaybookList:
+      type: object
+      required: [items]
+      properties:
+        items: { type: array, items: { $ref: '#/components/schemas/Playbook' } }
+
+    PlaybookRunRequest:
+      type: object
+      properties:
+        householdId: { type: string, nullable: true }
+        anchorDate: { type: string, format: date, description: 'Defaults to today. Step offsets are relative to it.' }
+
+    PlaybookRun:
+      type: object
+      required: [playbookId, tasks]
+      properties:
+        playbookId: { type: string }
+        playbookName: { type: string }
+        householdId: { type: string, nullable: true }
+        householdName: { type: string, nullable: true }
+        anchorDate: { type: string, format: date }
+        tasks: { type: array, items: { $ref: '#/components/schemas/Task' } }
+
+    AdvisorMatch:
+      type: object
+      required: [advisorId, advisorName, score, reasons]
+      properties:
+        advisorId: { type: string }
+        advisorName: { type: string }
+        score: { type: number, description: '0 to 1. Fit against typical client size, weighted with spare capacity.' }
+        households: { type: integer }
+        typicalClientAssets: { type: number }
+        reasons: { type: array, items: { type: string } }
+
+    MatchList:
+      type: object
+      required: [prospectId, items]
+      properties:
+        prospectId: { type: string }
+        prospectName: { type: string }
+        estimatedAssets: { type: number, nullable: true }
+        currentAdvisorId: { type: string }
+        items: { type: array, items: { $ref: '#/components/schemas/AdvisorMatch' } }
         note: { type: string }
         dataAsOf: { type: string, format: date-time }

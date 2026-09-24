@@ -1,6 +1,6 @@
 # Advisor Platform mock server (API v0.3)
 
-A dependency-free mock of the draft Advisor Platform API for the firm, advisor and client-portal views. It implements all 56 operations in `openapi.yaml` on one consistent dataset, enforces roles, and serves the dashboard.
+A dependency-free mock of the draft Advisor Platform API for the firm, advisor and client-portal views. It implements all 68 operations in `openapi.yaml` on one consistent dataset, enforces roles, and serves the dashboard.
 
 Nothing here is the real backend. It exists so the dashboard can be built and demonstrated before the backend and the Green Meadows connection exist, and so developers have a running example of every shape in the contract.
 
@@ -18,7 +18,7 @@ Then open http://localhost:4010/ for the dashboard, already connected to this se
 npm test
 ```
 
-runs 78 tests, including one that reads `openapi.yaml` and checks that every listed operation is served, and one that checks the dashboard's embedded mock has not drifted from `src/mock-core.js`.
+runs 85 tests, including one that reads `openapi.yaml` and checks that every listed operation is served, and one that checks the dashboard's embedded mock has not drifted from `src/mock-core.js`.
 
 ## Signing in
 

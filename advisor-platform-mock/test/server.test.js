@@ -186,9 +186,9 @@ test('every operation in openapi.yaml is served', async () => {
     const p = l.match(/^  (\/[^\s:]+):\s*$/); if (p) { cur = p[1]; continue; }
     const m = l.match(/^    (get|post|patch|put|delete):\s*$/); if (m && cur) ops.push([m[1].toUpperCase(), cur]);
   }
-  assert.equal(ops.length, 56, 'spec should list 56 operations');
+  assert.equal(ops.length, 68, 'spec should list 68 operations');
   const params = { householdId: 'h3', meetingId: 'm1', taskId: 't1', alertId: 'a1', signalId: 'sig_idle_cash', advisorId: 'adv2', documentId: 'd1',
-    communicationId: 'cm1', prospectId: 'p1', onboardingId: 'ob1', stepId: 'intake_form', invoiceId: 'inv1', queryId: 'q1' };
+    communicationId: 'cm1', prospectId: 'p1', onboardingId: 'ob1', stepId: 'intake_form', invoiceId: 'inv1', queryId: 'q1', teamShareId: 'ts1', playbookId: 'pb1' };
   const missing = [];
   for (const [method, p] of ops) {
     const url = p.replace(/\{(\w+)\}/g, (_, k) => params[k]);
@@ -699,4 +699,117 @@ test('reading next best action creates nothing', async () => {
   const first = r.items[0];
   await call('dana', 'POST', '/tasks', { title: first.suggestedTask.title, dueDate: first.suggestedTask.dueDate, householdId: first.suggestedTask.householdId || undefined });
   assert.equal((await call('dana', 'GET', '/tasks')).data.items.length, before + 1);
+});
+
+/* ---- ownership, team share, fee plan, modeling, playbooks, matching ---- */
+
+test('the cap table is the principal\'s alone, and the percentages add up', async () => {
+  assert.equal((await call('marcus', 'GET', '/firm/cap-table')).status, 403);
+  assert.equal((await call('grace', 'GET', '/firm/cap-table')).status, 403);
+  const c = (await call('dana', 'GET', '/firm/cap-table')).data;
+  assert.equal(c.holders.reduce((a, h) => a + h.shares, 0), c.totalShares);
+  assert.equal(Math.round(c.holders.reduce((a, h) => a + h.ownershipPct, 0)), 100);
+  for (const h of c.holders) assert.equal(h.vested + h.unvested, h.shares, h.holder + ' vested and unvested must equal shares');
+});
+
+test('a team share widens access, is recorded, and either side can end it', async () => {
+  assert.equal((await call('marcus', 'GET', '/households/h1')).status, 404, 'not visible before sharing');
+  const share = await call('dana', 'POST', '/team-shares', { householdId: 'h1', advisorId: 'adv2', reason: 'Cover while away' });
+  assert.equal(share.status, 201);
+  assert.equal(share.data.access, 'read', 'a team share is read access; the owner stays the owner');
+  assert.ok(share.data.sharedAt);
+
+  const asMarcus = (await call('marcus', 'GET', '/team-shares')).data.items;
+  assert.equal(asMarcus.length, 1);
+  assert.equal(asMarcus[0].direction, 'in');
+
+  assert.equal((await call('dana', 'POST', '/team-shares', { householdId: 'h1', advisorId: 'adv2' })).status, 409, 'sharing twice is refused');
+  assert.equal((await call('dana', 'POST', '/team-shares', { householdId: 'h11', advisorId: 'adv2' })).status, 404, 'cannot share a household that is not yours');
+  assert.equal((await call('dana', 'POST', '/team-shares', { householdId: 'h1', advisorId: 'adv1' })).status, 400);
+
+  // The recipient can give it up, not only the owner.
+  assert.equal((await call('marcus', 'DELETE', '/team-shares/' + share.data.id)).status, 204);
+  assert.equal((await call('marcus', 'GET', '/team-shares')).data.items.filter(t => !t.revokedAt).length, 0);
+});
+
+test('the fee schedule cannot be left with a gap a household falls through', async () => {
+  assert.equal((await call('marcus', 'PATCH', '/billing/fee-plan', { schedule: [{ minAssets: 0, maxAssets: null, annualRatePct: 1 }] })).status, 403,
+    'the schedule is the firm\'s, so an advisor cannot change it');
+  const bad = [
+    [[{ minAssets: 1000, maxAssets: null, annualRatePct: 1 }], /start at zero/],
+    [[{ minAssets: 0, maxAssets: 1e6, annualRatePct: 1 }, { minAssets: 2e6, maxAssets: null, annualRatePct: 0.8 }], /meet exactly/],
+    [[{ minAssets: 0, maxAssets: 1e6, annualRatePct: 1 }], /open-ended/],
+    [[{ minAssets: 0, maxAssets: null, annualRatePct: 9 }], /between 0 and 5/]
+  ];
+  for (const [schedule, re] of bad) {
+    const r = await call('dana', 'PATCH', '/billing/fee-plan', { schedule });
+    assert.equal(r.status, 400);
+    assert.match(r.data.message, re);
+  }
+  const good = await call('dana', 'PATCH', '/billing/fee-plan', {
+    schedule: [{ minAssets: 0, maxAssets: 5e6, annualRatePct: 0.9 }, { minAssets: 5e6, maxAssets: null, annualRatePct: 0.6 }] });
+  assert.equal(good.status, 200);
+  assert.equal(good.data.updatedBy, 'Dana Whitfield', 'a fee change must be attributed');
+});
+
+test('a fee override needs a reason, and flows through to what the client sees', async () => {
+  assert.equal((await call('dana', 'PATCH', '/billing/fees/h3', { annualRatePct: 0.4 })).status, 400,
+    'a change to what a client is billed must say why');
+  assert.equal((await call('dana', 'PATCH', '/billing/fees/h11', { annualRatePct: 0.4, reason: 'x' })).status, 404,
+    'an advisor cannot reprice another advisor\'s household');
+
+  const before = (await call('grace', 'GET', '/me/fees')).data.items[0].amount;
+  const set = await call('dana', 'PATCH', '/billing/fees/h3', { annualRatePct: 0.4, reason: 'Long-standing relationship' });
+  assert.equal(set.status, 200);
+  assert.equal(set.data.setBy, 'Dana Whitfield');
+  const after = (await call('grace', 'GET', '/me/fees')).data.items[0].amount;
+  assert.ok(after < before, 'the client portal must bill the overridden rate, not the schedule');
+
+  const advisorView = (await call('dana', 'GET', '/billing/fees')).data.items.find(f => f.householdId === 'h3');
+  assert.equal(advisorView.quarterlyFee, after, 'the two views must still agree after an override');
+
+  await call('dana', 'PATCH', '/billing/fees/h3', { annualRatePct: null });
+  assert.equal((await call('grace', 'GET', '/me/fees')).data.items[0].amount, before, 'removing the override restores the schedule rate');
+});
+
+test('a model comparison is a comparison, and never places a trade', async () => {
+  const models = (await call('dana', 'GET', '/models')).data;
+  assert.ok(models.items.length >= 3);
+  const c = (await call('dana', 'POST', '/households/h1/model-comparison', { modelId: 'mdl_conservative' })).data;
+  assert.equal(c.placed, false, 'placing a trade is PM-05 and is on the regulatory list');
+  assert.match(c.note, /No trade has been placed/);
+  assert.equal(Math.round(c.lines.reduce((t, l) => t + l.targetPct, 0)), 100);
+  for (const l of c.lines) assert.equal(l.changePct, +(l.targetPct - l.currentPct).toFixed(1));
+  assert.ok(c.turnoverPct > 0);
+  assert.equal((await call('dana', 'POST', '/households/h1/model-comparison', { modelId: 'nope' })).status, 400);
+  assert.equal((await call('dana', 'POST', '/households/h7/model-comparison', { modelId: 'mdl_income' })).status, 409,
+    'a household with no allocation has nothing to compare');
+  assert.equal((await call('marcus', 'POST', '/households/h1/model-comparison', { modelId: 'mdl_income' })).status, 404);
+});
+
+test('running a playbook creates dated follow-ups', async () => {
+  const before = (await call('dana', 'GET', '/tasks')).data.items.length;
+  const pbs = (await call('dana', 'GET', '/playbooks')).data.items;
+  assert.ok(pbs.length >= 3);
+  const r = await call('dana', 'POST', '/playbooks/pb1/runs', { householdId: 'h3', anchorDate: '2026-10-15' });
+  assert.equal(r.status, 201);
+  assert.equal(r.data.tasks.length, pbs.find(p => p.id === 'pb1').steps.length);
+  assert.equal((await call('dana', 'GET', '/tasks')).data.items.length, before + r.data.tasks.length);
+  // A step at -10 days should land before the anchor, which is the point of an offset.
+  assert.ok(r.data.tasks.some(t => t.dueDate < '2026-10-15'), 'preparation steps fall before the meeting');
+  assert.ok(r.data.tasks.every(t => t.origin === 'playbook'));
+  assert.equal((await call('dana', 'POST', '/playbooks/nope/runs', {})).status, 404);
+  assert.equal((await call('dana', 'POST', '/playbooks/pb1/runs', { householdId: 'h11' })).status, 404);
+});
+
+test('advisor matching ranks with its reasoning, and moves nobody', async () => {
+  const r = (await call('dana', 'GET', '/prospects/p1/matches')).data;
+  assert.equal(r.items.length, 4);
+  const scores = r.items.map(i => i.score);
+  assert.deepEqual(scores, [...scores].sort((a, b) => b - a), 'matches come back ranked');
+  for (const m of r.items) assert.ok(m.reasons.length >= 2, m.advisorName + ' must say why');
+  assert.match(r.note, /human decision/);
+  const after = (await call('dana', 'GET', '/prospects/p1')).data;
+  assert.equal(after.id, 'p1', 'reading matches must not reassign the prospect');
+  assert.equal((await call('marcus', 'GET', '/prospects/p1/matches')).status, 404);
 });

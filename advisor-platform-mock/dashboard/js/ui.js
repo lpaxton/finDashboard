@@ -52,7 +52,9 @@ export async function openHousehold(id, canShare) {
     dlg.innerHTML = `<button class="btn quiet close" data-close>Close</button><h2 id="dlgTitle">${esc(h.name)}</h2>
       <div>${statusBadge(h.status)}</div>
       <dl class="defs"><dt>Assets</dt><dd>${moneyFull(h.aum)}</dd><dt>30-day change</dt><dd class="${pctClass(h.change30d)}">${pct(h.change30d)}</dd><dt>Last contact</dt><dd>${esc(daysAgo(h.lastContactAt))}</dd></dl>
-      <div class="actions" style="margin:2px 0 14px"><button class="btn" id="hhAsk">Ask about this household</button></div>
+      <div class="actions" style="margin:2px 0 14px"><button class="btn" id="hhAsk">Ask about this household</button>
+        ${canShare ? '<button class="btn" id="hhTeam">Share with a colleague</button><button class="btn" id="hhFee">Change fee</button><button class="btn" id="hhModel">Compare models</button>' : ''}</div>
+      <div id="hhPanel"></div>
       <h3>Allocation</h3>
       <div id="hhAlloc"><div class="skel"></div></div>
       <h3>Accounts</h3>
@@ -68,6 +70,10 @@ export async function openHousehold(id, canShare) {
     setAskContext('household', id, h.name);
     const ask = $('hhAsk');
     if (ask) ask.onclick = () => openAsk(false);
+    const panelEl = () => $('hhPanel');
+    const team = $('hhTeam'); if (team) team.onclick = () => teamSharePanel(panelEl(), h);
+    const fee = $('hhFee'); if (fee) fee.onclick = () => feePanel(panelEl(), h);
+    const mdl = $('hhModel'); if (mdl) mdl.onclick = () => modelPanel(panelEl(), h);
     const go = $('shGo');
     if (go) go.onclick = async () => {
       const title = $('shTitle').value.trim(); if (!title) { toast('Add a title first.'); return; }
@@ -219,4 +225,97 @@ async function loadAskHistory() {
       catch (e) { toast(e.message); }
     });
   } catch { el.innerHTML = ''; }
+}
+
+/* ---- household actions, opened inline in the dialog ---- */
+
+/* Team share (PO-04). Read access only, recorded, revocable by either side. */
+async function teamSharePanel(el, h) {
+  el.innerHTML = '<div class="skel"></div>';
+  try {
+    const [advisors, shares] = await Promise.all([
+      api('GET', '/firm/advisors').catch(() => ({ items: [] })),
+      api('GET', '/team-shares')
+    ]);
+    const mine = shares.items.filter(t => t.householdId === h.id && !t.revokedAt);
+    el.innerHTML = `<h3>Share with a colleague</h3>
+      <p class="hint">Gives read access to this household. You stay the owner, it is recorded, and either of you can end it.</p>
+      ${advisors.items.length ? `<div class="field"><label for="tsWho">Colleague</label>
+        <select id="tsWho">${advisors.items.map(a => `<option value="${esc(a.id)}">${esc(a.name)}</option>`).join('')}</select></div>
+        <div class="field"><label for="tsWhy">Reason (optional)</label><input type="text" id="tsWhy" placeholder="For example, cover while I am away"></div>
+        <button class="btn primary" id="tsGo">Share</button>`
+      : '<p class="hint">The advisor list is not available to you, so sharing cannot be set up here.</p>'}
+      ${mine.length ? `<h3>Currently shared with</h3><ul class="rows">${mine.map(t => `
+        <li><div class="grow"><div class="title">${esc(t.sharedWithName)}</div>
+        <div class="meta">${esc(t.reason || 'No reason given')} • ${esc(daysAgo(t.sharedAt).toLowerCase())}</div></div>
+        <button class="btn quiet" data-revoke="${esc(t.id)}">End</button></li>`).join('')}</ul>` : ''}`;
+    const go = $('tsGo');
+    if (go) go.onclick = async () => {
+      go.disabled = true;
+      try { await api('POST', '/team-shares', { body: { householdId: h.id, advisorId: $('tsWho').value, reason: $('tsWhy').value.trim() || undefined } });
+        toast('Shared.'); teamSharePanel(el, h); }
+      catch (e) { toast(e.message); go.disabled = false; }
+    };
+    el.querySelectorAll('[data-revoke]').forEach(b => b.onclick = async () => {
+      b.disabled = true;
+      try { await api('DELETE', '/team-shares/' + encodeURIComponent(b.dataset.revoke)); toast('Access ended.'); teamSharePanel(el, h); }
+      catch (e) { toast(e.message); b.disabled = false; }
+    });
+  } catch (e) { el.innerHTML = `<p class="err">${esc(e.message)}</p>`; }
+}
+
+/* Fee override (AX-11). A reason is required, because the change alters what a client is billed. */
+async function feePanel(el, h) {
+  el.innerHTML = '<div class="skel"></div>';
+  try {
+    const plan = await api('GET', '/billing/fee-plan');
+    const current = plan.overrides.find(o => o.householdId === h.id);
+    el.innerHTML = `<h3>Fee for this household</h3>
+      <p class="hint">The schedule charges ${esc(String(scheduleRateFor(plan, h.aum)))}% at these assets. An override replaces that for this household only.</p>
+      <div class="field"><label for="feeRate">Annual rate</label><input type="number" id="feeRate" step="0.05" min="0" max="5" value="${current ? current.annualRatePct : scheduleRateFor(plan, h.aum)}"> <span class="meta">%</span></div>
+      <div class="field"><label for="feeWhy">Reason</label><input type="text" id="feeWhy" value="${esc(current ? current.reason : '')}" placeholder="Required: this changes what the client is billed"></div>
+      <div class="actions"><button class="btn primary" id="feeGo">Save rate</button>
+        ${current ? '<button class="btn quiet" id="feeClear">Remove override</button>' : ''}</div>`;
+    $('feeGo').onclick = async () => {
+      const b = $('feeGo'); b.disabled = true;
+      try { await api('PATCH', '/billing/fees/' + encodeURIComponent(h.id), { body: { annualRatePct: Number($('feeRate').value), reason: $('feeWhy').value.trim() } });
+        toast('Rate saved.'); feePanel(el, h); }
+      catch (e) { toast(e.message); b.disabled = false; }
+    };
+    const clear = $('feeClear');
+    if (clear) clear.onclick = async () => {
+      try { await api('PATCH', '/billing/fees/' + encodeURIComponent(h.id), { body: { annualRatePct: null } }); toast('Override removed.'); feePanel(el, h); }
+      catch (e) { toast(e.message); }
+    };
+  } catch (e) { el.innerHTML = `<p class="err">${esc(e.message)}</p>`; }
+}
+const scheduleRateFor = (plan, aum) => {
+  const t = plan.schedule.find(x => aum >= x.minAssets && (x.maxAssets === null || aum < x.maxAssets));
+  return t ? t.annualRatePct : 0;
+};
+
+/* Model comparison (PM-03). A comparison, never an instruction: no trade leaves this screen. */
+async function modelPanel(el, h) {
+  el.innerHTML = '<div class="skel"></div>';
+  try {
+    const models = await api('GET', '/models');
+    el.innerHTML = `<h3>Compare models</h3>
+      <div class="field"><label for="mdlPick">Move to</label>
+        <select id="mdlPick">${models.items.map(m => `<option value="${esc(m.id)}">${esc(m.name)} (${esc(m.riskLevel)})</option>`).join('')}</select></div>
+      <button class="btn primary" id="mdlGo">Compare</button>
+      <div id="mdlOut"></div>`;
+    $('mdlGo').onclick = async () => {
+      const b = $('mdlGo'); b.disabled = true;
+      try {
+        const c = await api('POST', '/households/' + encodeURIComponent(h.id) + '/model-comparison', { body: { modelId: $('mdlPick').value } });
+        $('mdlOut').innerHTML = `<p class="hint">${esc(c.fromModel ? c.fromModel.name : 'No model')} to ${esc(c.toModel.name)} • turnover ${c.turnoverPct}%</p>
+          <div class="tablewrap"><table><thead><tr><th>Asset class</th><th class="num">Now</th><th class="num">Proposed</th><th class="num">Change</th><th class="num">Value</th></tr></thead><tbody>
+          ${c.lines.map(l => `<tr><td>${esc(l.assetClass)}</td><td class="num">${l.currentPct}%</td><td class="num">${l.targetPct}%</td>
+            <td class="num ${l.changePct > 0 ? 'up' : l.changePct < 0 ? 'neg' : ''}">${l.changePct > 0 ? '+' : ''}${l.changePct}</td>
+            <td class="num">${moneyFull(l.changeValue)}</td></tr>`).join('')}</tbody></table></div>
+          <p class="hint">${esc(c.note)}</p>`;
+      } catch (e) { $('mdlOut').innerHTML = `<p class="err">${esc(e.message)}</p>`; }
+      finally { b.disabled = false; }
+    };
+  } catch (e) { el.innerHTML = `<p class="err">${esc(e.message)}</p>`; }
 }

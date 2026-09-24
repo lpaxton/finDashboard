@@ -8,7 +8,7 @@ import { state } from './state.js';
    so the client-safe boundary is never one click away from an advisor's own sections. */
 export const ADV_SECTIONS = [['today', 'Today'], ['next', 'Next best action'], ['clients', 'Clients'],
   ['communications', 'Communications'], ['prospects', 'Prospects'], ['onboarding', 'Onboarding'],
-  ['calendar', 'Calendar'], ['followups', 'Follow-ups'], ['reports', 'Reports']];
+  ['calendar', 'Calendar'], ['followups', 'Follow-ups'], ['playbooks', 'Playbooks'], ['reports', 'Reports']];
 export let advSection = 'today';
 
 export function advLoadStrip() {
@@ -83,8 +83,9 @@ export function advToday() {
 
 /* ---- Clients ---- */
 export function advClients() {
-  $('section').innerHTML = `<div class="grid">${panel('w-book', 'wide')}</div>`;
+  $('section').innerHTML = `<div class="grid">${panel('w-book', 'wide')}${panel('w-team', 'wide')}</div>`;
   bookPanel({ scope: 'own', canShare: true, id: 'w-book', title: 'Book of business', size: 10 });
+  teamSharePanelFor('w-team');
 }
 
 /* ---- Follow-ups ---- */
@@ -178,7 +179,19 @@ export async function openProspect(id, done) {
       <div><span class="badge plain">${esc(STAGE_LABEL[p.stage])}</span></div>
       <dl class="defs"><dt>Estimated assets</dt><dd>${p.estimatedAssets ? moneyFull(p.estimatedAssets) : 'Unknown'}</dd><dt>Source</dt><dd>${esc(p.source)}</dd><dt>First seen</dt><dd>${esc(daysAgo(p.createdAt))}</dd></dl>
       <h3>Intake notes</h3><p class="draft">${esc(p.intakeNotes || 'No notes yet.')}</p>
-      ${next ? `<div class="actions"><button class="btn primary" id="prAdv">Move to ${esc(STAGE_LABEL[next])}</button></div>` : '<p class="hint">This prospect has converted.</p>'}`;
+      ${next ? `<div class="actions"><button class="btn primary" id="prAdv">Move to ${esc(STAGE_LABEL[next])}</button>` : '<p class="hint">This prospect has converted.</p><div class="actions">'}
+        <button class="btn" id="prMatch">Which advisor fits?</button></div>
+      <div id="prOut"></div>`;
+    $('prMatch').onclick = async () => {
+      const b = $('prMatch'); b.disabled = true;
+      try {
+        const r = await api('GET', '/prospects/' + encodeURIComponent(id) + '/matches');
+        $('prOut').innerHTML = `<h3>Suggested fit</h3><ul class="rows">${r.items.map((mt, i) => `
+          <li><span class="count">${i + 1}</span><div class="grow"><div class="title">${esc(mt.advisorName)}${mt.advisorId === r.currentAdvisorId ? ' <span class="tag">current</span>' : ''}</div>
+          ${mt.reasons.map(x => `<div class="meta">${esc(x)}</div>`).join('')}</div></li>`).join('')}</ul>
+          <p class="hint">${esc(r.note)}</p>`;
+      } catch (e) { toast(e.message); } finally { b.disabled = false; }
+    };
     const adv = $('prAdv');
     if (adv) adv.onclick = async () => {
       adv.disabled = true;
@@ -366,7 +379,7 @@ export async function openMeeting(id, done) {
 
 export const ADV_RENDER = { today: advToday, next: advNext, clients: advClients, communications: advComms,
   prospects: advProspects, onboarding: advOnboarding, calendar: advCalendar, followups: advFollowups,
-  reports: advReports };
+  reports: advReports, playbooks: advPlaybooks };
 
 /* ---- Next best action (PL-02) ----------------------------------------------------------
  * One prioritised list across the book. Every row is a draft: accepting one posts it to
@@ -430,3 +443,41 @@ export function advReports() {
 const BREAKDOWN = { meetingsByType: 'Meetings by type', communicationsByStatus: 'Messages by status', complianceByStatus: 'Compliance by status' };
 const backDate = (n) => { const d = new Date(); d.setDate(d.getDate() - n + 1); return localDate(d); };
 const SCORE_ID = () => (state.session && state.session.advisorId) || 'adv1';
+
+/* ---- Playbooks (AX-09) ----------------------------------------------------------------
+ * Running one IS the advisor's explicit action, so unlike a suggestion these create real
+ * follow-ups rather than drafts. The dates come from each step's offset from the anchor.
+ */
+export function advPlaybooks() {
+  $('section').innerHTML = `<div class="grid">${panel('w-pb', 'wide')}</div>`;
+  load($('w-pb'), 'Playbooks', () => Promise.all([api('GET', '/playbooks'), api('GET', '/households', { query: { size: 100, sort: 'name,asc' } })]),
+    ([pbs, hh]) => head('Playbooks', pbs.items.length + ' available') + pbs.items.map(pb => `
+      <article class="onb" data-pb="${esc(pb.id)}"><div class="onb-head"><div>
+        <div class="title">${esc(pb.name)}</div><div class="meta">${esc(pb.description)}</div></div>
+        <button class="btn primary" data-run="${esc(pb.id)}">Run</button></div>
+      <ul class="steps">${pb.steps.map(st => `<li class="step"><span class="grow">${esc(st.title)}</span>
+        <span class="meta">${st.dayOffset === 0 ? 'on the day' : st.dayOffset < 0 ? Math.abs(st.dayOffset) + ' days before' : st.dayOffset + ' days after'}</span></li>`).join('')}</ul>
+      <div class="field" style="margin-top:8px"><label for="pbHh-${esc(pb.id)}">For</label>
+        <select id="pbHh-${esc(pb.id)}"><option value="">No household</option>${hh.items.map(h => `<option value="${esc(h.id)}">${esc(h.name)}</option>`).join('')}</select></div>
+      </article>`).join(''),
+  (el) => el.querySelectorAll('[data-run]').forEach(b => b.onclick = async () => {
+    const id = b.dataset.run, hhId = el.querySelector('#pbHh-' + CSS.escape(id)).value;
+    b.disabled = true;
+    try {
+      const r = await api('POST', '/playbooks/' + encodeURIComponent(id) + '/runs', { body: { householdId: hhId || undefined } });
+      toast(r.tasks.length + ' follow-ups added.'); advLoadStrip();
+    } catch (e) { toast(e.message); } finally { b.disabled = false; }
+  }));
+}
+
+/* Households a colleague has shared with you, and ones you have shared out (PO-04). */
+export function teamSharePanelFor(elId) {
+  load($(elId), 'Shared with the team', () => api('GET', '/team-shares'), (r) => {
+    const live = r.items.filter(t => !t.revokedAt);
+    return head('Shared with the team', live.length + ' active') + (live.length ? `<ul class="rows">${live.map(t => `
+      <li><div class="grow"><div class="title">${esc(t.householdName)}</div>
+      <div class="meta">${t.direction === 'in' ? 'Shared with you by ' + esc(t.sharedByName) : 'You shared this with ' + esc(t.sharedWithName)}${t.reason ? ' • ' + esc(t.reason) : ''}</div></div>
+      <span class="badge plain">${t.direction === 'in' ? 'read access' : 'shared out'}</span></li>`).join('')}</ul>`
+      : '<p class="empty">Nothing is shared with or by you.</p>');
+  });
+}

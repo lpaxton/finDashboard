@@ -911,6 +911,194 @@ export interface NextActionList {
   dataAsOf: string;
 }
 
+export interface CapTableHolder {
+  id: string;
+  holder: string;
+  role?: string;
+  shareClass: string;
+  shares: number;
+  vested?: number;
+  unvested?: number;
+  /** Format: date. */
+  vestingEndsOn?: string | null;
+  ownershipPct: number;
+  fullyDilutedPct?: number;
+}
+
+export interface CapTable {
+  /** Format: date. */
+  asOf: string;
+  totalShares: number;
+  shareClasses?: Array<{
+    id?: string;
+    name?: string;
+    votesPerShare?: number;
+    liquidationPreference?: number;
+  }>;
+  holders: CapTableHolder[];
+  /** Format: date-time. */
+  dataAsOf: string;
+}
+
+export interface TeamShareCreate {
+  householdId: string;
+  /** The colleague being given read access. */
+  advisorId: string;
+  reason?: string | null;
+}
+
+export interface TeamShare {
+  id: string;
+  householdId: string;
+  householdName?: string;
+  sharedBy: string;
+  sharedByName?: string;
+  sharedWith: string;
+  sharedWithName?: string;
+  /** Read only. The owning advisor stays the owner. */
+  access: 'read';
+  direction?: 'in' | 'out';
+  reason?: string | null;
+  /** Format: date-time. */
+  sharedAt: string;
+  /** Format: date-time. */
+  revokedAt?: string | null;
+  revokedBy?: string | null;
+}
+
+export interface TeamShareList {
+  items: TeamShare[];
+}
+
+export interface FeeOverrideUpdate {
+  /** Null removes the override. */
+  annualRatePct?: number | null;
+  /** Required when setting a rate. */
+  reason?: string;
+}
+
+export interface FeeOverride {
+  householdId: string;
+  householdName?: string;
+  overridden: boolean;
+  annualRatePct?: number;
+  /** What the schedule would have charged. */
+  scheduleRate?: number;
+  reason?: string;
+  setBy?: string;
+  /** Format: date-time. */
+  setAt?: string;
+}
+
+export interface FeePlan {
+  schedule: FeeTier[];
+  currency?: string;
+  overrides?: FeeOverride[];
+  /** True for a principal only. */
+  canEditSchedule: boolean;
+  /** Format: date-time. */
+  updatedAt?: string;
+  updatedBy?: string;
+  /** Format: date-time. */
+  dataAsOf: string;
+}
+
+export interface Model {
+  id: string;
+  name: string;
+  riskLevel?: 'Conservative' | 'Moderate' | 'Aggressive';
+  /** Target weights, in the order of the allocation asset classes. */
+  target?: number[];
+}
+
+export interface ModelList {
+  items: Model[];
+}
+
+export interface ModelComparison {
+  householdId: string;
+  householdName?: string;
+  aum?: number;
+  fromModel: {
+    id?: string;
+    name?: string;
+  } | null;
+  toModel: {
+    id?: string;
+    name?: string;
+  };
+  lines: Array<{
+    assetClass?: string;
+    currentPct?: number;
+    targetPct?: number;
+    changePct?: number;
+    /** The change in dollars at current assets. */
+    changeValue?: number;
+  }>;
+  /** Half the sum of absolute changes. */
+  turnoverPct: number;
+  /** Always false. No trade can be placed from here. */
+  placed: boolean;
+  note?: string;
+  /** Format: date-time. */
+  dataAsOf?: string;
+}
+
+export interface PlaybookStep {
+  id: string;
+  title: string;
+  /** Days from the anchor date. Negative runs before it. */
+  dayOffset: number;
+}
+
+export interface Playbook {
+  id: string;
+  name: string;
+  description?: string;
+  steps: PlaybookStep[];
+}
+
+export interface PlaybookList {
+  items: Playbook[];
+}
+
+export interface PlaybookRunRequest {
+  householdId?: string | null;
+  /** Defaults to today. Step offsets are relative to it. Format: date. */
+  anchorDate?: string;
+}
+
+export interface PlaybookRun {
+  playbookId: string;
+  playbookName?: string;
+  householdId?: string | null;
+  householdName?: string | null;
+  /** Format: date. */
+  anchorDate?: string;
+  tasks: Task[];
+}
+
+export interface AdvisorMatch {
+  advisorId: string;
+  advisorName: string;
+  /** 0 to 1. Fit against typical client size, weighted with spare capacity. */
+  score: number;
+  households?: number;
+  typicalClientAssets?: number;
+  reasons: string[];
+}
+
+export interface MatchList {
+  prospectId: string;
+  prospectName?: string;
+  estimatedAssets?: number | null;
+  currentAdvisorId?: string;
+  items: AdvisorMatch[];
+  note?: string;
+  /** Format: date-time. */
+  dataAsOf?: string;
+}
+
 /** Every operation in the contract, by operationId. */
 export interface Operations {
   getSession: {
@@ -1254,6 +1442,82 @@ export interface Operations {
     path: '/next-actions';
     request: never;
     response: NextActionList;
+  };
+  getCapTable: {
+    method: 'GET';
+    path: '/firm/cap-table';
+    request: never;
+    response: CapTable;
+  };
+  listTeamShares: {
+    method: 'GET';
+    path: '/team-shares';
+    request: never;
+    response: TeamShareList;
+  };
+  shareWithColleague: {
+    method: 'POST';
+    path: '/team-shares';
+    request: TeamShareCreate;
+    response: TeamShare;
+  };
+  revokeTeamShare: {
+    method: 'DELETE';
+    path: '/team-shares/{teamShareId}';
+    request: never;
+    response: void;
+  };
+  getFeePlan: {
+    method: 'GET';
+    path: '/billing/fee-plan';
+    request: never;
+    response: FeePlan;
+  };
+  updateFeePlan: {
+    method: 'PATCH';
+    path: '/billing/fee-plan';
+    request: {
+      schedule: FeeTier[];
+    };
+    response: FeePlan;
+  };
+  setHouseholdFee: {
+    method: 'PATCH';
+    path: '/billing/fees/{householdId}';
+    request: FeeOverrideUpdate;
+    response: FeeOverride;
+  };
+  listModels: {
+    method: 'GET';
+    path: '/models';
+    request: never;
+    response: ModelList;
+  };
+  compareToModel: {
+    method: 'POST';
+    path: '/households/{householdId}/model-comparison';
+    request: {
+      modelId: string;
+    };
+    response: ModelComparison;
+  };
+  listPlaybooks: {
+    method: 'GET';
+    path: '/playbooks';
+    request: never;
+    response: PlaybookList;
+  };
+  runPlaybook: {
+    method: 'POST';
+    path: '/playbooks/{playbookId}/runs';
+    request: PlaybookRunRequest;
+    response: PlaybookRun;
+  };
+  matchProspect: {
+    method: 'GET';
+    path: '/prospects/{prospectId}/matches';
+    request: never;
+    response: MatchList;
   };
 }
 

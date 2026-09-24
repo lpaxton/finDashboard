@@ -312,7 +312,7 @@ function createMock() {
     } },
     { id: 'fees', test: /\b(fee|billing|charge|revenue)\b/i, run: (hs) => {
       const billable = hs.filter(h => h.aum > 0);
-      const total = billable.reduce((a, h) => a + quarterlyFee(h.aum), 0);
+      const total = billable.reduce((a, h) => a + quarterlyFee(h.aum, h.id), 0);
       return { answer: `This quarter bills about $${total.toLocaleString('en-US')} across ${billable.length} households, off the published tier schedule.`,
         citations: [cite('platform', 'fee-schedule', 'Firm fee schedule')] };
     } },
@@ -346,6 +346,12 @@ function createMock() {
 
 
   // household, model, target and current allocation. Max drift equals that household's drift signal.
+  const MODEL_LIBRARY = {
+    mdl_growth:       { name: 'Growth, 70/30', riskLevel: 'Aggressive', target: [45, 20, 25, 5, 5] },
+    mdl_balanced:     { name: 'Balanced, 60/40', riskLevel: 'Moderate', target: [40, 20, 30, 5, 5] },
+    mdl_conservative: { name: 'Conservative, 40/60', riskLevel: 'Conservative', target: [25, 15, 50, 7, 3] },
+    mdl_income:       { name: 'Income', riskLevel: 'Conservative', target: [20, 10, 60, 8, 2] }
+  };
   const ALLOC_CLASSES = ['US equity', 'International equity', 'Fixed income', 'Cash', 'Alternatives'];
   const ALLOCATIONS = {
     h1: { modelId: 'mdl_growth', modelName: 'Growth, 70/30', target: [45, 20, 25, 5, 5], current: [52.2, 18, 21, 4.8, 4] },
@@ -365,14 +371,21 @@ function createMock() {
       'Capture started before consent was confirmed. Transcript withheld pending client consent.']
   ].map(([meetingId, kind, author, consent, content]) => ({ meetingId, kind, author, consent, content, source: 'platform' }));
 
-  const FEE_TIERS = [
+  /* The schedule is the firm's, so only a principal changes it. A per-household override is
+     the advisor's call for their own client, and both are recorded: a fee change alters what a
+     client is billed, so who changed it and when is part of the record (AX-11, X-05). */
+  let FEE_TIERS = [
     { minAssets: 0, maxAssets: 2000000, annualRatePct: 1 },
     { minAssets: 2000000, maxAssets: 5000000, annualRatePct: 0.85 },
     { minAssets: 5000000, maxAssets: 10000000, annualRatePct: 0.7 },
     { minAssets: 10000000, maxAssets: null, annualRatePct: 0.55 }
   ];
-  const feeRate = (assets) => FEE_TIERS.find(t => assets >= t.minAssets && (t.maxAssets === null || assets < t.maxAssets)).annualRatePct;
-  const quarterlyFee = (assets) => Math.round(assets * (feeRate(assets) / 100) / 4);
+  let FEE_PLAN_META = { updatedAt: dayISO(-120, 10), updatedBy: 'Dana Whitfield' };
+  const FEE_OVERRIDES = {};   // householdId -> { annualRatePct, reason, setBy, setAt }
+  const scheduleRate = (assets) => FEE_TIERS.find(t => assets >= t.minAssets && (t.maxAssets === null || assets < t.maxAssets)).annualRatePct;
+  const feeRate = (assets, householdId) => (householdId && FEE_OVERRIDES[householdId])
+    ? FEE_OVERRIDES[householdId].annualRatePct : scheduleRate(assets);
+  const quarterlyFee = (assets, householdId) => Math.round(assets * (feeRate(assets, householdId) / 100) / 4);
 
   const SUBSCRIPTION = {
     plan: 'Advisor Desk, firm plan', seats: { purchased: 6, used: ADVISORS.length },
@@ -401,6 +414,54 @@ function createMock() {
 
   const BRANDING = { firmName: FIRM.name, advisorDisplayName: 'Dana Whitfield, CFP', markLetter: 'W',
     accentColor: '#0E5A57', updatedAt: dayISO(-40, 14), updatedBy: 'Dana Whitfield' };
+
+  /* ---- firm ownership (PO-12) -------------------------------------------------------
+   * The firm's own cap table, not a client's. Principal only: who owns the practice and on
+   * what terms is the most sensitive non-client data the platform holds.
+   */
+  const SHARE_CLASSES = [
+    { id: 'common', name: 'Common', votesPerShare: 1 },
+    { id: 'pref_a', name: 'Preferred A', votesPerShare: 1, liquidationPreference: 1 }
+  ];
+  const CAP_TABLE = [
+    ['Dana Whitfield', 'Founder and principal', 'common', 5200000, 0, null],
+    ['Marcus Bell', 'Advisor', 'common', 900000, 225000, 18],
+    ['Elena Park', 'Advisor', 'common', 700000, 350000, 9],
+    ['Tom Reyes', 'Advisor', 'common', 400000, 300000, 4],
+    ['Harbour Lane Capital', 'Outside investor', 'pref_a', 1800000, 0, null],
+    ['Employee option pool', 'Reserved', 'common', 1000000, 1000000, null]
+  ].map(([holder, role, shareClass, shares, unvested, vestingMonthsLeft], i) => ({
+    id: 'cap' + (i + 1), holder, role, shareClass, shares, unvested, vested: shares - unvested,
+    vestingEndsOn: vestingMonthsLeft ? dateOnly(vestingMonthsLeft * 30) : null
+  }));
+
+  /* ---- team share (PO-04) -----------------------------------------------------------
+   * Widens who may see a household, so it is recorded and revocable, never implicit.
+   */
+  const TEAM_SHARES = [];
+
+  /* ---- playbooks (AX-09) ------------------------------------------------------------ */
+  const PLAYBOOKS = [
+    ['pb1', 'Annual review preparation', 'Everything that should happen in the fortnight before an annual review.', [
+      ['Pull the latest statements and performance', -10],
+      ['Check allocation against the model', -8],
+      ['Review open tax-loss positions', -7],
+      ['Draft the agenda and send it to the client', -3],
+      ['Confirm attendees and location', -2]
+    ]],
+    ['pb2', 'New client first 30 days', 'The onboarding steps that are not the custodian\'s.', [
+      ['Welcome call', 1], ['Collect outstanding documents', 5],
+      ['Confirm beneficiaries', 10], ['Walk them through the portal', 14],
+      ['First check-in', 30]
+    ]],
+    ['pb3', 'Reconnecting after a gap', 'For a household that has gone quiet.', [
+      ['Review what changed since last contact', 0],
+      ['Draft a personal note, not a newsletter', 1],
+      ['Offer two specific times', 2],
+      ['Log the outcome', 7]
+    ]]
+  ].map(([id, name, description, steps]) => ({ id, name, description,
+    steps: steps.map(([title, offset], i) => ({ id: `${id}-s${i}`, title, dayOffset: offset })) }));
 
   /* ---- reporting, scorecards and next best action (PO-07, AX-08, PL-02) ----------------
    * All three read data the platform already holds. Nothing here needs a new source, which
@@ -898,7 +959,7 @@ function createMock() {
       if (!isRole('advisor')) return forbid();
       const hs = myHH().filter(h => h.aum > 0);
       const rows = hs.map(h => ({ householdId: h.id, householdName: h.name, billableAssets: h.aum,
-        annualRatePct: feeRate(h.aum), quarterlyFee: quarterlyFee(h.aum) }));
+        annualRatePct: feeRate(h.aum, h.id), quarterlyFee: quarterlyFee(h.aum, h.id) }));
       return ok({ schedule: FEE_TIERS, nextRunDate: dateOnly(7), currency: 'USD',
         totalQuarterlyFees: rows.reduce((a, r) => a + r.quarterlyFee, 0), dataAsOf: NOW(),
         ...paged(rows, q, 'billableAssets,desc') });
@@ -961,6 +1022,166 @@ function createMock() {
       const size = +q.size || 20;
       return ok({ items: items.slice(0, size), totalItems: items.length, dataAsOf: NOW(),
         note: 'Drafts. Nothing here has been created; post a suggestedTask to /tasks to accept one.' });
+    }],
+
+    /* ---- firm ownership (PO-12) ---- */
+    ['GET', /^\/firm\/cap-table$/, () => {
+      if (!isRole('principal')) return forbid();
+      const total = CAP_TABLE.reduce((a, r) => a + r.shares, 0);
+      return ok({ asOf: dateOnly(0), totalShares: total, shareClasses: SHARE_CLASSES,
+        holders: CAP_TABLE.map(r => ({ ...r, ownershipPct: +((r.shares / total) * 100).toFixed(2),
+          fullyDilutedPct: +((r.shares / total) * 100).toFixed(2) })), dataAsOf: NOW() });
+    }],
+
+    /* ---- team share (PO-04) ---- */
+    ['GET', /^\/team-shares$/, () => {
+      if (!isRole('advisor')) return forbid();
+      const me = user().advisorId;
+      return ok({ items: TEAM_SHARES.filter(t => t.sharedBy === me || t.sharedWith === me)
+        .map(t => ({ ...t, householdName: hhName(t.householdId), sharedByName: advName(t.sharedBy),
+          sharedWithName: advName(t.sharedWith), direction: t.sharedBy === me ? 'out' : 'in' })) });
+    }],
+    ['POST', /^\/team-shares$/, (m, q, b) => {
+      if (!isRole('advisor')) return forbid();
+      if (!b || !b.householdId || !b.advisorId) return fail(400, 'bad_request', 'householdId and advisorId are required.');
+      const h = hhById(b.householdId);
+      if (!h || h.advisorId !== user().advisorId) return notFound('Household');
+      if (!ADVISORS.some(a => a.id === b.advisorId)) return notFound('Advisor');
+      if (b.advisorId === user().advisorId) return fail(400, 'bad_request', 'That household is already yours.');
+      if (TEAM_SHARES.some(t => t.householdId === b.householdId && t.sharedWith === b.advisorId && !t.revokedAt))
+        return fail(409, 'conflict', 'This household is already shared with that advisor.');
+      const t = { id: 'ts' + (++seq), householdId: h.id, sharedBy: user().advisorId, sharedWith: b.advisorId,
+        access: 'read', reason: b.reason || null, sharedAt: NOW(), revokedAt: null, revokedBy: null };
+      TEAM_SHARES.push(t);
+      return created({ ...t, householdName: h.name, sharedByName: user().name, sharedWithName: advName(b.advisorId), direction: 'out' });
+    }],
+    ['DELETE', /^\/team-shares\/([^/]+)$/, (m) => {
+      if (!isRole('advisor')) return forbid();
+      const t = TEAM_SHARES.find(x => x.id === m[1] && !x.revokedAt);
+      if (!t) return notFound('Team share');
+      // Either side may end it: the owner withdraws access, the recipient gives it up.
+      if (t.sharedBy !== user().advisorId && t.sharedWith !== user().advisorId) return notFound('Team share');
+      t.revokedAt = NOW(); t.revokedBy = user().name;
+      return { status: 204, data: undefined };
+    }],
+
+    /* ---- fee plan (AX-11) ---- */
+    ['GET', /^\/billing\/fee-plan$/, () => {
+      if (!isRole('advisor') && !isRole('principal')) return forbid();
+      return ok({ schedule: FEE_TIERS, currency: 'USD', ...FEE_PLAN_META,
+        overrides: Object.entries(FEE_OVERRIDES)
+          .filter(([hid]) => isRole('principal') || hhById(hid).advisorId === user().advisorId)
+          .map(([hid, o]) => ({ householdId: hid, householdName: hhName(hid), ...o })),
+        canEditSchedule: isRole('principal'), dataAsOf: NOW() });
+    }],
+    ['PATCH', /^\/billing\/fee-plan$/, (m, q, b) => {
+      // The schedule is the firm's. An advisor changes one client's rate, not everyone's.
+      if (!isRole('principal')) return forbid();
+      if (!b || !Array.isArray(b.schedule) || !b.schedule.length) return fail(400, 'bad_request', 'A schedule with at least one tier is required.');
+      const tiers = b.schedule;
+      for (const t of tiers) {
+        if (typeof t.minAssets !== 'number' || t.minAssets < 0) return fail(400, 'bad_request', 'Each tier needs a minAssets of zero or more.');
+        if (typeof t.annualRatePct !== 'number' || t.annualRatePct < 0 || t.annualRatePct > 5)
+          return fail(400, 'bad_request', 'Each rate must be between 0 and 5 percent.');
+      }
+      const sorted = [...tiers].sort((a, b2) => a.minAssets - b2.minAssets);
+      if (sorted[0].minAssets !== 0) return fail(400, 'bad_request', 'The first tier must start at zero, or some households have no rate.');
+      for (let i = 0; i < sorted.length - 1; i++) {
+        if (sorted[i].maxAssets !== sorted[i + 1].minAssets)
+          return fail(400, 'bad_request', 'Tiers must meet exactly, with no gap or overlap between them.');
+      }
+      if (sorted[sorted.length - 1].maxAssets !== null) return fail(400, 'bad_request', 'The top tier must be open-ended.');
+      FEE_TIERS = sorted;
+      FEE_PLAN_META = { updatedAt: NOW(), updatedBy: user().name };
+      return ok({ schedule: FEE_TIERS, currency: 'USD', ...FEE_PLAN_META, overrides: [], canEditSchedule: true, dataAsOf: NOW() });
+    }],
+    ['PATCH', /^\/billing\/fees\/([^/]+)$/, (m, q, b) => {
+      if (!isRole('advisor')) return forbid();
+      const h = hhById(m[1]);
+      if (!h || h.advisorId !== user().advisorId) return notFound('Household');
+      if (b && b.annualRatePct === null) { delete FEE_OVERRIDES[h.id]; return ok({ householdId: h.id, householdName: h.name, annualRatePct: scheduleRate(h.aum), overridden: false }); }
+      if (!b || typeof b.annualRatePct !== 'number' || b.annualRatePct < 0 || b.annualRatePct > 5)
+        return fail(400, 'bad_request', 'annualRatePct must be between 0 and 5, or null to remove the override.');
+      if (!b.reason || !String(b.reason).trim()) return fail(400, 'bad_request', 'A reason is required: a fee change alters what a client is billed.');
+      FEE_OVERRIDES[h.id] = { annualRatePct: b.annualRatePct, reason: String(b.reason).trim(), setBy: user().name, setAt: NOW() };
+      return ok({ householdId: h.id, householdName: h.name, overridden: true, scheduleRate: scheduleRate(h.aum), ...FEE_OVERRIDES[h.id] });
+    }],
+
+    /* ---- portfolio modeling (PM-03) ---- */
+    ['GET', /^\/models$/, () => {
+      if (!isRole('advisor') && !isRole('principal')) return forbid();
+      return ok({ items: Object.entries(MODEL_LIBRARY).map(([id, mdl]) => ({ id, ...mdl })) });
+    }],
+    ['POST', /^\/households\/([^/]+)\/model-comparison$/, (m, q, b) => {
+      if (!isRole('advisor')) return forbid();
+      const h = hhById(m[1]);
+      if (!h || h.advisorId !== user().advisorId) return notFound('Household');
+      const target = MODEL_LIBRARY[b && b.modelId];
+      if (!target) return fail(400, 'bad_request', 'modelId must be one of: ' + Object.keys(MODEL_LIBRARY).join(', ') + '.');
+      const a = ALLOCATIONS[h.id];
+      if (!a) return fail(409, 'conflict', 'This household has no allocation on file, so there is nothing to compare.');
+      const lines = ALLOC_CLASSES.map((assetClass, i) => {
+        const currentPct = a.current[i], targetPct = target.target[i];
+        return { assetClass, currentPct, targetPct, changePct: +(targetPct - currentPct).toFixed(1),
+          changeValue: Math.round(h.aum * (targetPct - currentPct) / 100) };
+      });
+      return created({
+        householdId: h.id, householdName: h.name, aum: h.aum,
+        fromModel: { id: a.modelId, name: a.modelName }, toModel: { id: b.modelId, name: target.name },
+        lines,
+        turnoverPct: +(lines.reduce((t, l) => t + Math.abs(l.changePct), 0) / 2).toFixed(1),
+        // A comparison is a draft. Placing a trade is PM-05 and is on the regulatory list.
+        placed: false,
+        note: 'A comparison, not an instruction. No trade has been placed and none can be from here.',
+        dataAsOf: NOW()
+      });
+    }],
+
+    /* ---- playbooks (AX-09) ---- */
+    ['GET', /^\/playbooks$/, () => (isRole('advisor') ? ok({ items: PLAYBOOKS }) : forbid())],
+    ['POST', /^\/playbooks\/([^/]+)\/runs$/, (m, q, b) => {
+      if (!isRole('advisor')) return forbid();
+      const pb = PLAYBOOKS.find(p2 => p2.id === m[1]); if (!pb) return notFound('Playbook');
+      const h = b && b.householdId ? hhById(b.householdId) : null;
+      if (b && b.householdId && (!h || h.advisorId !== user().advisorId)) return notFound('Household');
+      const anchor = b && b.anchorDate ? b.anchorDate : dateOnly(0);
+      if (Number.isNaN(Date.parse(anchor))) return fail(400, 'bad_request', 'anchorDate must be a date.');
+      const base = Math.round((new Date(anchor + 'T00:00:00') - T0) / 864e5);
+      // Running a playbook IS the advisor's explicit action, so these are real tasks.
+      const made = pb.steps.map(st => {
+        const t = { id: 't' + (++seq), advisorId: user().advisorId, title: st.title,
+          householdId: h ? h.id : null, dueDate: dateOnly(base + st.dayOffset), origin: 'playbook',
+          originMeetingId: null, status: 'open', createdAt: NOW() };
+        TASKS.push(t); return publicTask(t);
+      });
+      return created({ playbookId: pb.id, playbookName: pb.name, householdId: h ? h.id : null,
+        householdName: h ? h.name : null, anchorDate: anchor, tasks: made });
+    }],
+
+    /* ---- advisor-client matching (GP-01) ---- */
+    ['GET', /^\/prospects\/([^/]+)\/matches$/, (m) => {
+      if (!isRole('advisor') && !isRole('principal')) return forbid();
+      const p = PROSPECTS.find(x => x.id === m[1]);
+      if (!p) return notFound('Prospect');
+      if (!isRole('principal') && p.advisorId !== user().advisorId) return notFound('Prospect');
+      const scored = ADVISORS.map(a => {
+        const hs = HH.filter(h => h.advisorId === a.id);
+        const load = hs.length;
+        const sizes = hs.map(h => h.aum).sort((x, y) => x - y);
+        const typical = sizes.length ? sizes[sizes.length >> 1] : 0;
+        // Closeness of the prospect's assets to this advisor's typical client, and spare capacity.
+        const fit = typical ? 1 - Math.min(1, Math.abs(Math.log((p.estimatedAssets || 1) / typical)) / 2) : 0.5;
+        const capacity = 1 - Math.min(1, load / 12);
+        const score = +(fit * 0.6 + capacity * 0.4).toFixed(3);
+        const reasons = [];
+        reasons.push(`Typical client is $${(typical / 1e6).toFixed(1)}M against this prospect's $${((p.estimatedAssets || 0) / 1e6).toFixed(1)}M.`);
+        reasons.push(load >= 12 ? `Carrying ${load} households, which is at the top of the range.` : `Carrying ${load} households, with room for more.`);
+        return { advisorId: a.id, advisorName: a.name, score, households: load, typicalClientAssets: typical, reasons };
+      }).sort((x, y) => y.score - x.score);
+      return ok({ prospectId: p.id, prospectName: p.name, estimatedAssets: p.estimatedAssets,
+        items: scored, currentAdvisorId: p.advisorId,
+        note: 'A suggestion based on client size and current load. Reassigning is a human decision.',
+        dataAsOf: NOW() });
     }],
 
     ['GET', /^\/firm\/summary$/, () => {
@@ -1030,7 +1251,7 @@ function createMock() {
     ['GET', /^\/me\/fees$/, () => {
       if (!isRole('client')) return forbid();
       // Billed off the same schedule the advisor sees at /billing/fees, so the two agree.
-      const h = hhById(user().householdId), a = h.accounts[0], amt = quarterlyFee(h.aum);
+      const h = hhById(user().householdId), a = h.accounts[0], amt = quarterlyFee(h.aum, h.id);
       const q = (o) => ({ periodStart: dateOnly(o), periodEnd: dateOnly(o + 89) });
       return ok({ dataAsOf: NOW(), items: [
         { id: 'f1', maskedAccountNumber: a.maskedNumber, description: 'Advisory fee, prior quarter', amount: amt, ...q(-180), status: 'paid' },

@@ -24,7 +24,7 @@ advisor-platform-mock/
   README.md               how to run and use the mock server
   package.json            npm start, npm test (no dependencies, Node 18+, ES modules)
   server.js               HTTP layer: routing, sign-in, CORS, failure injection, static files
-  src/mock-core.js        the dataset and all 56 operations; imported by the server AND the dashboard
+  src/mock-core.js        the dataset and all 68 operations; imported by the server AND the dashboard
   src/greenmeadows/       the custodian integration. schemas.js holds shapes transcribed from
                           the reference; credentials.js, client.js, mappers.js and adapter.js
                           are the adapter; fake.js is a Green Meadows shaped like the real one.
@@ -99,7 +99,9 @@ Roles: `principal`, `advisor`, `associate`, `client`. A user can hold several (a
 
 **Regulatory sensitivity (needs review before build):** recording consent (MEET-04), placing trades (PM-05), robo portfolios (PM-04), credit risk (RTI-01), tax strategies (RTI-03), advisor value claims (RTI-09), marketing content (GP-06 to GP-10), and the Client Sentiment Index (COMM-05).
 
-**Coverage against the 75, audited 24 September 2026 by reading the code:** 20 built and working, 19 partial, 36 remaining. The last three were PO-07 reporting, AX-08 scorecards and PL-02 next best action, all built over data the platform already held. Every one of the 50 contract operations now has a UI; a test asserts it. Full matrix: https://claude.ai/code/artifact/5611e434-13f5-4262-9562-4881dd3b797d
+**Coverage against the 75, audited 24 September 2026 by reading the code:** 26 built and working, 16 partial, 33 remaining.
+
+Built since the audit, all over data the platform already held, with no new source, provider choice or compliance review needed: PO-07 reporting, AX-08 scorecards, PL-02 next best action, PO-12 cap table, PO-04 team share, AX-11 fee plan customisation, PM-03 portfolio modeling, AX-09 playbooks, GP-01 advisor-client matching. Every one of the 50 contract operations now has a UI; a test asserts it. Full matrix: https://claude.ai/code/artifact/5611e434-13f5-4262-9562-4881dd3b797d
 
 The largest gap is structural rather than incremental. Seven of the eleven Intelligence Platform features are "query X" — meetings, CRM, email, custodial data, documents, market information, internal research — and the dashboard has no query surface at all: no chat, no ask box, no cross-source search. Those seven are one missing capability, not seven builds, and deciding where it lives changes the shell rather than filling in a section of it.
 
@@ -111,7 +113,7 @@ Three clusters are untouched: advisor development (AX-05 to AX-09, five features
 
 One API, role-scoped: the caller's role decides what each endpoint returns. Firm-wide data uses `scope=firm` (principal only). Client-portal endpoints live under `/me`.
 
-56 operations across 46 paths.
+68 operations across 56 paths.
 
 | Group | Operations |
 | --- | --- |
@@ -125,7 +127,10 @@ One API, role-scoped: the caller's role decides what each endpoint returns. Firm
 | Firm (9) | `GET /firm/summary` · `GET /firm/advisors` · `GET /firm/advisors/{id}` · `GET /firm/compliance` · `GET /firm/billing/subscription` · `GET /firm/billing/invoices` · `GET /firm/billing/invoices/{id}` · `GET /firm/branding` · `PATCH /firm/branding` |
 | Intelligence (3) | `POST /queries` · `GET /queries` · `GET /queries/{id}` |
 | Reporting (3) | `GET /reports/practice` · `GET /next-actions` · `GET /firm/advisors/{id}/scorecard` |
-| Sharing (1) | `POST /households/{id}/shares` |
+| Billing and modeling (5) | `GET /billing/fee-plan` · `PATCH /billing/fee-plan` · `PATCH /billing/fees/{id}` · `GET /models` · `POST /households/{id}/model-comparison` |
+| Playbooks and growth (3) | `GET /playbooks` · `POST /playbooks/{id}/runs` · `GET /prospects/{id}/matches` |
+| Ownership (1) | `GET /firm/cap-table` |
+| Sharing (4) | `POST /households/{id}/shares` · `GET /team-shares` · `POST /team-shares` · `DELETE /team-shares/{id}` |
 | Client (8) | `GET /me/household` · `GET /me/documents` · `GET /me/documents/{id}` · `GET /me/fees` · `GET /me/shared` · `GET /me/preferences` · `PATCH /me/preferences` · `POST /me/meeting-requests` |
 
 Everything from Calendar down to Portfolio and fees was ported from the Meridian Wealth Advisor Desk mockup, which covered a wider feature surface than v0.2 did. `GET /firm/branding` is the one operation any signed-in role may read, because the client portal is branded too; only a principal may change it.

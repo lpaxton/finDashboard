@@ -250,3 +250,8 @@ footer { margin-top: 28px; color: var(--muted); font-size: 13px; }
 
 /* Report and scorecard metric rows */
 .figure-sm { font: 600 15px/1 var(--serif); font-variant-numeric: tabular-nums; min-width: 84px; text-align: right; }
+
+.tiers { list-style: none; margin: 0 0 12px; padding: 0; }
+.tiers li { display: flex; align-items: center; gap: 8px; padding: 5px 0; font-size: 14px; }
+.tiers li span:first-child { flex: 1; }
+.tiers input { width: 74px; }
