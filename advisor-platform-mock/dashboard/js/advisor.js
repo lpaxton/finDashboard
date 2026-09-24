@@ -32,10 +32,17 @@ export function advisorView() {
 
 /* ---- Today ---- */
 export function advToday() {
-  $('section').innerHTML = `<div class="grid">
+  $('section').innerHTML = `<div id="aiNote"></div><div class="grid">
     <div class="col">${panel('w-meetings')}</div>
     <div class="col">${panel('w-alerts')}${panel('w-signals')}</div>
   </div>`;
+
+  // Said once, where nothing reloads over it: an advisor should know what is drafting for them.
+  api('GET', '/ai/status').then(st => {
+    const el = $('aiNote');
+    if (!el || st.live) return;
+    el.innerHTML = `<p class="hint" style="margin:0 0 14px">Drafting is offline. ${esc(st.reason || '')} Drafts are still produced, and each one says what made it.</p>`;
+  }).catch(() => {});
 
   load($('w-meetings'), "Today's meetings", () => api('GET', '/meetings'), (r) => {
     const list = r.items, nextIdx = list.findIndex(m => new Date(m.startsAt) > new Date());
@@ -134,8 +141,14 @@ export async function openComm(id, done) {
       <dl class="defs"><dt>To</dt><dd>${esc(c.householdName || 'Practice')}</dd><dt>Channel</dt><dd>${esc(c.channel)}</dd><dt>Tone</dt><dd>${esc(c.tone || 'Not set')}</dd><dt>Drafted</dt><dd>${esc(c.draftedBy === 'ai' ? 'By AI, ' + daysAgo(c.createdAt).toLowerCase() : daysAgo(c.createdAt))}</dd>${c.approvedBy ? `<dt>Approved</dt><dd>${esc(c.approvedBy)}</dd>` : ''}</dl>
       <h3>Draft</h3><p class="draft">${esc(c.body)}</p>
       <p class="hint">${c.status === 'draft' ? 'This is a draft. It cannot be sent until an advisor approves it, and the approval is recorded.' : c.status === 'approved' ? 'Approved and queued. Sending is the last step.' : 'This message has been sent.'}</p>
-      <div class="actions">${c.status === 'draft' ? '<button class="btn primary" data-act="approved">Approve</button>' : ''}
-      ${c.status === 'approved' ? '<button class="btn primary" data-act="sent">Send now</button><button class="btn" data-act="draft">Return to draft</button>' : ''}</div>`;
+      <div class="actions">
+      ${c.status !== 'sent' ? `<button class="btn" id="cmRedraft">Redraft</button>
+        <select id="cmTone" aria-label="Tone"><option>Warm and direct</option><option>Formal</option><option>Brief</option></select>` : ''}
+      ${c.status === 'draft' ? '<button class="btn primary" data-act="approved">Approve</button>' : ''}
+      ${c.status === 'approved' ? '<button class="btn primary" data-act="sent">Send now</button><button class="btn" data-act="draft">Return to draft</button>' : ''}</div>
+      <div id="cmDraft"></div>`;
+    const rd = $('cmRedraft');
+    if (rd) rd.onclick = () => runDraft(rd, $('cmDraft'), 'POST', '/communications/' + encodeURIComponent(id) + '/redraft', { tone: $('cmTone').value });
     dlg.querySelectorAll('[data-act]').forEach(b => b.onclick = async () => {
       b.disabled = true;
       try {
@@ -343,6 +356,10 @@ export async function openMeeting(id, done) {
         ${record.withheld ? `<p class="err">${esc(record.withheldReason)}</p>`
           : `<p class="draft">${esc(record.content)}</p><div class="actions"><button class="btn primary" id="mtNext">Suggest next steps</button></div><div id="mtOut"></div>`}`
         : '<p class="hint">No notes or transcript for this meeting.</p>'}
+      <div class="actions" style="margin:4px 0 10px">
+        ${record && !record.withheld ? '<button class="btn" id="mtSum">Summarise</button>' : ''}
+        ${new Date(m.startsAt) > new Date() ? '<button class="btn" id="mtAgenda">Draft agenda</button>' : ''}</div>
+      <div id="mtDraft"></div>
       ${new Date(m.startsAt) > new Date() ? `<h3>Move</h3>
         <div class="field"><label for="mtWhen">New date and time</label><input type="datetime-local" id="mtWhen" value="${esc(localDate(new Date(m.startsAt)))}T${esc(new Date(m.startsAt).toTimeString().slice(0, 5))}"></div>
         <button class="btn" id="mtMove">Move meeting</button>` : ''}
@@ -362,6 +379,10 @@ export async function openMeeting(id, done) {
         });
       } catch (e) { toast(e.message); nx.disabled = false; }
     };
+    const sum = $('mtSum');
+    if (sum) sum.onclick = () => runDraft(sum, $('mtDraft'), 'POST', '/meetings/' + encodeURIComponent(id) + '/record/summary');
+    const ag = $('mtAgenda');
+    if (ag) ag.onclick = () => runDraft(ag, $('mtDraft'), 'POST', '/meetings/' + encodeURIComponent(id) + '/agenda');
     const mv = $('mtMove');
     if (mv) mv.onclick = async () => {
       const when = $('mtWhen').value;
@@ -480,4 +501,32 @@ export function teamSharePanelFor(elId) {
       <span class="badge plain">${t.direction === 'in' ? 'read access' : 'shared out'}</span></li>`).join('')}</ul>`
       : '<p class="empty">Nothing is shared with or by you.</p>');
   });
+}
+
+/* A draft is shown beside what it was made from, never in place of it, and is labelled with
+   what produced it — including when that was the offline generator rather than a model. */
+export async function runDraft(btn, out, method, path, body) {
+  btn.disabled = true;
+  out.innerHTML = '<div class="skel"></div><div class="skel s"></div>';
+  try {
+    const r = await api(method, path, body ? { body } : undefined);
+    if (r.refused) {
+      out.innerHTML = `<p class="err">The model declined this request${r.refusalCategory ? ' (' + esc(r.refusalCategory) + ')' : ''}.</p>`;
+      return;
+    }
+    out.innerHTML = `<div class="answer">
+      <p class="demo-lbl">Draft</p>
+      <p class="draft">${esc(r.draft)}</p>
+      ${r.provenance.readFrom && r.provenance.readFrom.length ? `<div class="answer-cites"><strong>Read from</strong>
+        <ul>${r.provenance.readFrom.map(c => `<li><span class="tag">${esc(c.source)}</span> ${esc(c.label)}</li>`).join('')}</ul></div>` : ''}
+      <p class="hint">${r.provenance.live ? 'Drafted by ' + esc(r.provenance.model) : 'Written offline: no model is connected'}
+        • prompt ${esc(r.provenance.promptVersion)}. A draft — nothing has been saved or sent.</p>
+      <button class="btn" data-copy>Copy</button></div>`;
+    const copy = out.querySelector('[data-copy]');
+    if (copy) copy.onclick = async () => {
+      try { await navigator.clipboard.writeText(r.draft); toast('Copied.'); }
+      catch { toast('Select the text to copy it.'); }
+    };
+  } catch (e) { out.innerHTML = `<p class="err">${esc(e.message)}</p>`; }
+  finally { btn.disabled = false; }
 }

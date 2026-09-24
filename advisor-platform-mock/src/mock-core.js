@@ -1184,6 +1184,56 @@ function createMock() {
         dataAsOf: NOW() });
     }],
 
+    /* ---- model-backed drafts (MEET-02, MEET-06, COMM-01, COMM-02) ----------------------
+       Each returns a draft with its provenance. None of them writes anything: a summary is
+       not filed, an agenda is not sent, a redraft does not replace the message. The advisor
+       accepts, exactly as with suggested next steps and next best action (X-03). */
+    ['GET', /^\/ai\/status$/, () => {
+      if (!isRole('advisor') && !isRole('principal')) return forbid();
+      return { status: 202, async: 'modelStatus', context: {} };
+    }],
+    ['POST', /^\/meetings\/([^/]+)\/record\/summary$/, (m) => {
+      if (!isRole('advisor')) return forbid();
+      const x = MEETINGS.find(y => y.id === m[1] && y.advisorId === user().advisorId); if (!x) return notFound('Meeting');
+      const r = RECORDS.find(y => y.meetingId === x.id); if (!r) return notFound('Record');
+      if (r.kind === 'transcript' && !(r.consent && r.consent.obtained))
+        return fail(409, 'conflict', 'Recording consent is not on file for this meeting.');
+      return { status: 202, async: 'summariseMeeting', context: {
+        householdName: hhName(x.householdId), type: x.type, capturedAt: x.startsAt,
+        kind: r.kind, brief: x.brief, content: r.content,
+        readFrom: [{ source: r.source, id: r.meetingId, label: r.kind === 'transcript' ? 'Meeting transcript' : 'Meeting notes' }] } };
+    }],
+    ['POST', /^\/meetings\/([^/]+)\/agenda$/, (m) => {
+      if (!isRole('advisor')) return forbid();
+      const x = MEETINGS.find(y => y.id === m[1] && y.advisorId === user().advisorId); if (!x) return notFound('Meeting');
+      const h = x.householdId ? hhById(x.householdId) : null;
+      const sigs = h ? Object.keys(SIGNAL_META)
+        .filter(k => SIGNAL_ROWS.some(sr => sr.kind === k && sr.householdId === h.id))
+        .map(k => ({ label: SIGNAL_META[k].label, detail: itemDetail(SIGNAL_ROWS.find(sr => sr.kind === k && sr.householdId === h.id)) })) : [];
+      return { status: 202, async: 'draftAgenda', context: {
+        householdName: h ? h.name : prospectName(x.id), type: x.type, startsAt: x.startsAt,
+        aum: h ? h.aum : null, brief: x.brief, signals: sigs,
+        lastContact: h ? daysSince(h.lastContactAt) + ' days ago' : null,
+        tasks: TASKS.filter(t => t.householdId === (h && h.id) && t.status === 'open').map(t => t.title),
+        readFrom: [{ source: 'calendar', id: x.id, label: x.type },
+          ...(h ? [{ source: 'greenmeadows', id: h.id, label: h.name + ' positions and balances' }] : [])] } };
+    }],
+    ['POST', /^\/communications\/([^/]+)\/redraft$/, (m, q, b) => {
+      if (!isRole('advisor')) return forbid();
+      const c = COMMS.find(x => x.id === m[1] && x.advisorId === user().advisorId); if (!c) return notFound('Message');
+      if (c.status === 'sent') return fail(409, 'conflict', 'That message has already been sent.');
+      const tone = (b && b.tone) || c.tone;
+      if (!['Warm and direct', 'Formal', 'Brief'].includes(tone))
+        return fail(400, 'bad_request', 'Tone must be one of: Warm and direct, Formal, Brief.');
+      const h = c.householdId ? hhById(c.householdId) : null;
+      return { status: 202, async: 'draftEmail', context: {
+        householdName: h ? h.name : null, tone, subject: c.subject,
+        points: (b && Array.isArray(b.points) && b.points.length) ? b.points : [c.body.split(/(?<=[.?!])\s/)[0]],
+        background: h ? `${h.name}, $${h.aum.toLocaleString('en-US')}, last contact ${daysSince(h.lastContactAt)} days ago` : null,
+        readFrom: [{ source: 'platform', id: c.id, label: 'Existing draft' },
+          ...(h ? [{ source: 'crm', id: h.id, label: h.name + ' contact history' }] : [])] } };
+    }],
+
     ['GET', /^\/firm\/summary$/, () => {
       if (!isRole('principal')) return forbid();
       const live = COMPLIANCE.filter(c => c.status !== 'done');

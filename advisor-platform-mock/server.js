@@ -13,6 +13,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createMock } from './src/mock-core.js';
+import * as ai from './src/model/service.js';
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
 const MAX_BODY = 1024 * 1024;
@@ -110,6 +111,14 @@ function createServer(options = {}) {
       const body = ['POST', 'PATCH', 'PUT'].includes(req.method) ? await readBody(req) : undefined;
       const query = Object.fromEntries(url.searchParams);
       const r = mock.handle(req.method, p.slice(3), query, body, persona);
+      // A route that needs the model describes the work and the server awaits it, so
+      // src/mock-core.js stays synchronous and has no idea a model exists.
+      if (r.async) {
+        const out = await ai[r.async](r.context);
+        const status = r.async === 'modelStatus' ? 200 : 201;
+        send(res, status, out);
+        return done(status);
+      }
       const data = r.status >= 400 ? { ...r.data, traceId } : r.data;
       send(res, r.status, data);
       return done(r.status);

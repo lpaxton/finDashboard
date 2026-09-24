@@ -24,7 +24,9 @@ advisor-platform-mock/
   README.md               how to run and use the mock server
   package.json            npm start, npm test (no dependencies, Node 18+, ES modules)
   server.js               HTTP layer: routing, sign-in, CORS, failure injection, static files
-  src/mock-core.js        the dataset and all 68 operations; imported by the server AND the dashboard
+  src/mock-core.js        the dataset and all 72 operations; imported by the server AND the dashboard
+  src/model/              the model layer: client (SDK optional), prompts (versioned), the
+                          offline generator, and the capability functions. Drafts only.
   src/greenmeadows/       the custodian integration. schemas.js holds shapes transcribed from
                           the reference; credentials.js, client.js, mappers.js and adapter.js
                           are the adapter; fake.js is a Green Meadows shaped like the real one.
@@ -99,9 +101,11 @@ Roles: `principal`, `advisor`, `associate`, `client`. A user can hold several (a
 
 **Regulatory sensitivity (needs review before build):** recording consent (MEET-04), placing trades (PM-05), robo portfolios (PM-04), credit risk (RTI-01), tax strategies (RTI-03), advisor value claims (RTI-09), marketing content (GP-06 to GP-10), and the Client Sentiment Index (COMM-05).
 
-**Coverage against the 75, audited 24 September 2026 by reading the code:** 26 built and working, 16 partial, 33 remaining.
+**Coverage against the 75, audited 24 September 2026 by reading the code:** 29 built and working, 14 partial, 32 remaining.
 
-Built since the audit, all over data the platform already held, with no new source, provider choice or compliance review needed: PO-07 reporting, AX-08 scorecards, PL-02 next best action, PO-12 cap table, PO-04 team share, AX-11 fee plan customisation, PM-03 portfolio modeling, AX-09 playbooks, GP-01 advisor-client matching. Every one of the 50 contract operations now has a UI; a test asserts it. Full matrix: https://claude.ai/code/artifact/5611e434-13f5-4262-9562-4881dd3b797d
+Built since the audit, over data the platform already held: PO-07 reporting, AX-08 scorecards, PL-02 next best action, PO-12 cap table, PO-04 team share, AX-11 fee plan customisation, PM-03 portfolio modeling, AX-09 playbooks, GP-01 advisor-client matching.
+
+**A model is now wired** (`src/model/`), which closes MEET-06 summaries, MEET-02 agendas and COMM-01/02 drafting with tone, and is the shared capability the rest of the AI features hang off. It is optional by design: with no SDK and no key the platform still runs and produces drafts offline, and every draft says which produced it. Adding a real model means `npm install @anthropic-ai/sdk` and an `ANTHROPIC_API_KEY`; **that is the project's first dependency, and it stays optional** — `npm start` and `npm test` need nothing installed. Every one of the 50 contract operations now has a UI; a test asserts it. Full matrix: https://claude.ai/code/artifact/5611e434-13f5-4262-9562-4881dd3b797d
 
 The largest gap is structural rather than incremental. Seven of the eleven Intelligence Platform features are "query X" — meetings, CRM, email, custodial data, documents, market information, internal research — and the dashboard has no query surface at all: no chat, no ask box, no cross-source search. Those seven are one missing capability, not seven builds, and deciding where it lives changes the shell rather than filling in a section of it.
 
@@ -113,7 +117,7 @@ Three clusters are untouched: advisor development (AX-05 to AX-09, five features
 
 One API, role-scoped: the caller's role decides what each endpoint returns. Firm-wide data uses `scope=firm` (principal only). Client-portal endpoints live under `/me`.
 
-68 operations across 56 paths.
+72 operations across 60 paths.
 
 | Group | Operations |
 | --- | --- |
@@ -125,7 +129,8 @@ One API, role-scoped: the caller's role decides what each endpoint returns. Firm
 | Migration (2) | `GET /migrations` · `POST /migrations` |
 | Portfolio and fees (2) | `GET /households/{id}/allocation` · `GET /billing/fees` |
 | Firm (9) | `GET /firm/summary` · `GET /firm/advisors` · `GET /firm/advisors/{id}` · `GET /firm/compliance` · `GET /firm/billing/subscription` · `GET /firm/billing/invoices` · `GET /firm/billing/invoices/{id}` · `GET /firm/branding` · `PATCH /firm/branding` |
-| Intelligence (3) | `POST /queries` · `GET /queries` · `GET /queries/{id}` |
+| Intelligence (4) | `POST /queries` · `GET /queries` · `GET /queries/{id}` · `GET /ai/status` |
+| Model-backed drafts (3) | `POST /meetings/{id}/record/summary` · `POST /meetings/{id}/agenda` · `POST /communications/{id}/redraft` |
 | Reporting (3) | `GET /reports/practice` · `GET /next-actions` · `GET /firm/advisors/{id}/scorecard` |
 | Billing and modeling (5) | `GET /billing/fee-plan` · `PATCH /billing/fee-plan` · `PATCH /billing/fees/{id}` · `GET /models` · `POST /households/{id}/model-comparison` |
 | Playbooks and growth (3) | `GET /playbooks` · `POST /playbooks/{id}/runs` · `GET /prospects/{id}/matches` |

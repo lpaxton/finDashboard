@@ -1099,6 +1099,50 @@ export interface MatchList {
   dataAsOf?: string;
 }
 
+export interface ModelStatus {
+  /** False when drafts are produced offline. */
+  live: boolean;
+  /** The model id, or the offline generator. */
+  model: string;
+  /** Why there is no model, when there is none. */
+  reason?: string | null;
+}
+
+/**
+ * What produced a draft and what it was given to read. Required by X-04, and the thing that
+ * lets an approved draft be traced back months later.
+ */
+export interface DraftProvenance {
+  model: string;
+  /** False when the offline generator produced it. */
+  live: boolean;
+  /** Example: "email_draft/v2". */
+  promptVersion: string;
+  /** Format: date-time. */
+  generatedAt: string;
+  readFrom?: Citation[];
+}
+
+export interface AiDraft {
+  capability: 'meeting_summary' | 'meeting_agenda' | 'email_draft';
+  draft: string;
+  /**
+   * Always false. A draft becomes real only when an advisor acts on it — posting a task,
+   * approving a message. Nothing here writes to a record or sends anything (X-03).
+   */
+  accepted: boolean;
+  /** True when the model declined the request. */
+  refused?: boolean;
+  refusalCategory?: string | null;
+  provenance: DraftProvenance;
+}
+
+export interface RedraftRequest {
+  tone?: 'Warm and direct' | 'Formal' | 'Brief';
+  /** What the advisor wants covered. Defaults to the existing draft. */
+  points?: string[];
+}
+
 /** Every operation in the contract, by operationId. */
 export interface Operations {
   getSession: {
@@ -1518,6 +1562,30 @@ export interface Operations {
     path: '/prospects/{prospectId}/matches';
     request: never;
     response: MatchList;
+  };
+  getModelStatus: {
+    method: 'GET';
+    path: '/ai/status';
+    request: never;
+    response: ModelStatus;
+  };
+  summariseMeeting: {
+    method: 'POST';
+    path: '/meetings/{meetingId}/record/summary';
+    request: never;
+    response: AiDraft;
+  };
+  draftAgenda: {
+    method: 'POST';
+    path: '/meetings/{meetingId}/agenda';
+    request: never;
+    response: AiDraft;
+  };
+  redraftCommunication: {
+    method: 'POST';
+    path: '/communications/{communicationId}/redraft';
+    request: RedraftRequest;
+    response: AiDraft;
   };
 }
 

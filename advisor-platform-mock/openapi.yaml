@@ -985,6 +985,70 @@ paths:
         '403': { $ref: '#/components/responses/Error' }
         '404': { $ref: '#/components/responses/Error' }
 
+  /ai/status:
+    get:
+      tags: [Intelligence]
+      operationId: getModelStatus
+      summary: Whether a model is wired, and what is producing drafts
+      description: >
+        Reports the model behind the drafting capabilities, or why there is none. The platform
+        runs without one: drafts are then produced offline and say so. No credential is ever
+        returned.
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/ModelStatus' } } } }
+        '403': { $ref: '#/components/responses/Error' }
+
+  /meetings/{meetingId}/record/summary:
+    post:
+      tags: [Meetings]
+      operationId: summariseMeeting
+      summary: Summarise a meeting from its record
+      description: >
+        A draft. Nothing is filed against the meeting and the record is unchanged. Refused with
+        409 when the record is a transcript with no recording consent on file, the same gate
+        that governs reading it. Requirement MEET-06.
+      parameters:
+        - { $ref: '#/components/parameters/meetingId' }
+      responses:
+        '201': { description: Drafted, content: { application/json: { schema: { $ref: '#/components/schemas/AiDraft' } } } }
+        '404': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
+
+  /meetings/{meetingId}/agenda:
+    post:
+      tags: [Meetings]
+      operationId: draftAgenda
+      summary: Draft an agenda for an upcoming meeting
+      description: >
+        Built from the prep brief, the household's open signals, time since last contact and
+        outstanding follow-ups. A draft: nothing is sent and nothing is attached to the meeting.
+        Requirement MEET-02.
+      parameters:
+        - { $ref: '#/components/parameters/meetingId' }
+      responses:
+        '201': { description: Drafted, content: { application/json: { schema: { $ref: '#/components/schemas/AiDraft' } } } }
+        '404': { $ref: '#/components/responses/Error' }
+
+  /communications/{communicationId}/redraft:
+    post:
+      tags: [Communications]
+      operationId: redraftCommunication
+      summary: Redraft a message, optionally in another tone
+      description: >
+        Returns a new draft beside the existing one. It does not replace the message, and an
+        already-sent message is refused with 409. The tone changes the register, never the
+        facts. Requirement COMM-01, COMM-02.
+      parameters:
+        - { $ref: '#/components/parameters/communicationId' }
+      requestBody:
+        required: false
+        content: { application/json: { schema: { $ref: '#/components/schemas/RedraftRequest' } } }
+      responses:
+        '201': { description: Drafted, content: { application/json: { schema: { $ref: '#/components/schemas/AiDraft' } } } }
+        '400': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
+
 components:
   securitySchemes:
     bearerAuth:
@@ -2238,3 +2302,45 @@ components:
         items: { type: array, items: { $ref: '#/components/schemas/AdvisorMatch' } }
         note: { type: string }
         dataAsOf: { type: string, format: date-time }
+
+    ModelStatus:
+      type: object
+      required: [live, model]
+      properties:
+        live: { type: boolean, description: 'False when drafts are produced offline.' }
+        model: { type: string, description: 'The model id, or the offline generator.' }
+        reason: { type: string, nullable: true, description: 'Why there is no model, when there is none.' }
+
+    DraftProvenance:
+      type: object
+      description: >
+        What produced a draft and what it was given to read. Required by X-04, and the thing
+        that lets an approved draft be traced back months later.
+      required: [model, live, promptVersion, generatedAt]
+      properties:
+        model: { type: string }
+        live: { type: boolean, description: 'False when the offline generator produced it.' }
+        promptVersion: { type: string, example: 'email_draft/v2' }
+        generatedAt: { type: string, format: date-time }
+        readFrom: { type: array, items: { $ref: '#/components/schemas/Citation' } }
+
+    AiDraft:
+      type: object
+      required: [capability, draft, accepted, provenance]
+      properties:
+        capability: { type: string, enum: [meeting_summary, meeting_agenda, email_draft] }
+        draft: { type: string }
+        accepted:
+          type: boolean
+          description: >
+            Always false. A draft becomes real only when an advisor acts on it — posting a task,
+            approving a message. Nothing here writes to a record or sends anything (X-03).
+        refused: { type: boolean, description: 'True when the model declined the request.' }
+        refusalCategory: { type: string, nullable: true }
+        provenance: { $ref: '#/components/schemas/DraftProvenance' }
+
+    RedraftRequest:
+      type: object
+      properties:
+        tone: { type: string, enum: ['Warm and direct', 'Formal', 'Brief'] }
+        points: { type: array, items: { type: string }, description: 'What the advisor wants covered. Defaults to the existing draft.' }

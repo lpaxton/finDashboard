@@ -186,7 +186,7 @@ test('every operation in openapi.yaml is served', async () => {
     const p = l.match(/^  (\/[^\s:]+):\s*$/); if (p) { cur = p[1]; continue; }
     const m = l.match(/^    (get|post|patch|put|delete):\s*$/); if (m && cur) ops.push([m[1].toUpperCase(), cur]);
   }
-  assert.equal(ops.length, 68, 'spec should list 68 operations');
+  assert.equal(ops.length, 72, 'spec should list 72 operations');
   const params = { householdId: 'h3', meetingId: 'm1', taskId: 't1', alertId: 'a1', signalId: 'sig_idle_cash', advisorId: 'adv2', documentId: 'd1',
     communicationId: 'cm1', prospectId: 'p1', onboardingId: 'ob1', stepId: 'intake_form', invoiceId: 'inv1', queryId: 'q1', teamShareId: 'ts1', playbookId: 'pb1' };
   const missing = [];
@@ -812,4 +812,53 @@ test('advisor matching ranks with its reasoning, and moves nobody', async () => 
   const after = (await call('dana', 'GET', '/prospects/p1')).data;
   assert.equal(after.id, 'p1', 'reading matches must not reassign the prospect');
   assert.equal((await call('marcus', 'GET', '/prospects/p1/matches')).status, 404);
+});
+
+/* ---- model-backed drafts over HTTP ---- */
+
+test('a meeting summary is a draft, and consent still gates it', async () => {
+  assert.equal((await call('grace', 'POST', '/meetings/m5/record/summary', {})).status, 403);
+  const r = await call('dana', 'POST', '/meetings/m5/record/summary', {});
+  assert.equal(r.status, 201);
+  assert.equal(r.data.accepted, false);
+  assert.equal(r.data.capability, 'meeting_summary');
+  assert.ok(r.data.provenance.readFrom.length > 0, 'it must name the record it read');
+  // The record itself is untouched: a summary is not filed against the meeting.
+  assert.equal((await call('dana', 'GET', '/meetings/m5/record')).data.content.includes('gifting'), true);
+  assert.equal((await call('dana', 'POST', '/meetings/m14/record/summary', {})).status, 409,
+    'no consent, no transcript, and so no summary of one either');
+});
+
+test('an agenda is drawn from the household, and creates nothing', async () => {
+  const before = (await call('dana', 'GET', '/tasks')).data.items.length;
+  const r = await call('dana', 'POST', '/meetings/m7/agenda', {});
+  assert.equal(r.status, 201);
+  assert.equal(r.data.capability, 'meeting_agenda');
+  assert.equal(r.data.accepted, false);
+  assert.ok(r.data.provenance.readFrom.some(c => c.source === 'calendar'));
+  assert.equal((await call('dana', 'GET', '/tasks')).data.items.length, before, 'an agenda is not a task list');
+  assert.equal((await call('marcus', 'POST', '/meetings/m7/agenda', {})).status, 404);
+});
+
+test('a redraft sits beside the message and never replaces it', async () => {
+  const original = (await call('dana', 'GET', '/communications/cm1')).data.body;
+  const r = await call('dana', 'POST', '/communications/cm1/redraft', { tone: 'Formal' });
+  assert.equal(r.status, 201);
+  assert.equal(r.data.accepted, false);
+  assert.equal((await call('dana', 'GET', '/communications/cm1')).data.body, original,
+    'the stored message must be unchanged by a redraft');
+  assert.equal((await call('dana', 'POST', '/communications/cm1/redraft', { tone: 'Shouty' })).status, 400);
+
+  await call('dana', 'PATCH', '/communications/cm1', { status: 'approved' });
+  await call('dana', 'PATCH', '/communications/cm1', { status: 'sent' });
+  assert.equal((await call('dana', 'POST', '/communications/cm1/redraft', {})).status, 409,
+    'a sent message cannot be redrafted');
+});
+
+test('model status is reported without any credential', async () => {
+  const r = await call('dana', 'GET', '/ai/status');
+  assert.equal(r.status, 200);
+  assert.equal(typeof r.data.live, 'boolean');
+  assert.doesNotMatch(JSON.stringify(r.data), /sk-ant|ANTHROPIC_API_KEY/);
+  assert.equal((await call('grace', 'GET', '/ai/status')).status, 403);
 });
