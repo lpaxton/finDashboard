@@ -171,7 +171,7 @@ Other areas exist and are only mapped by name: account opening, user details, ag
 
 **The reference does document response bodies.** An earlier version of this note said it did not, and that every Green Meadows shape here was an assumption. That was wrong. Each endpoint page carries a full field-by-field **RESPONSE BODY** tree collapsed behind its `200` row, plus a worked example in the right-hand panel. Reaching it needs a signed-in browser session: the site redirects anonymous requests to a ReadMe login, which is what made automated fetching look like a block.
 
-Four endpoints have now been transcribed into `src/greenmeadows/schemas.js`, each tagged with the page it came from: account summaries, balances, balance history and positions. The other 178 still need the same treatment; `src/greenmeadows/README.md` lists the next ones in priority order and describes how.
+Twelve endpoints have now been transcribed into `src/greenmeadows/schemas.js`, each tagged with the page it came from: account summaries, balances, balance history, positions, accounts performance, open tax lots, model portfolios, account rebalances, document search, margin calls, user notes and account fees. Ten are usable. **Two are not**: account fees publishes `content` as a bare string with the note "mapping will be dynamic", and user notes documents a user-info object that does not contain the notes. Both need a sample response before anything maps to them, and both are load-bearing (fees for AX-10 and AX-11, notes for the CRM surface). `src/greenmeadows/README.md` has the detail, what is still uncaptured, and the method.
 
 **Coverage.** Green Meadows covers 30 of the 75 features; the other 45 need different sources.
 
@@ -185,10 +185,10 @@ Four endpoints have now been transcribed into `src/greenmeadows/schemas.js`, eac
 | --- | --- |
 | Assets, month change, 12-month trend | Balances (with `accountNetworth`), `POST /ftgw/fcat/bookkeeping/v1/balance-history/search` (daily, max 30 accounts per call, points can be flagged inaccurate) |
 | Household values and 30-day change | Account summaries, balances, performance |
-| Tax-loss harvesting signal | Open tax lots, realized gain/loss, positions |
+| Tax-loss harvesting signal | Open tax lots (`unrealizedGainOrLoss`, `washSaleAmount`, `holdingPeriod`), realized gain/loss. One call per account per sub-account code. |
 | Concentration and idle cash signals | Positions, balances |
-| Allocation drift signal | Positions, model portfolio by ID, rebalances search |
-| Account-status and margin alerts | Account summaries (status), margin calls |
+| Allocation drift signal | Model portfolios (`holdings[].category`, `targetPercent`, and the model's own `driftThreshold`), positions, rebalances search. Green Meadows already computes drift: rebalance `reasons` include `DriftExceeded`. |
+| Account-status and margin alerts | Account summaries (status), margin calls (internal host, access unconfirmed) |
 | Meetings, tasks, last contact | None. Needs calendar, task store, CRM. |
 
 ## 8. Architecture decisions already made
@@ -212,7 +212,9 @@ Assumptions baked into the code and contract:
 
 Open questions, from the requirements doc:
 
-- **Does the sandbox return position values and asset classes?** The positions reference marks `currentValue`, `totalGainLoss`, `todayGainLoss`, `lastPrice` and both `securityClassification` fields as "Not applicable", while still offering an `includeCurrentValue` pricing flag. If the annotations hold, the client portal has no per-account gain/loss and the allocation-drift and concentration signals have no asset class to work from, so `GET /households/{id}/allocation` has no source. This is the second question to ask, after the token one.
+- **Does `includeCurrentValue` actually price positions?** The positions reference marks `currentValue` and `lastPrice` "Not applicable" while offering `includeCurrentValue` as a pricing flag, and does not resolve the contradiction. Per-position value is what the concentration signal needs. Gain and loss turned out not to depend on this (accounts performance supplies it) and asset class turned out not to either (model holdings carry `category`), so this is now the only piece of the portfolio signals with no confirmed source. Second question after the token one.
+- **Can this client reach the margin admin host?** The margin-call endpoint is documented on `fcat-gm-gmsecgtwy-dev-nlb.fmr.com`, an internal dev NLB, not `gp-sandbox.fidelity.com`. It is the source for the margin-call alert.
+- **Sample responses for account fees and user notes**, whose published shapes are unusable.
 - Which Green Meadows token lets an advisor see every client's accounts? Only a user-specific token and a robo advisor system token appear in the reference. If none exists, options are federating every client (needs each client's SSN and consent) or asking Green Meadows for another token type.
 - Does the API have a household concept? Are the margin admin endpoints available to this client? What are the token lifetime and rate limits? What is the sandbox to production timeline (mTLS onboarding)?
 - Which systems supply meetings, email, CRM notes and tasks? Which calendar and CRM providers first?

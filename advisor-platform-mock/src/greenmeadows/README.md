@@ -15,31 +15,48 @@ entry.
 
 ## Captured so far
 
-| Our need | Green Meadows | Slug |
-| --- | --- | --- |
-| Accounts, status, model, owner | `GET /ftgw/fcat/customer/user/v4/accounts/summary` | `getaccountsbyuseridv4compact` |
-| Balances, net worth, cash, restrictions | `POST /ftgw/fcat/bookkeeping/v2/accounts/balances/search` | `getaccountbalances-1` |
-| The 12-month trend | `POST /ftgw/fcat/bookkeeping/v1/balance-history/search` | `searchaccountbalancesovertime-1` |
-| Holdings | `POST /ftgw/fcat/bookkeeping/v3/positions/get` | `getpositionswithpagination-1` |
+| Our need | Green Meadows | Slug | State |
+| --- | --- | --- | --- |
+| Accounts, status, model, owner | `GET .../customer/user/v4/accounts/summary` | `getaccountsbyuseridv4compact` | full |
+| Balances, net worth, cash, restrictions | `POST .../bookkeeping/v2/accounts/balances/search` | `getaccountbalances-1` | full |
+| The 12-month trend | `POST .../bookkeeping/v1/balance-history/search` | `searchaccountbalancesovertime-1` | full |
+| Holdings | `POST .../bookkeeping/v3/positions/get` | `getpositionswithpagination-1` | full |
+| Per-account gain and loss | `POST .../bookkeeping/v1/accounts/performance/get` | `getaccountsperformancesummary` | full |
+| Tax-loss harvesting | `POST .../bookkeeping/v2/opentaxlot/get` | `getopentaxlots-1` | full |
+| Target allocation and drift policy | `GET .../portfolios/ria/v1/customer/models` | `ria-customerlistcustomermodels` | full |
+| Rebalance history and drift triggers | `POST .../portfolios/ria/v1/customer/accounts/rebalances/search` | `ria-customersearchcustomerrebalances` | full |
+| Client documents | `POST .../reports/user/v1/documents/search` | `searchrecords` | full |
+| Margin-call alerts | `POST .../margin/admin/v1/margin-calls` | `post_admin-v1-margin-calls` | full, internal host |
+| CRM-style notes | `GET .../ows/api/v1/get-notes` | `getusernotes` | **incomplete** |
+| Client fees | `POST .../rt/v1/account-fees/search` | `getaccountfees` | **incomplete** |
 
-The reference lists **182 endpoints**. Four are captured. The rest are named in HANDOFF
-section 7 and still need the same treatment.
+The reference lists **182 endpoints**. Twelve are captured: ten usable, two whose published
+shape is not usable yet.
+
+## The two incomplete ones
+
+Both need a sample response from Green Meadows before anything can be mapped.
+
+**Account fees** (`getaccountfees`). The reference says so itself: each item is
+`{ content: string, _links: object }` and the documentation states "Mapping will be dynamic in
+nature based on the entity involved". There is no fee shape published. This is the source for
+AX-10 and AX-11, so both the advisor fee table and the client portal's fee list depend on it.
+
+**User notes** (`getusernotes`). The documented 200 body is a "Flight Deck User Info" object
+plus error messages. The notes themselves are not in it, despite being the point of the
+endpoint. The documented keys also carry spaces (`"GM User Id"`, `"First Name"`), so either the
+reference is showing display labels rather than JSON keys, or the payload really is shaped that
+way. Do not map it on the strength of the docs.
 
 ## Still to capture
 
-Needed next, in the order the backend will want them:
-
-- Accounts Performance Summary — `getaccountsperformancesummary`
-- Get Account's Performance
-- Open tax lots — `getopentaxlots-1`
 - Realized gain and loss — `post_ftgw-fcat-bookkeeping-v1-realized-gain-loss-get`
-- Documents — `downloaddocument`
-- Account fees — `getaccountfees`
-- Customer models and rebalances — `ria-customerlistcustomermodels`,
-  `ria-customergetcustomermodel`, `ria-customersearchcustomerrebalances`
-- Notes — `getnotes`
 - Transaction history — `gettransactionhistory-1`
-- Margin calls — `post_admin-v1-margin-calls` (on a separate internal host; access unconfirmed)
+- Model portfolio by ID — `ria-customergetcustomermodel`
+- Document download — `downloaddocument`
+- The drift calculation resource that `drift_calculation_id` points at
+- Everything else: account opening, agreements, beneficiaries, funding and money movement,
+  orders and trades, IRA, ACAT, preferences
 
 ## What the captured schemas changed
 
@@ -65,27 +82,50 @@ That last one matters more than it looks. The client portal's value chart is the
 this data reaches a client directly. A point the custodian has flagged as incomplete must not
 be drawn to a client as fact. The contract has nowhere to express that today.
 
-## The finding that needs a decision
+## The positions gaps, and where the data actually lives
 
-The positions reference marks these **"Not applicable"**:
+Positions marks these **"Not applicable"**: `currentValue`, `totalGainLoss`,
+`totalPercentGainLoss`, `todayGainLoss`, `todayPercentGainLoss`, `lastPrice`,
+`securityClassificationLevel`, `securityClassificationLevel2`.
 
-`currentValue` · `totalGainLoss` · `totalPercentGainLoss` · `todayGainLoss` ·
-`todayPercentGainLoss` · `lastPrice` · `securityClassificationLevel` ·
-`securityClassificationLevel2`
+Capturing the rest of the endpoints answered most of what that threatened. Both concerns
+raised on the first pass turned out to have sources elsewhere:
 
-Two consequences if that holds in the sandbox rather than being stale documentation:
+**Gain and loss: solved.** `POST /bookkeeping/v1/accounts/performance/get` returns
+`todaysUnrealizedProfitAndLoss`, `totalUnrealizedProfitAndLoss` and `totalMarketValue` per
+account, with the formulas documented. That is where `ClientAccount.todayGainLoss` and
+`totalGainLoss` come from. Not positions.
 
-- **Position value and gain/loss are not returned.** `includeCurrentValue` exists as a pricing
-  flag, which contradicts the annotations, so this needs confirming rather than assuming. If
-  they really are empty, value must be derived from quantity and a price from elsewhere.
-  The client portal shows `todayGainLoss` and `totalGainLoss` per account today.
-- **Asset class is not returned.** The two `securityClassification` fields are the ones the
-  allocation-drift and concentration signals were designed around. Without them there is no
-  asset class to compare against a model, and `GET /households/{id}/allocation` has no source.
-  A separate classification source, or the model endpoints, would have to supply it.
+**Asset class: mostly solved.** `GET /portfolios/ria/v1/customer/models` returns
+`holdings[].category` and `subCategory` alongside `targetPercent`. So the *target* allocation
+by asset class is available, and a holding can be classified by matching its ticker to the
+model's holdings. Two caveats: it only classifies securities that are in a model, and it needs
+position market values, which brings back the pricing question.
 
-Confirm both against the sandbox before building the portfolio signals. They are the second
-question for Green Meadows, after the advisor-wide token.
+**Still open: position market value.** Concentration ("24% of equities in one holding") needs
+per-position value. Positions says `currentValue` is not applicable while offering
+`includeCurrentValue` as a pricing flag, which is a contradiction the docs do not resolve.
+Either the flag works and the annotation is stale, or value must be derived from
+`tdQuantity` and a price from elsewhere. **Confirm this one against the sandbox.**
+
+**Worth knowing: Green Meadows already computes drift.** Rebalance requests carry
+`reasons` including `DriftExceeded` and `MaxTotalDriftExceeded`, and models carry
+`driftMethod`, `driftThreshold`, `maxTotalDrift` and `rebalanceFrequency`. The mock invents a
+flat 5-point threshold. The real threshold belongs to the model, and the drift may be readable
+from their calculation rather than computed per account, which would remove a large fan-out.
+
+## Conventions that differ across subsystems
+
+The adapter cannot assume one house style. Observed so far:
+
+| | Case | Account number | Paging key |
+| --- | --- | --- | --- |
+| `user/v4` | camelCase | `int64` | none, `{ accounts: [] }` |
+| bookkeeping | camelCase | `int64` | `page` inside `{ content, page }` |
+| portfolios RIA | **snake_case** | `string`, `^[0-9]{10}$` | none, `{ data, metadata }` |
+| reports documents | camelCase | `int64` | `page`, top level is an **array** |
+| recurring transactions | camelCase | **`string`** | `page` |
+| margin admin | camelCase | `integer` | **`pagination`** |
 
 ## How to capture the rest
 
