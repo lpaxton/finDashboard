@@ -20,6 +20,8 @@ The contract and mock cover 72 operations and the dashboard reaches every one of
 
 ```
 HANDOFF.md                this file, at the project root
+DESIGNER-HANDOFF.md       for the designer: the design system, and the five product rules
+                          that look like styling choices and are not
 advisor-platform-mock/
   README.md               how to run and use the mock server
   package.json            npm start, npm test (no dependencies, Node 18+, ES modules)
@@ -47,7 +49,8 @@ advisor-platform-mock/
   tools/gen-types.js      the generator, and a YAML reader for the subset the spec uses
   jsconfig.json           lets editors check JSDoc against the generated types, no build step
   docs/                   decisions that outlived the conversation that produced them:
-                          query-surface.md and system-of-record.md
+                          query-surface.md, system-of-record.md, and design.md — the log of
+                          design requests, what was built for each and what it implies
   test/server.test.js     66 tests over the contract, the roles and the client-safe boundary
   test/greenmeadows.test.js  23 tests for the custodian adapter, against its fake
   test/model.test.js      7 tests for the model layer, including the request shape
@@ -322,7 +325,7 @@ buildable now.
 - **Placeholder actions:** some alert buttons still show a "not built yet" message; Open queue now goes to Communications. "Open advisor dashboard read-only" from the firm view is not built; the drill-down shows summary numbers only.
 - **Views and sections.** The role switcher (Firm, Advisor, Client) is the top level, per X-15. Inside the advisor view a sub-nav holds Today, Next best action, Clients, Communications, Prospects, Onboarding, Calendar, Follow-ups, Playbooks and Reports; inside the firm view, Overview, Billing, Ownership and Branding. Sections were kept below the role switcher deliberately, so an advisor's own work never sits at the same level as the client-safe boundary.
 
-**Every AI output is a draft, and this is structural rather than a rule to remember.** Five surfaces produce them — suggested next steps, next best action, queries, meeting summaries and agendas, and message redrafts — and all five return `accepted: false`, create nothing, and carry provenance saying what produced them and what they read. A draft becomes real only when an advisor acts: posting a task, approving a message. If a new AI feature does not follow that shape, it is the feature that is wrong.
+**Every AI output is a draft, and this is structural rather than a rule to remember.** Six surfaces produce them — suggested next steps, next best action, queries, meeting summaries, agendas and message redrafts — and all six return `accepted: false`, create nothing, and carry provenance saying what produced them and what they read. A draft becomes real only when an advisor acts: posting a task, approving a message. If a new AI feature does not follow that shape, it is the feature that is wrong.
 
 **The model is optional, and the platform must keep working without it.** `src/model/` loads the Anthropic SDK with a dynamic import. With no SDK and no `ANTHROPIC_API_KEY`, every drafting capability falls back to a deterministic offline generator, `GET /ai/status` says so, and the dashboard says so once on the Today section. The offline drafts admit in their own text that no model read anything, deliberately: a fake that improvised fluent prose would let everyone forget nothing was actually read. To go live:
 
