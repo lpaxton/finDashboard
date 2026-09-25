@@ -862,3 +862,22 @@ test('model status is reported without any credential', async () => {
   assert.doesNotMatch(JSON.stringify(r.data), /sk-ant|ANTHROPIC_API_KEY/);
   assert.equal((await call('grace', 'GET', '/ai/status')).status, 403);
 });
+
+// The feature-to-API map is generated from the requirement ids in openapi.yaml. If it drifts,
+// the document is claiming a link the contract does not make.
+test('docs/feature-api-map.md matches the contract', async () => {
+  const r = await new Promise((resolve) => {
+    const p = spawn(process.execPath, [path.join(__dirname, '..', 'tools', 'feature-map.js'), '--check']);
+    let err = ''; p.stderr.on('data', d => { err += d; });
+    p.on('close', code => resolve({ code, err }));
+  });
+  assert.equal(r.code, 0, r.err.trim() || 'the generator failed');
+});
+
+test('every requirement id named in the contract is a real one', () => {
+  const spec = fs.readFileSync(path.join(__dirname, '..', 'openapi.yaml'), 'utf8');
+  const sizes = { IP: 11, MEET: 8, COMM: 5, PO: 12, PM: 5, PL: 2, RTI: 10, GP: 10, AX: 12, X: 15 };
+  const bad = [...new Set(spec.match(/\b(?:IP|MEET|COMM|PO|PM|PL|RTI|GP|AX|X)-\d{2}\b/g) || [])]
+    .filter(id => { const [p, n] = id.split('-'); return Number(n) < 1 || Number(n) > sizes[p]; });
+  assert.deepEqual(bad, [], 'the contract references requirement ids that do not exist: ' + bad.join(', '));
+});

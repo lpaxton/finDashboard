@@ -12,7 +12,8 @@
     "start": "node server.js",
     "test": "node --test",
     "types": "node tools/gen-types.js",
-    "typecheck": "tsc -p jsconfig.json"
+    "typecheck": "tsc -p jsconfig.json",
+    "feature-map": "node tools/feature-map.js"
   },
   "type": "module"
 }

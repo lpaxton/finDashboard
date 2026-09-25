@@ -46,11 +46,14 @@ advisor-platform-mock/
   dashboard/js/client.js  the client portal
   dashboard/js/app.js     entry point: sign in, pick a view, global click handlers
   types/api.d.ts          a type per schema plus an Operations map; generated, never hand-edited
-  tools/gen-types.js      the generator, and a YAML reader for the subset the spec uses
+  tools/yaml.js           a YAML reader for the subset the spec uses, shared by both tools
+  tools/gen-types.js      generates types/api.d.ts
+  tools/feature-map.js    generates the tables in docs/feature-api-map.md
   jsconfig.json           lets editors check JSDoc against the generated types, no build step
   docs/                   decisions that outlived the conversation that produced them:
-                          query-surface.md, system-of-record.md, and design.md — the log of
-                          design requests, what was built for each and what it implies
+                          query-surface.md, system-of-record.md, design.md (the log of design
+                          requests), and feature-api-map.md (which operation serves each of the
+                          75 features, generated from the contract)
   test/server.test.js     66 tests over the contract, the roles and the client-safe boundary
   test/greenmeadows.test.js  23 tests for the custodian adapter, against its fake
   test/model.test.js      7 tests for the model layer, including the request shape
@@ -60,8 +63,9 @@ Run it (from `advisor-platform-mock/`):
 
 ```
 npm start        # http://localhost:4010 serves the dashboard, connected to the mock
-npm test         # 96 tests
+npm test         # 98 tests
 npm run types    # regenerate types/api.d.ts from openapi.yaml
+npm run feature-map   # regenerate the feature-to-API tables
 ```
 
 **Nothing needs installing.** Node 18 or newer is the only requirement. The one optional
