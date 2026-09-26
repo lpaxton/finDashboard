@@ -11,6 +11,12 @@ that pass between the architect and the builder, so nothing gets decided in a ha
 
 ---
 
+## Scope right now [PO]
+
+**Advisor view first.** The Client view is a required deliverable and comes in a later pass.
+The **Firm view is parked**: Luke's current version stays as built. This is a deliberate choice to
+keep the POC focused, not an oversight. See `UX_IA.md` §1.
+
 ## 1. Who does what
 
 | Who | Role | Owns |
@@ -86,17 +92,18 @@ wearing a [UX] coat, and it should be named as one before anything is built.
 | File | What it is | Status |
 | --- | --- | --- |
 | `UX_README.md` | This file: the working agreement | Draft |
-| `UX_REQUESTS.md` | The request log between design and build | Live, empty |
+| `UX_RESEARCH.md` | The advisor findings the design is built on, with how well we know each | v0.1 |
+| `UX_RULES.md` | Five commitments and their rules for the advisor view: Focused · Trust · Steady · Catch what slips · A member of your team | v0.3, confirmed |
+| `UX_IA.md` | How the advisor view is organised: the spine, role homes, Inbox, Ask, Systems | v0.1 |
+| `UX_REQUESTS.md` | The request log between design and build | Live — 11 requests |
+| `UX_DESIGN_SYSTEM.md` | What every colour, gradient, typeface and shape means, and how it maps to your variables | v0.5 |
+| `UX_TOKENS.css` | Drop-in replacement for the `:root` blocks in `styles.css` (same variable names, plus role gradients, glass, elevation) | v0.5 |
 
 **Planned, roughly in this order:**
 
 | File | What it will hold |
 | --- | --- |
-| `UX_RESEARCH.md` | The anonymised advisor findings the design is built on |
-| `UX_RULES.md` | Behaviours and rules: how things rank, when the platform speaks and when it stays quiet, how the interface behaves as it fills up |
-| `UX_IA.md` | How everything is organised and reached across the three views |
 | `UX_WIREFRAMES/` | Greyscale screens, built against the rules and the IA |
-| `UX_DESIGN_SYSTEM.md` | The visual system that replaces the placeholder tokens |
 
 ## 7. What does not live here
 

@@ -1,0 +1,111 @@
+/* ============================================================================
+   Advisor Platform — design tokens · v0.5 · 26 September 2026 · Leila Mitchell
+   ----------------------------------------------------------------------------
+   HOW TO USE (Luke):
+   1. Replace the three :root blocks at the top of dashboard/styles.css
+      (light, dark via prefers-color-scheme, dark via data-theme) with the
+      three blocks below. Every variable name you use today is kept, so no
+      other line of styles.css has to change to pick up the new ground,
+      type and status colours.
+   2. In dashboard/index.html, replace the Google Fonts <link> with:
+      <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&family=Newsreader:opsz,wght@6..72,400;6..72,500;6..72,600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+   3. NEW variables (roles, the platform's voice, gradients, glass, radii,
+      elevation, motion) are ready for the requests in ux/UX_REQUESTS.md.
+   Meaning of every colour: ux/UX_DESIGN_SYSTEM.md (a colour means one thing
+   everywhere — UX_RULES ST-04). Text on a gradient only ever sits on the
+   "-deep" gradient; the full three-stop gradient is for bands and graphics.
+   ============================================================================ */
+
+:root {
+  /* ---- Ground and type (your existing names) ---- */
+  --bg: #F3F4F0;          /* cool stone — the page, never pure white            */
+  --surface: #FAFBF8;     /* paper — cards and panels                            */
+  --ink: #1B1F1D;         /* primary text                                        */
+  --muted: #4C5145;       /* graphite — secondary text, sources, timestamps      */
+  --line: #D7DAD3;        /* fog — 1px hairlines                                 */
+  --mist: #E8E9E3;        /* hover row, secondary surface                        */
+
+  /* ---- Brand: interactive only ---- */
+  --brand: #3D5440;       /* moss — links, active state, primary buttons         */
+  --brand-soft: #E3E9E1;  /* active nav, selected rows                           */
+  --on-brand: #FAFBF8;
+  --accent: #E45D4D;      /* coral — focus ring and chip dots only               */
+
+  /* ---- Status: meaning only, always tint + dot + word. NEVER a solid fill ---- */
+  --ok: #356856;   --ok-soft: #E1ECE7;   --ok-on-deep: #9ED3BC;
+  --warn: #77602E; --warn-soft: #F1E9DA; --warn-on-deep: #E9CF8A;   /* yellow-olive — kept clear of Operations' amber */
+  --crit: #954552; --crit-soft: #F5E4E5; --crit-on-deep: #F2A7AE;   /* muted berry, clear of Prospecting */
+
+  /* ---- The platform's voice (was: AI Intelligence) ---- */
+  --ai: #5A4A8C;  --ai-soft: #E5E2EF;   /* labels sit on --ai-deep; wells get a 3px --ai-deep-edge */
+  --ai-deep-edge: #3F326C;
+  --ai-grad: linear-gradient(165deg, #6E5DA0 0%, #3F326C 55%, #1C1438 100%);
+  --ai-deep: linear-gradient(165deg, #3F326C 0%, #1C1438 100%);
+
+  /* ---- The four roles ----
+     --role-x      text-safe solid (marks, labels, links on sand)
+     --role-x-soft background tint
+     --role-x-grad full three-stop gradient — bands and graphics, no small text
+     --role-x-deep mid-to-deep gradient — the only gradient text may sit on    */
+  --role-bd: #9E3F2B; --role-bd-soft: #F6E3DA;       /* Prospecting · coral → terracotta (new) */
+  --role-bd-grad: linear-gradient(165deg, #D2644A 0%, #9E3F2B 55%, #4A1C12 100%);
+  --role-bd-deep: linear-gradient(165deg, #9E3F2B 0%, #4A1C12 100%);
+
+  --role-ca: #1F6B73; --role-ca-soft: #DDEDEE;       /* Clients · takes the Market Signals gradient (Leila, 26 Sept) */
+  --role-ca-grad: linear-gradient(165deg, #3FA0A6 0%, #1F6B73 55%, #14322A 100%);
+  --role-ca-deep: linear-gradient(165deg, #1F6B73 0%, #14322A 100%);
+
+  --role-op: #8C5C20; --role-op-soft: #F4E8D6;       /* Operations · was Operations System */
+  --role-op-grad: linear-gradient(165deg, #C68A3A 0%, #8C5C20 55%, #3F2A0C 100%);
+  --role-op-deep: linear-gradient(165deg, #8C5C20 0%, #3F2A0C 100%);
+
+  --role-pd: #59675C; --role-pd-soft: #E3EAE4;       /* Development · slate sage, the quietest role (Leila, 26 Sept) */
+  --role-pd-grad: linear-gradient(165deg, #899A8D 0%, #59675C 55%, #2B352D 100%);
+  --role-pd-deep: linear-gradient(165deg, #59675C 0%, #2B352D 100%);
+
+  /* ---- Market information · its own blue, SAVED for a future section (no screen uses it yet) ---- */
+  --market: #335B8A;  --market-soft: #E4E8F1;
+  --market-grad: linear-gradient(165deg, #6D8DBC 0%, #335B8A 55%, #142D49 100%);
+
+  /* ---- Charts: neutrals only (a role colour in a chart would claim the data) ---- */
+  --chart-1: #4C5145; --chart-2: #80867A; --chart-3: #B5B9AE; --chart-4: #D7DAD3;
+
+  /* ---- Glass: buttons and chips on a gradient ---- */
+  --glass-fill: rgba(251, 250, 246, 0.14);
+  --glass-line: rgba(251, 250, 246, 0.32);
+  --glass-blur: 6px;
+
+  /* ---- Type ---- */
+  --sans: "Plus Jakarta Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --serif: "Newsreader", Georgia, "Times New Roman", serif;
+  --mono: "JetBrains Mono", ui-monospace, "SF Mono", monospace;
+
+  /* ---- Shape, depth, motion ---- */
+  --radius-1: 8px;  --radius-2: 12px;  --radius-pill: 999px;
+  --elev-1: 0 1px 2px rgba(27, 31, 29, 0.04);
+  --elev-2: 0 4px 12px rgba(27, 31, 29, 0.06);
+  --elev-3: 0 16px 40px rgba(27, 31, 29, 0.10);
+  --ease: cubic-bezier(0.2, 0.6, 0.2, 1);
+  --dur-fast: 120ms;  --dur-base: 220ms;  --dur-slow: 400ms;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #141816; --surface: #1C211E; --ink: #ECEEE8; --muted: #A3A99E; --line: #2E3530; --mist: #242A26;
+    --brand: #9DC0A2; --brand-soft: #24302A; --on-brand: #141816; --accent: #F08A7C;
+    --ok: #8CC7AE; --ok-soft: #1C3229; --warn: #E3C57A; --warn-soft: #3A3317; --crit: #EBA0A8; --crit-soft: #3A2226;
+    --ai: #B5A8E6; --ai-soft: #2B2640; --ai-deep-edge: #B5A8E6;
+    --role-bd: #F0957F; --role-bd-soft: #3A2620; --role-ca: #6CC7BD; --role-ca-soft: #1B3432;
+    --role-op: #D9A15E; --role-op-soft: #33281A; --role-pd: #A2B5A6; --role-pd-soft: #232B25;
+    --market: #98B2DC; --market-soft: #1E2533;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #141816; --surface: #1C211E; --ink: #ECEEE8; --muted: #A3A99E; --line: #2E3530; --mist: #242A26;
+  --brand: #9DC0A2; --brand-soft: #24302A; --on-brand: #141816; --accent: #F08A7C;
+  --ok: #8CC7AE; --ok-soft: #1C3229; --warn: #E3C57A; --warn-soft: #3A3317; --crit: #EBA0A8; --crit-soft: #3A2226;
+  --ai: #B5A8E6; --ai-soft: #2B2640; --ai-deep-edge: #B5A8E6;
+  --role-bd: #F0957F; --role-bd-soft: #3A2620; --role-ca: #6CC7BD; --role-ca-soft: #1B3432;
+  --role-op: #D9A15E; --role-op-soft: #33281A; --role-pd: #A2B5A6; --role-pd-soft: #232B25;
+  --market: #98B2DC; --market-soft: #1E2533;
+}
