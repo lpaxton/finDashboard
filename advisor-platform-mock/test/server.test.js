@@ -186,7 +186,7 @@ test('every operation in openapi.yaml is served', async () => {
     const p = l.match(/^  (\/[^\s:]+):\s*$/); if (p) { cur = p[1]; continue; }
     const m = l.match(/^    (get|post|patch|put|delete):\s*$/); if (m && cur) ops.push([m[1].toUpperCase(), cur]);
   }
-  assert.equal(ops.length, 72, 'spec should list 72 operations');
+  assert.equal(ops.length, 75, 'spec should list 75 operations');
   const params = { householdId: 'h3', meetingId: 'm1', taskId: 't1', alertId: 'a1', signalId: 'sig_idle_cash', advisorId: 'adv2', documentId: 'd1',
     communicationId: 'cm1', prospectId: 'p1', onboardingId: 'ob1', stepId: 'intake_form', invoiceId: 'inv1', queryId: 'q1', teamShareId: 'ts1', playbookId: 'pb1' };
   const missing = [];
@@ -398,8 +398,13 @@ test('the dashboard calls every ported endpoint', () => {
   for (const w of wired) assert.ok(html.includes(w), 'the dashboard no longer calls ' + w);
   for (const frag of ['/record', '/record/next-steps', '/convert', '/steps/'])
     assert.ok(html.includes(frag), 'the dashboard no longer calls ' + frag);
-  for (const sec of ['today', 'clients', 'communications', 'prospects', 'onboarding', 'calendar', 'followups'])
-    assert.ok(new RegExp(`\\['${sec}',`).test(html), 'the advisor sub-nav lost ' + sec);
+  // The advisor spine, after the IA pass (ux/UX_IA.md §2): Today, Inbox and Calendar at the top,
+  // the four roles as the frame, Systems at the bottom. Communications and Follow-ups merged
+  // into the Inbox and Prospects moved inside a role home, so they are tabs, not spine entries.
+  for (const sec of ['today', 'inbox', 'calendar', 'role:bd', 'role:ca', 'role:op', 'role:pd', 'glance', 'systems'])
+    assert.ok(new RegExp(`\\['${sec}',`).test(html), 'the advisor spine lost ' + sec);
+  for (const tab of ['pipeline', 'referrals', 'households', 'onboarding', 'reports', 'billing', 'playbooks', 'scorecard'])
+    assert.ok(new RegExp(`\\['${tab}', '`).test(html), 'a role home lost its ' + tab + ' tab');
   for (const sec of ['overview', 'billing', 'branding'])
     assert.ok(new RegExp(`\\['${sec}',`).test(html), 'the firm sub-nav lost ' + sec);
 });

@@ -1,31 +1,109 @@
+/* Design tokens. Generated from ux/UX_TOKENS.css v0.5 (Leila Mitchell, 26 September 2026);
+   what every value means is in ux/UX_DESIGN_SYSTEM.md. Edit there, not here.
+   The box-sizing and safe-area lines in :root are ours and are not part of the palette. */
 :root {
   box-sizing: border-box;
   padding-top: env(safe-area-inset-top, 0px);
   padding-bottom: env(safe-area-inset-bottom, 0px);
-  --bg: #EEF1F0; --surface: #FBFCFB; --ink: #16262D; --muted: #5B6B71; --line: #D5DCDA;
-  --brand: #0E5A57; --brand-soft: #DCEBE9; --on-brand: #FFFFFF;
-  --warn: #9A4A06; --warn-soft: #F6E7D8; --crit: #A3282F; --crit-soft: #F6DEDF; --ok: #2E7D4F; --ok-soft: #DDEFE3;
-  --sans: "Instrument Sans", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-  --serif: "Source Serif 4", Georgia, "Times New Roman", serif;
+  /* ---- Ground and type (your existing names) ---- */
+  --bg: #F3F4F0;          /* cool stone — the page, never pure white            */
+  --surface: #FAFBF8;     /* paper — cards and panels                            */
+  --ink: #1B1F1D;         /* primary text                                        */
+  --muted: #4C5145;       /* graphite — secondary text, sources, timestamps      */
+  --line: #D7DAD3;        /* fog — 1px hairlines                                 */
+  --mist: #E8E9E3;        /* hover row, secondary surface                        */
+
+  /* ---- Brand: interactive only ---- */
+  --brand: #3D5440;       /* moss — links, active state, primary buttons         */
+  --brand-soft: #E3E9E1;  /* active nav, selected rows                           */
+  --on-brand: #FAFBF8;
+  --accent: #E45D4D;      /* coral — focus ring and chip dots only               */
+
+  /* ---- Status: meaning only, always tint + dot + word. NEVER a solid fill ---- */
+  --ok: #356856;   --ok-soft: #E1ECE7;   --ok-on-deep: #9ED3BC;
+  --warn: #77602E; --warn-soft: #F1E9DA; --warn-on-deep: #E9CF8A;   /* yellow-olive — kept clear of Operations' amber */
+  --crit: #954552; --crit-soft: #F5E4E5; --crit-on-deep: #F2A7AE;   /* muted berry, clear of Prospecting */
+
+  /* ---- The platform's voice (was: AI Intelligence) ---- */
+  --ai: #5A4A8C;  --ai-soft: #E5E2EF;   /* labels sit on --ai-deep; wells get a 3px --ai-deep-edge */
+  --ai-deep-edge: #3F326C;
+  --ai-grad: linear-gradient(165deg, #6E5DA0 0%, #3F326C 55%, #1C1438 100%);
+  --ai-deep: linear-gradient(165deg, #3F326C 0%, #1C1438 100%);
+
+  /* ---- The four roles ----
+     --role-x      text-safe solid (marks, labels, links on sand)
+     --role-x-soft background tint
+     --role-x-grad full three-stop gradient — bands and graphics, no small text
+     --role-x-deep mid-to-deep gradient — the only gradient text may sit on    */
+  --role-bd: #9E3F2B; --role-bd-soft: #F6E3DA;       /* Prospecting · coral → terracotta (new) */
+  --role-bd-grad: linear-gradient(165deg, #D2644A 0%, #9E3F2B 55%, #4A1C12 100%);
+  --role-bd-deep: linear-gradient(165deg, #9E3F2B 0%, #4A1C12 100%);
+
+  --role-ca: #1F6B73; --role-ca-soft: #DDEDEE;       /* Clients · takes the Market Signals gradient (Leila, 26 Sept) */
+  --role-ca-grad: linear-gradient(165deg, #3FA0A6 0%, #1F6B73 55%, #14322A 100%);
+  --role-ca-deep: linear-gradient(165deg, #1F6B73 0%, #14322A 100%);
+
+  --role-op: #8C5C20; --role-op-soft: #F4E8D6;       /* Operations · was Operations System */
+  --role-op-grad: linear-gradient(165deg, #C68A3A 0%, #8C5C20 55%, #3F2A0C 100%);
+  --role-op-deep: linear-gradient(165deg, #8C5C20 0%, #3F2A0C 100%);
+
+  --role-pd: #59675C; --role-pd-soft: #E3EAE4;       /* Development · slate sage, the quietest role (Leila, 26 Sept) */
+  --role-pd-grad: linear-gradient(165deg, #899A8D 0%, #59675C 55%, #2B352D 100%);
+  --role-pd-deep: linear-gradient(165deg, #59675C 0%, #2B352D 100%);
+
+  /* ---- Market information · its own blue, SAVED for a future section (no screen uses it yet) ---- */
+  --market: #335B8A;  --market-soft: #E4E8F1;
+  --market-grad: linear-gradient(165deg, #6D8DBC 0%, #335B8A 55%, #142D49 100%);
+
+  /* ---- Charts: neutrals only (a role colour in a chart would claim the data) ---- */
+  --chart-1: #4C5145; --chart-2: #80867A; --chart-3: #B5B9AE; --chart-4: #D7DAD3;
+
+  /* ---- Glass: buttons and chips on a gradient ---- */
+  --glass-fill: rgba(251, 250, 246, 0.14);
+  --glass-line: rgba(251, 250, 246, 0.32);
+  --glass-blur: 6px;
+
+  /* ---- Type ---- */
+  --sans: "Plus Jakarta Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --serif: "Newsreader", Georgia, "Times New Roman", serif;
+  --mono: "JetBrains Mono", ui-monospace, "SF Mono", monospace;
+
+  /* ---- Shape, depth, motion ---- */
+  --radius-1: 8px;  --radius-2: 12px;  --radius-pill: 999px;
+  --elev-1: 0 1px 2px rgba(27, 31, 29, 0.04);
+  --elev-2: 0 4px 12px rgba(27, 31, 29, 0.06);
+  --elev-3: 0 16px 40px rgba(27, 31, 29, 0.10);
+  --ease: cubic-bezier(0.2, 0.6, 0.2, 1);
+  --dur-fast: 120ms;  --dur-base: 220ms;  --dur-slow: 400ms;
 }
+
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --bg: #0F1A1E; --surface: #16252A; --ink: #E6EEEC; --muted: #93A4A9; --line: #263A40;
-    --brand: #5CC0B8; --brand-soft: #1B3A3B; --on-brand: #0F1A1E;
-    --warn: #E0A15B; --warn-soft: #3A2A18; --crit: #EE8A8F; --crit-soft: #3B1E21; --ok: #6CC494; --ok-soft: #1B3527;
+    --bg: #141816; --surface: #1C211E; --ink: #ECEEE8; --muted: #A3A99E; --line: #2E3530; --mist: #242A26;
+    --brand: #9DC0A2; --brand-soft: #24302A; --on-brand: #141816; --accent: #F08A7C;
+    --ok: #8CC7AE; --ok-soft: #1C3229; --warn: #E3C57A; --warn-soft: #3A3317; --crit: #EBA0A8; --crit-soft: #3A2226;
+    --ai: #B5A8E6; --ai-soft: #2B2640; --ai-deep-edge: #B5A8E6;
+    --role-bd: #F0957F; --role-bd-soft: #3A2620; --role-ca: #6CC7BD; --role-ca-soft: #1B3432;
+    --role-op: #D9A15E; --role-op-soft: #33281A; --role-pd: #A2B5A6; --role-pd-soft: #232B25;
+    --market: #98B2DC; --market-soft: #1E2533;
   }
 }
 :root[data-theme="dark"] {
-  --bg: #0F1A1E; --surface: #16252A; --ink: #E6EEEC; --muted: #93A4A9; --line: #263A40;
-  --brand: #5CC0B8; --brand-soft: #1B3A3B; --on-brand: #0F1A1E;
-  --warn: #E0A15B; --warn-soft: #3A2A18; --crit: #EE8A8F; --crit-soft: #3B1E21; --ok: #6CC494; --ok-soft: #1B3527;
+  --bg: #141816; --surface: #1C211E; --ink: #ECEEE8; --muted: #A3A99E; --line: #2E3530; --mist: #242A26;
+  --brand: #9DC0A2; --brand-soft: #24302A; --on-brand: #141816; --accent: #F08A7C;
+  --ok: #8CC7AE; --ok-soft: #1C3229; --warn: #E3C57A; --warn-soft: #3A3317; --crit: #EBA0A8; --crit-soft: #3A2226;
+  --ai: #B5A8E6; --ai-soft: #2B2640; --ai-deep-edge: #B5A8E6;
+  --role-bd: #F0957F; --role-bd-soft: #3A2620; --role-ca: #6CC7BD; --role-ca-soft: #1B3432;
+  --role-op: #D9A15E; --role-op-soft: #33281A; --role-pd: #A2B5A6; --role-pd-soft: #232B25;
+  --market: #98B2DC; --market-soft: #1E2533;
 }
+
 *, *::before, *::after { box-sizing: inherit; }
 html { height: 100%; scroll-padding-top: env(safe-area-inset-top, 0px); }
 body { margin: 0; min-height: 100%; background: var(--bg); color: var(--ink); font: 400 15px/1.5 var(--sans); -webkit-font-smoothing: antialiased; }
 button, input, select, textarea { font: inherit; color: inherit; }
 button { cursor: pointer; }
-:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; border-radius: 4px; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
 .wrap { max-width: 1180px; margin: 0 auto; padding: 24px 20px 56px; }
 
 /* header */
@@ -35,7 +113,7 @@ button { cursor: pointer; }
 .top h1 { font: 600 30px/1.15 var(--serif); margin: 0 0 4px; letter-spacing: -0.01em; }
 .top p { margin: 0; color: var(--muted); }
 .who { display: flex; align-items: center; gap: 12px; }
-.avatar { width: 40px; height: 40px; border-radius: 50%; background: var(--brand); color: var(--on-brand); display: grid; place-items: center; font-weight: 600; font-size: 14px; }
+.avatar { width: 40px; height: 40px; border-radius: 50%; background: var(--firm-mark, var(--brand)); color: var(--on-brand); display: grid; place-items: center; font-weight: 600; font-size: 14px; }
 .tabs { display: flex; gap: 4px; padding: 3px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); }
 .tabs button { background: none; border: 0; padding: 5px 14px; border-radius: 6px; font-size: 14px; }
 .tabs button[aria-selected="true"], .tabs button[aria-pressed="true"] { background: var(--brand); color: var(--on-brand); }
@@ -80,9 +158,8 @@ button { cursor: pointer; }
 .badge.next { background: var(--brand-soft); color: var(--brand); }
 .badge.crit { background: var(--crit-soft); color: var(--crit); }
 .badge.plain { background: var(--bg); color: var(--muted); }
-details.brief { margin: 6px 0 0 78px; }
-details.brief summary { cursor: pointer; color: var(--brand); font-size: 14px; }
-details.brief p { margin: 6px 0 0; color: var(--muted); font-size: 14px; max-width: 62ch; }
+.disc.brief { margin-left: 78px; }
+.disc.brief .disc-inner p { margin: 0 0 4px; color: var(--muted); font-size: 14px; max-width: 62ch; }
 
 /* lists */
 .rows { list-style: none; margin: 0; padding: 0; }
@@ -97,8 +174,8 @@ details.brief p { margin: 6px 0 0; color: var(--muted); font-size: 14px; max-wid
 .actions { display: flex; gap: 6px; }
 .btn { border: 1px solid var(--line); background: transparent; padding: 5px 12px; border-radius: 6px; font-size: 13px; white-space: nowrap; }
 .btn:hover { border-color: var(--brand); color: var(--brand); }
-.btn.primary { background: var(--brand); color: var(--on-brand); border-color: var(--brand); }
-.btn.primary:hover { color: var(--on-brand); opacity: .9; }
+.btn.primary { background: var(--ink); color: var(--surface); border-color: var(--ink); }
+.btn.primary:hover { color: var(--surface); opacity: .9; }
 .btn.quiet { border-color: transparent; color: var(--muted); }
 .link { background: none; border: 0; padding: 0; color: var(--brand); text-align: left; font-weight: 500; }
 .link:hover { text-decoration: underline; }
@@ -150,8 +227,21 @@ dialog h3 { font: 600 16px/1.2 var(--serif); margin: 20px 0 8px; }
 .skel.s { width: 55%; } .skel.m { width: 80%; }
 .err { color: var(--crit); font-size: 14px; display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
 .empty { color: var(--muted); font-size: 14px; margin: 0; }
-.toast { position: fixed; left: 50%; bottom: calc(20px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); background: var(--ink); color: var(--bg); padding: 10px 16px; border-radius: 8px; font-size: 14px; opacity: 0; pointer-events: none; transition: opacity .2s; max-width: 90vw; z-index: 10; }
+.toast { position: fixed; left: 50%; bottom: calc(20px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); background: var(--ink); color: var(--bg); padding: 10px 16px; border-radius: 8px; font-size: 14px; opacity: 0; pointer-events: none; transition: opacity var(--dur-base) var(--ease); max-width: 90vw; z-index: 10; }
 .toast.show { opacity: 1; }
+/* A toast that carries a way back has to be reachable, and has to wait to be reached (TR-07). */
+.toast.actionable { pointer-events: auto; display: flex; align-items: center; gap: 14px; }
+.toast-action { background: none; border: 0; padding: 0; color: var(--bg); font-weight: 600; text-decoration: underline; text-underline-offset: 3px; }
+
+/* An alert row now carries three answers (act, not now, dismiss). .grow has min-width:0 so
+   text can ellipsis, which lets it collapse to one word per line once the buttons are wide;
+   give these rows a floor and let the buttons wrap under instead. */
+.rows > li[data-alert] .grow { min-width: 240px; }
+.rows > li[data-alert] .actions { flex-wrap: wrap; }
+
+/* Set aside, and said so: nothing disappears quietly (ST-08). */
+.set-aside { margin: 12px 0 0; }
+.notnow { flex-basis: 100%; align-items: center; flex-wrap: wrap; margin-top: 4px; }
 footer { margin-top: 28px; color: var(--muted); font-size: 13px; }
 
 @media (max-width: 860px) {
@@ -159,9 +249,14 @@ footer { margin-top: 28px; color: var(--muted); font-size: 13px; }
   .strip, .strip.three { grid-template-columns: 1fr 1fr; }
   .stat:nth-child(3) { padding-left: 0; border-left: 0; }
   .stat:nth-child(n+3) { border-top: 1px solid var(--line); }
-  details.brief { margin-left: 0; }
+  .disc.brief { margin-left: 0; }
 }
-@media (prefers-reduced-motion: reduce) { .toast { transition: none; } }
+/* Reduced motion is set once, on the tokens, so nothing built later can miss it
+   (UX_RULES FO-08; the accessibility floor in DESIGNER-HANDOFF §4). */
+@media (prefers-reduced-motion: reduce) {
+  :root { --dur-fast: 0ms; --dur-base: 0ms; --dur-slow: 0ms; }
+  *, *::before, *::after { animation-duration: 0ms !important; animation-iteration-count: 1 !important; transition-duration: 0ms !important; scroll-behavior: auto !important; }
+}
 
 /* Sections inside a view, and the components the ported features need. */
 /* Section rail. Sits to the left of the section it switches, sticky so a long section does
@@ -176,7 +271,7 @@ footer { margin-top: 28px; color: var(--muted); font-size: 13px; }
   text-align: left; border-radius: 0 6px 6px 0; }
 .subnav-list button:hover { color: var(--ink); background: var(--surface); }
 .subnav-list button[aria-selected="true"] { color: var(--brand); border-left-color: var(--brand); background: var(--brand-soft); }
-.subnav-list button:focus-visible { outline: 2px solid var(--brand); outline-offset: -2px; }
+.subnav-list button:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 
 @media (max-width: 860px) {
   .viewbody { grid-template-columns: 1fr; gap: 0; }
@@ -185,7 +280,7 @@ footer { margin-top: 28px; color: var(--muted); font-size: 13px; }
   .subnav-toggle { display: flex; align-items: center; gap: 10px; width: 100%;
     background: var(--surface); border: 1px solid var(--line); border-radius: 8px;
     padding: 10px 14px; font: 500 14px/1 var(--sans); color: var(--ink); cursor: pointer; }
-  .subnav-toggle:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+  .subnav-toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
   .subnav-current { color: var(--brand); }
   .bars { width: 16px; height: 11px; flex: none; position: relative; }
   .bars, .bars::before, .bars::after { border-top: 2px solid currentColor; }
@@ -198,6 +293,22 @@ footer { margin-top: 28px; color: var(--muted); font-size: 13px; }
   .subnav-list button[aria-selected="true"] { background: var(--brand-soft); }
 }
 
+/* Disclosure: opens and closes in place, and shows where the content went (FO-08).
+   grid-template-rows 0fr -> 1fr is what makes an unknown height animate; the inner element
+   is hidden rather than clipped when closed, so nothing inside it can take focus. */
+.disc { margin-top: 6px; }
+.disc-toggle { font-size: 14px; }
+.disc-toggle[aria-expanded="true"] { border-color: var(--brand); color: var(--brand); }
+.disc-panel { display: grid; grid-template-rows: 0fr; transition: grid-template-rows var(--dur-base) var(--ease); }
+.disc[data-open="true"] .disc-panel { grid-template-rows: 1fr; }
+.disc[data-restoring] .disc-panel { transition: none; }
+.disc-inner { overflow: hidden; visibility: hidden; transition: visibility 0s linear var(--dur-base); }
+.disc[data-open="true"] .disc-inner { visibility: visible; transition-delay: 0s; }
+.disc[data-open="true"] .disc-inner > :first-child { margin-top: 8px; }
+
+/* Source line: what kind of source, and how recent. Mono, quiet, never removed (TR-06, TR-10). */
+.source { font: 400 12px/1.5 var(--mono); color: var(--muted); }
+
 .draft { white-space: pre-wrap; background: var(--bg); border: 1px solid var(--line); border-radius: 8px;
   padding: 12px 14px; margin: 8px 0 14px; font-size: 14px; line-height: 1.55; }
 
@@ -207,7 +318,7 @@ footer { margin-top: 28px; color: var(--muted); font-size: 13px; }
 .kcol .empty { font-size: 12px; padding: 8px 0; }
 .kcard { border: 1px solid var(--line); border-radius: 8px; padding: 10px; margin-bottom: 8px; cursor: pointer; background: var(--surface); }
 .kcard:hover { border-color: var(--brand); }
-.kcard:focus-visible { outline: 2px solid var(--brand); outline-offset: 1px; }
+.kcard:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 .kcard .title { font-size: 14px; font-weight: 500; }
 
 .onb { border-bottom: 1px solid var(--line); padding: 14px 0; }
@@ -288,3 +399,129 @@ footer { margin-top: 28px; color: var(--muted); font-size: 13px; }
   #navtop { margin-bottom: 18px; }
   #navtop .subnav { margin-bottom: 0; }
 }
+
+/* ============================================================================================
+   The advisor's frame: the spine, the role cards, and the two panels that open beside the page.
+   Every value here comes from ux/UX_DESIGN_SYSTEM.md; what each one means is written there.
+   ============================================================================================ */
+
+/* ---- The spine (UX_IA §2) ---- */
+.spine-list .spine-group { font: 500 11px/1.4 var(--mono); text-transform: uppercase; letter-spacing: 0.08em;
+  color: var(--muted); margin: 18px 0 6px; padding-left: 10px; }
+.spine-list [role="tablist"] { display: flex; flex-direction: column; gap: 1px; }
+.spine-list button { display: flex; align-items: center; gap: 8px; }
+.spine-list button > span:last-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+
+/* ---- The role mark: two letters on the role's gradient (ST-02). Colour is never alone. ---- */
+.rolemark { width: 22px; height: 22px; flex: none; border-radius: 6px; display: grid; place-items: center;
+  font: 700 10px/1 var(--mono); color: #FBFAF6; letter-spacing: 0.02em; }
+.rolemark.role-bd { background: var(--role-bd-grad); }
+.rolemark.role-ca { background: var(--role-ca-grad); }
+.rolemark.role-op { background: var(--role-op-grad); }
+.rolemark.role-pd { background: var(--role-pd-grad); }
+.headmark { display: inline-flex; vertical-align: -3px; margin-right: 10px; }
+.headmark .rolemark { width: 28px; height: 28px; border-radius: 8px; font-size: 11px; }
+
+.pagehead { font: 600 30px/1.2 var(--serif); margin: 0 0 16px; letter-spacing: -0.01em; display: flex; align-items: center; }
+
+/* ---- Tabs inside a role home (FO-07) ---- */
+.tabrow { display: flex; gap: 2px; border-bottom: 1px solid var(--line); overflow-x: auto; }
+.tabrow button { background: none; border: 0; border-bottom: 2px solid transparent; margin-bottom: -1px;
+  padding: 9px 14px; font: 500 14px/1.3 var(--sans); color: var(--muted); white-space: nowrap;
+  transition: color var(--dur-fast) var(--ease), border-color var(--dur-fast) var(--ease); }
+.tabrow button:hover { color: var(--ink); }
+.tabrow button[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--ink); }
+
+/* ---- Today: why the order changed, and pinning it (ST-03, ST-09) ---- */
+.todayline { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 6px; }
+.orderpill { display: inline-flex; align-items: center; gap: 7px; background: none; border: 1px solid var(--line);
+  border-radius: var(--radius-pill); padding: 5px 12px; font: 400 11px/1.4 var(--mono);
+  text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); }
+.orderpill .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); flex: none; }
+.orderwhy { margin: 0 0 14px; color: var(--muted); font-size: 14px; }
+
+/* ---- The role cards (FO-01, FO-02, FO-04) ---- */
+/* Two up when there is room, one when there is not. auto-fit rather than a breakpoint, because
+   what decides it is the space left beside an open Ask panel, not the size of the window. */
+.rolecards { display: grid; grid-template-columns: repeat(auto-fit, minmax(290px, 1fr)); gap: 16px; align-items: start; }
+.rolecard { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-2);
+  box-shadow: var(--elev-1); overflow: hidden; display: flex; flex-direction: column;
+  transition: box-shadow var(--dur-base) var(--ease); }
+.rolecard:hover { box-shadow: var(--elev-2); }
+.band { height: 34px; display: flex; align-items: center; gap: 9px; padding: 0 12px; color: #FBFAF6; }
+.rolecard.role-bd .band { background: var(--role-bd-deep); }
+.rolecard.role-ca .band { background: var(--role-ca-deep); }
+.rolecard.role-op .band { background: var(--role-op-deep); }
+.rolecard.role-pd .band { background: var(--role-pd-deep); }
+.band .rolemark { background: var(--glass-fill); border: 1px solid var(--glass-line); }
+.band-name { font: 600 14px/1 var(--sans); }
+.band .chip { margin-left: auto; font: 400 10px/1 var(--mono); text-transform: uppercase; letter-spacing: 0.08em;
+  background: var(--glass-fill); border: 1px solid var(--glass-line); border-radius: var(--radius-pill);
+  padding: 4px 9px; backdrop-filter: blur(var(--glass-blur)); }
+.band .pin { margin-left: auto; background: none; border: 0; color: #FBFAF6; font-size: 15px; line-height: 1; padding: 4px; }
+.band .chip + .pin { margin-left: 8px; }
+.cardbody { padding: 14px 16px 6px; flex: 1; }
+.card-meaning { margin: 0 0 12px; font-size: 15px; line-height: 1.45; }
+.cardlink { margin: 0 16px 14px; align-self: flex-start; }
+
+/* One deep card per screen, at most: the one that leads today (FO-04). */
+.rolecard.lead { box-shadow: var(--elev-2); border-color: transparent; color: #FBFAF6; }
+.rolecard.lead.role-bd { background: var(--role-bd-deep); }
+.rolecard.lead.role-ca { background: var(--role-ca-deep); }
+.rolecard.lead.role-op { background: var(--role-op-deep); }
+.rolecard.lead.role-pd { background: var(--role-pd-deep); }
+.rolecard.lead .band { background: none; border-bottom: 1px solid var(--glass-line); }
+.rolecard.lead .source, .rolecard.lead .meta, .rolecard.lead .empty { color: rgba(251, 250, 246, 0.82); }
+.rolecard.lead .cardlink { color: #FBFAF6; }
+.rolecard.lead .btn { border-color: var(--glass-line); background: var(--glass-fill); color: #FBFAF6;
+  backdrop-filter: blur(var(--glass-blur)); }
+.rolecard.lead .btn.primary { background: var(--surface); color: var(--ink); border-color: var(--surface); }
+.rolecard.lead .btn.quiet { background: none; border-color: transparent; color: rgba(251, 250, 246, 0.86); }
+.rolecard.lead .well { background: var(--glass-fill); border-left-color: var(--glass-line); }
+.rolecard.lead .well-label { background: var(--glass-fill); border: 1px solid var(--glass-line); }
+.rolecard.lead .disc-toggle[aria-expanded="true"] { border-color: var(--glass-line); color: #FBFAF6; }
+
+/* ---- The suggestion well: the platform's own voice, in violet (CS-03, CS-05) ---- */
+.well { background: var(--ai-soft); border-left: 3px solid var(--ai-deep-edge); border-radius: 0 var(--radius-1) var(--radius-1) 0;
+  padding: 10px 12px; margin: 0 0 10px; }
+.well-label { display: inline-block; background: var(--ai-deep); color: #FBFAF6; border-radius: var(--radius-pill);
+  font: 500 10px/1 var(--mono); text-transform: uppercase; letter-spacing: 0.08em; padding: 4px 8px; margin-bottom: 8px; }
+.well-actions { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+
+/* ---- The receipt: what the platform did, from what, and when (TR-04) ---- */
+.receipt { display: flex; gap: 7px; align-items: baseline; margin: 6px 0 0;
+  font: 400 12px/1.5 var(--mono); color: var(--muted); }
+.receipt .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--ai); flex: none; transform: translateY(-1px); }
+
+/* ---- Ask and Activity, beside the page and never over it (UX_IA §5, FO-06) ---- */
+.askfab { position: fixed; right: 20px; bottom: calc(20px + env(safe-area-inset-bottom, 0px));
+  background: var(--ai-deep); color: #FBFAF6; border-color: transparent; border-radius: var(--radius-pill);
+  padding: 10px 20px; box-shadow: var(--elev-3); z-index: 9; }
+.askfab::before { background: #FBFAF6; }
+.askfab:hover { color: #FBFAF6; border-color: transparent; }
+.side { position: fixed; top: 0; right: 0; bottom: 0; width: min(420px, 100vw); background: var(--surface);
+  border-left: 1px solid var(--line); box-shadow: var(--elev-3); z-index: 20; display: flex; flex-direction: column;
+  transform: translateX(100%); transition: transform var(--dur-base) var(--ease); }
+.side.open { transform: none; }
+.side-head { display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 16px 18px; border-bottom: 1px solid var(--line); }
+.side-head h2 { font: 600 19px/1.2 var(--serif); margin: 0; }
+.side-body { padding: 16px 18px 28px; overflow-y: auto; flex: 1; }
+/* The page moves over rather than being covered, so the advisor can still read what they were
+   looking at while they ask about it (UX_IA §5, FO-06). It shifts wherever there is room at
+   all; on a phone there is none, and the panel takes the screen. */
+@media (min-width: 860px) {
+  .wrap { transition: margin-right var(--dur-base) var(--ease); }
+  body.side-open .wrap { margin-right: 420px; max-width: none; }
+}
+@media (max-width: 859px) {
+  .side { width: 100vw; }
+}
+.activity .actor { width: 7px; height: 7px; border-radius: 50%; background: var(--muted); flex: none; margin-top: 7px; }
+.activity .actor.ai { background: var(--ai); }
+/* An empty role speaks in the serif: it is the platform's voice, not a label (FO-05, §3). */
+.empty.serif { font: 400 16px/1.5 var(--serif); color: var(--muted); }
+.hint.gap { color: var(--warn); }
+.meta.gap { color: var(--warn); }
+
+

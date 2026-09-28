@@ -15,6 +15,56 @@ export const daysAgo = (iso) => {
   const n = Math.floor((Date.now() - new Date(iso)) / 864e5);
   return n <= 0 ? 'Today' : n === 1 ? 'Yesterday' : n + ' days ago';
 };
+/* How recent, finely enough to be useful on a source line. daysAgo() is the right grain for a
+   record ("12 days ago"); this is the right grain for a reading ("2 hrs ago"). */
+export const ageBrief = (iso) => {
+  if (!iso) return 'age unknown';
+  const mins = Math.floor((Date.now() - new Date(iso)) / 6e4);
+  if (!Number.isFinite(mins) || mins < 0) return 'just now';
+  if (mins < 2) return 'just now';
+  if (mins < 60) return mins + ' mins ago';
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return hrs + (hrs === 1 ? ' hr ago' : ' hrs ago');
+  const days = Math.floor(hrs / 24);
+  return days === 1 ? 'yesterday' : days + ' days ago';
+};
+
+/* Sources in the advisor's language, never the system's name (UX_RULES TR-06, TR-10).
+   The contract's Source enum has four values and briefSources carries the same ones, but it is
+   typed as free strings, so an unknown value has to degrade rather than leak "greenmeadows"
+   onto an advisor's screen. Anything reaching the fallback is worth raising with design: a
+   source the advisor cannot name is a TR-10 problem, not a wording one. */
+export const SOURCE_KIND = {
+  greenmeadows: 'custodian records',
+  crm: 'your CRM',
+  calendar: 'your calendar',
+  platform: "the platform's own checks"
+};
+/* UX_DESIGN_SYSTEM names five kinds — custodian records, your CRM, your calendar, your notes,
+   market data — and the contract has a fourth value, `platform`, for something the platform
+   worked out itself. "From the platform" reads as circular, so it is named for what it is.
+   Worth confirming with design; notes and market data have no contract value yet. */
+const unnamedSources = new Set();
+export const sourceKind = (s) => {
+  const k = SOURCE_KIND[s];
+  if (k) return k;
+  if (s && !unnamedSources.has(s)) { unnamedSources.add(s); console.warn('No advisor-facing name for source:', s); }
+  return 'another connected system';
+};
+
+/* "From custodian records, your CRM and your calendar \u00b7 updated 2 hrs ago".
+   Takes one source or a list; the age is optional, because not every source carries one. */
+export function sourceLine(sources, at) {
+  const kinds = [...new Set([].concat(sources ?? []).filter(Boolean).map(sourceKind))];
+  if (!kinds.length) return '';
+  const named = kinds.length === 1 ? kinds[0]
+    : kinds.slice(0, -1).join(', ') + ' and ' + kinds[kinds.length - 1];
+  return 'From ' + named + (at ? ' \u00b7 updated ' + ageBrief(at) : '');
+}
+
+/* Whole days between then and now. daysAgo() is for showing; this is for deciding. */
+export const daysBetween = (iso, to = Date.now()) => Math.floor((to - new Date(iso)) / 864e5);
+
 export function dueLabel(dateStr) {
   if (!dateStr) return { text: 'No due date', hot: false };
   const t = localDate(new Date()), tm = new Date(); tm.setDate(tm.getDate() + 1);

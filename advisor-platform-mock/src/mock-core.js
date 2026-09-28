@@ -98,7 +98,11 @@ function createMock() {
     ['m14', 'adv1', 'h10', -5, '14:30', 'Portfolio check-in', 'ready', 30, 'Completed.']
   ].map(([id, advisorId, householdId, off, hm, type, prepStatus, durationMinutes, brief]) => {
     const [h, m] = hm.split(':').map(Number);
-    return { id, advisorId, householdId, startsAt: dayISO(off, h, m), type, prepStatus, durationMinutes, brief };
+    /* A prepared brief knows when it was prepared: the morning of the meeting, an hour before
+       the working day for a meeting still ahead. Nothing is prepared for a meeting that needs
+       prep, which is what needs_prep means. */
+    return { id, advisorId, householdId, startsAt: dayISO(off, h, m), type, prepStatus, durationMinutes, brief,
+      preparedAt: prepStatus === 'ready' ? dayISO(off, 7, 40) : null };
   });
   const hhName = (id) => (id ? hhById(id).name : null);
 
@@ -129,7 +133,7 @@ function createMock() {
     ['a8', 'adv3', 'medium', 'No contact in 61 days', 'h22', ['draft_email', 'Draft email'], 'crm', 40],
     ['a9', 'adv4', 'low', 'Onboarding form incomplete', 'h28', ['send_reminder', 'Send reminder'], 'crm', 24]
   ].map(([id, advisorId, severity, title, householdId, [type, label], source, age]) => ({
-    id, advisorId, severity, title, householdId, source, status: 'open',
+    id, advisorId, severity, title, householdId, source, status: 'open', snoozedUntil: null,
     action: { type, label, targetId: householdId }, createdAt: new Date(Date.now() - age * 36e5).toISOString() }));
 
   // advisor, kind, household, value (dollars, or percent, or points)
@@ -212,17 +216,20 @@ function createMock() {
   const PROSPECT_STAGES = ['lead', 'contacted', 'meeting_scheduled', 'proposal', 'onboarding', 'converted'];
   // id, advisor, name, stage, estimated assets, source, days old, notes
   const PROSPECTS = [
-    ['p1', 'adv1', 'Marcus DeLuca', 'meeting_scheduled', 2400000, 'referral', 12,
+    // ... days since the record was made, days in the current stage, days since contact (null = none)
+    ['p1', 'adv1', 'Marcus DeLuca', 'meeting_scheduled', 2400000, 'referral', 12, 4, 2,
       'Referred by the Lindqvists. Sold his engineering business in March; proceeds sitting in cash. Wants to understand the tax consequences before committing.'],
-    ['p2', 'adv1', 'Yusuf Rahman', 'lead', 1100000, 'website', 4, 'Enquiry through the site. No call yet.'],
-    ['p3', 'adv1', 'The Ashworth Family', 'contacted', 3600000, 'referral', 21, 'Introductory call done. Comparing us with two other firms.'],
-    ['p4', 'adv1', 'Nadia Constantin', 'proposal', 5200000, 'event', 34, 'Proposal sent after the estate planning seminar. Waiting on her accountant.'],
-    ['p5', 'adv1', 'Beatriz Okonjo', 'onboarding', 1800000, 'referral', 47, 'Agreement signed. Account opening under way.'],
-    ['p6', 'adv2', 'Halloran Trust', 'proposal', 4400000, 'referral', 26, 'Trustees reviewing the proposal at their next quarterly meeting.'],
-    ['p7', 'adv2', 'Devon Pryce', 'lead', 900000, 'website', 6, 'Downloaded the retirement guide.']
-  ].map(([id, advisorId, name, stage, estimatedAssets, source, days, intakeNotes]) => ({
+    ['p2', 'adv1', 'Yusuf Rahman', 'lead', 1100000, 'website', 4, 4, null, 'Enquiry through the site. No call yet.'],
+    ['p3', 'adv1', 'The Ashworth Family', 'contacted', 3600000, 'referral', 21, 14, 14, 'Introductory call done. Comparing us with two other firms.'],
+    ['p4', 'adv1', 'Nadia Constantin', 'proposal', 5200000, 'event', 34, 14, 14, 'Proposal sent after the estate planning seminar. Waiting on her accountant.'],
+    ['p5', 'adv1', 'Beatriz Okonjo', 'onboarding', 1800000, 'referral', 47, 9, 3, 'Agreement signed. Account opening under way.'],
+    ['p6', 'adv2', 'Halloran Trust', 'proposal', 4400000, 'referral', 26, 26, 26, 'Trustees reviewing the proposal at their next quarterly meeting.'],
+    ['p7', 'adv2', 'Devon Pryce', 'lead', 900000, 'website', 6, 6, null, 'Downloaded the retirement guide.']
+  ].map(([id, advisorId, name, stage, estimatedAssets, source, days, stageDays, contactDays, intakeNotes]) => ({
     id, advisorId, name, stage, estimatedAssets, source, intakeNotes,
-    createdAt: dayISO(-days, 9), updatedAt: dayISO(-Math.floor(days / 3), 9), meetingId: id === 'p1' ? 'm12' : null
+    createdAt: dayISO(-days, 9), updatedAt: dayISO(-Math.floor(days / 3), 9),
+    stageChangedAt: dayISO(-stageDays, 9), lastContactAt: contactDays === null ? null : dayISO(-contactDays, 9),
+    meetingId: id === 'p1' ? 'm12' : null
   }));
   const prospectName = (meetingId) => PROSPECTS.find(p => p.meetingId === meetingId)?.name ?? null;
 
@@ -557,7 +564,7 @@ function createMock() {
     });
 
     for (const a of ALERTS.filter(x => advisorIds.includes(x.advisorId) && x.status === 'open' && x.severity === 'high')) {
-      push('high', 'alert', a.title, 'Flagged as high severity ' + daysSince(a.createdAt) + ' days ago.', a.householdId,
+      push('high', 'alert', a.title, 'Flagged as high severity ' + sinceWords(a.createdAt) + '.', a.householdId,
         [{ source: a.source, id: a.id, label: a.title, dataAsOf: NOW() }], 1);
     }
     for (const h of HH.filter(x => advisorIds.includes(x.advisorId) && x.lastContactAt && (Date.now() - new Date(x.lastContactAt)) / 864e5 > 45)) {
@@ -567,7 +574,7 @@ function createMock() {
     }
     for (const c of COMMS.filter(x => advisorIds.includes(x.advisorId) && x.status === 'draft' && x.complianceReview)) {
       push('medium', 'approval', 'Review the draft to ' + (hhName(c.householdId) || 'the practice'),
-        'Waiting for compliance review since ' + daysSince(c.createdAt) + ' days ago.', c.householdId,
+        'Flagged for compliance review ' + sinceWords(c.createdAt) + '.', c.householdId,
         [{ source: 'platform', id: c.id, label: c.subject, dataAsOf: NOW() }], 1);
     }
     for (const r of SIGNAL_ROWS.filter(x => advisorIds.includes(x.advisorId) && x.kind === 'tax_loss_harvesting' && x.value >= 10000)) {
@@ -578,7 +585,7 @@ function createMock() {
     for (const m of MEETINGS.filter(x => advisorIds.includes(x.advisorId) && x.prepStatus === 'needs_prep'
         && new Date(x.startsAt) >= new Date(dayISO(0)))) {
       push('medium', 'prep', 'Prepare for ' + (hhName(m.householdId) || prospectName(m.id) || m.type),
-        m.type + ' on ' + m.startsAt.slice(0, 10) + ' has no prep.', m.householdId,
+        m.type + ' on ' + dayWords(m.startsAt) + ' has no prep.', m.householdId,
         [{ source: 'calendar', id: m.id, label: m.type, dataAsOf: NOW() }], 1);
     }
     for (const o of ONBOARDING.filter(x => advisorIds.includes(x.advisorId) && !x.convertedAt)) {
@@ -591,10 +598,48 @@ function createMock() {
     return out.sort((a, b) => order[a.priority] - order[b.priority]);
   }
   const daysSince = (iso) => Math.floor((Date.now() - new Date(iso)) / 864e5);
+  /* Reasons are read by an advisor, not by a developer, so "0 days ago" is never a thing to
+     say (UX_REQUESTS UX-004). */
+  const sinceWords = (iso) => { const d = daysSince(iso); return d <= 0 ? 'today' : d === 1 ? 'yesterday' : d + ' days ago'; };
+  const dayWords = (iso) => new Date(iso).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
 
   /* ---- helpers ---- */
   /* The CRM is the system of record; this platform is a working surface (docs/system-of-record.md).
      No CRM is connected, so every syncable record says so rather than implying it reached one. */
+  /* What the platform is connected to (X-08). Firm-level, not per advisor. CRM stays
+     disconnected so the sync states elsewhere in this mock stay true. */
+  const SYSTEMS = [
+    ['sy_custodian', 'Green Meadows', 'custodian', 'connected', -0.08, 'Dana Whitfield', -18, null],
+    ['sy_calendar', 'Calendar', 'calendar', 'connected', -0.5, 'Dana Whitfield', -18, null],
+    ['sy_crm', 'CRM', 'crm', 'not_connected', null, null, null, 'Contact history and notes are not visible, and nothing written here reaches a CRM.'],
+    ['sy_email', 'Email', 'email', 'not_connected', null, null, null, 'Client replies are not visible, so a message that has been answered may still look unanswered.'],
+    ['sy_documents', 'Documents', 'documents', 'not_connected', null, null, null, 'Statements, agreements and returns cannot be read.']
+  ].map(([id, name, kind, status, syncDays, connectedBy, connectedDays, cannotSee]) => ({
+    id, name, kind, status,
+    lastSyncAt: syncDays === null ? null : new Date(Date.now() + syncDays * 864e5).toISOString(),
+    connectedBy, connectedAt: connectedDays === null ? null : dayISO(connectedDays, 10), cannotSee
+  }));
+
+  /* The activity log (X-05). One record of what the platform did and what the advisor did,
+     newest first. Seeded with this morning so the log is never empty on a first look. */
+  const ACTIVITY = [];
+  const logActivity = (advisorId, e) => {
+    ACTIVITY.unshift({ id: 'ac' + (++seq), at: NOW(), advisorId, actorName: e.actor === 'advisor' ? user().name : null,
+      detail: null, subjectType: null, subjectId: null, undoable: false, undoWith: null, ...e });
+  };
+  const seedActivity = (advisorId, minsAgo, e) => ACTIVITY.push({
+    id: 'ac_seed' + ACTIVITY.length, at: new Date(Date.now() - minsAgo * 6e4).toISOString(), advisorId,
+    actorName: null, detail: null, subjectType: null, subjectId: null, undoable: false, undoWith: null, ...e });
+
+  /* This morning's work, before the advisor arrived. Everything here is the platform's own
+     doing: preparing, ranking, flagging. Nothing left the firm. */
+  for (const advisorId of ['adv1', 'adv2', 'adv3', 'adv4']) {
+    seedActivity(advisorId, 18, { actor: 'platform', summary: 'Ranked today by role', detail: 'Clients first today: the day has two reviews and a market move.' });
+    seedActivity(advisorId, 74, { actor: 'platform', summary: 'Prepared the briefs for today\u2019s meetings', detail: 'From custodian records, your CRM and your calendar.', subjectType: 'meeting' });
+    seedActivity(advisorId, 96, { actor: 'platform', summary: 'Checked every household against its policy limits', detail: 'One breach found and flagged.', subjectType: 'household' });
+    seedActivity(advisorId, 132, { actor: 'platform', summary: 'Read overnight custodian records', detail: 'Balances, positions and open tax lots are current as of 6:10am.' });
+  }
+
   const CRM = { connected: false, system: null };
   const syncState = (externalId = null) => CRM.connected
     ? { status: externalId ? 'synced' : 'pending', system: CRM.system, externalId, lastSyncedAt: externalId ? NOW() : null, error: null }
@@ -707,6 +752,9 @@ function createMock() {
       if (!b || !b.type || !b.sourceId || !b.title) return fail(400, 'bad_request', 'Type, sourceId and title are required.');
       const s = { id: 'sh' + (++seq), householdId: h.id, type: b.type, title: b.title, message: b.message || null, sharedAt: NOW(), sharedBy: user().name, contentUrl: null };
       SHARED.unshift(s);
+      logActivity(user().advisorId, { actor: 'advisor', subjectType: 'household', subjectId: h.id,
+        summary: 'Shared "' + s.title + '" with ' + h.name,
+        detail: 'The client can see this. Sharing cannot be taken back from here.', undoable: false });
       const { householdId, ...out } = s; return created(out);
     }],
 
@@ -737,16 +785,61 @@ function createMock() {
       if (!isRole('advisor')) return forbid();
       if (!b || !b.title) return fail(400, 'bad_request', 'Title is required.');
       const t = { id: 't' + (++seq), advisorId: user().advisorId, title: b.title, householdId: b.householdId || null, dueDate: b.dueDate || null, origin: b.origin || 'manual', originMeetingId: b.originMeetingId || null, status: 'open', createdAt: NOW() };
-      TASKS.push(t); return created(publicTask(t));
+      TASKS.push(t);
+      logActivity(user().advisorId, { actor: 'advisor', subjectType: 'task', subjectId: t.id,
+        summary: 'Added to your follow-ups: ' + t.title,
+        detail: b.origin === 'meeting' ? 'From a meeting the platform drafted next steps for.' : null });
+      return created(publicTask(t));
     }],
     ['PATCH', /^\/tasks\/([^/]+)$/, (m, q, b) => {
       if (!isRole('advisor')) return forbid();
       const t = TASKS.find(x => x.id === m[1] && x.advisorId === user().advisorId); if (!t) return notFound('Task');
+      const wasStatus = t.status;
       Object.assign(t, ['title', 'dueDate', 'status'].reduce((o, k) => (b && k in b ? { ...o, [k]: b[k] } : o), {}));
+      if (b && b.status && b.status !== wasStatus) logActivity(user().advisorId, { actor: 'advisor', subjectType: 'task', subjectId: t.id,
+        summary: (b.status === 'done' ? 'Completed: ' : 'Reopened: ') + t.title,
+        undoable: true, undoWith: { method: 'PATCH', path: '/tasks/' + t.id, body: { status: wasStatus } } });
       return ok(publicTask(t));
     }],
 
+    ['GET', /^\/activity$/, (m, q) => {
+      if (!isRole('advisor')) return forbid();
+      const mine = ACTIVITY.filter(a => a.advisorId === user().advisorId);
+      const since = q.since ? String(q.since) : null;
+      const list = (since ? mine.filter(a => a.at > since) : mine)
+        .slice()
+        .sort((a, b) => b.at.localeCompare(a.at));
+      const size = +q.size || 25;
+      return ok({ items: list.slice(0, size).map(({ advisorId, ...a }) => a), totalItems: list.length });
+    }],
+
+    ['GET', /^\/systems$/, () => {
+      if (!isRole('advisor') && !isRole('principal')) return forbid();
+      const off = SYSTEMS.filter(x => x.status !== 'connected');
+      return ok({
+        items: SYSTEMS.map(x => ({ ...x })),
+        canEdit: isRole('principal'),
+        note: off.length ? 'Not connected: ' + off.map(x => x.name).join(', ') + '. Anything those systems hold is outside what the platform can see.' : null
+      });
+    }],
+    ['PATCH', /^\/systems\/([^/]+)$/, (m, q, b) => {
+      if (!isRole('principal')) return forbid();
+      const sysm = SYSTEMS.find(x => x.id === m[1]); if (!sysm) return notFound('System');
+      if (!b || !['connected', 'not_connected'].includes(b.status)) return fail(400, 'bad_request', 'Status must be connected or not_connected.');
+      const was = sysm.status;
+      sysm.status = b.status;
+      if (b.status === 'connected') { sysm.connectedBy = user().name; sysm.connectedAt = NOW(); sysm.lastSyncAt = NOW(); sysm.cannotSee = null; }
+      else { sysm.lastSyncAt = null; sysm.cannotSee = sysm.name + ' is not connected, so what it holds is outside what the platform can see.'; }
+      if (was !== b.status) logActivity(user().advisorId, { actor: 'advisor', subjectType: 'system', subjectId: sysm.id,
+        summary: (b.status === 'connected' ? 'Connected ' : 'Disconnected ') + sysm.name,
+        undoable: true, undoWith: { method: 'PATCH', path: '/systems/' + sysm.id, body: { status: was } } });
+      return ok({ ...sysm });
+    }],
+
     ['GET', /^\/alerts$/, (m, q) => {
+      /* A snooze that has run out is simply open again. Doing it on read keeps the mock free of
+         timers and matches what a backend would do on the way out. */
+      for (const a of ALERTS) if (a.status === 'snoozed' && a.snoozedUntil && a.snoozedUntil <= NOW()) { a.status = 'open'; a.snoozedUntil = null; }
       let list;
       if (q.scope === 'firm') { if (!isRole('principal')) return forbid(); list = ALERTS; }
       else { if (!isRole('advisor')) return forbid(); list = ALERTS.filter(a => a.advisorId === user().advisorId); }
@@ -759,8 +852,17 @@ function createMock() {
     ['PATCH', /^\/alerts\/([^/]+)$/, (m, q, b) => {
       if (!isRole('advisor')) return forbid();
       const a = ALERTS.find(x => x.id === m[1] && x.advisorId === user().advisorId); if (!a) return notFound('Alert');
-      if (!b || !['open', 'dismissed', 'resolved'].includes(b.status)) return fail(400, 'bad_request', 'Status must be open, dismissed or resolved.');
-      a.status = b.status; return ok(alertOut(a));
+      if (!b || !['open', 'dismissed', 'resolved', 'snoozed'].includes(b.status)) return fail(400, 'bad_request', 'Status must be open, dismissed, resolved or snoozed.');
+      if (b.status === 'snoozed' && !b.snoozedUntil) return fail(400, 'bad_request', 'A snoozed alert needs snoozedUntil: the advisor chooses when it comes back.');
+      const was = a.status;
+      a.status = b.status;
+      a.snoozedUntil = b.status === 'snoozed' ? new Date(b.snoozedUntil).toISOString() : null;
+      const said = { dismissed: 'Dismissed', resolved: 'Resolved', snoozed: 'Set aside', open: 'Brought back' }[b.status];
+      logActivity(user().advisorId, { actor: 'advisor', subjectType: 'alert', subjectId: a.id,
+        summary: said + ' the alert: ' + a.title,
+        detail: b.status === 'snoozed' ? 'Comes back ' + new Date(a.snoozedUntil).toLocaleString('en-US', { weekday: 'long', hour: 'numeric', minute: '2-digit' }) : null,
+        undoable: true, undoWith: { method: 'PATCH', path: '/alerts/' + a.id, body: { status: was } } });
+      return ok(alertOut(a));
     }],
 
     ['GET', /^\/portfolio-signals$/, () => {
@@ -768,7 +870,8 @@ function createMock() {
       const mine = SIGNAL_ROWS.filter(s => s.advisorId === user().advisorId);
       const items = Object.keys(SIGNAL_META).map(kind => {
         const rows = mine.filter(s => s.kind === kind); if (!rows.length) return null;
-        return { id: 'sig_' + kind, kind, count: rows.length, label: SIGNAL_META[kind].label, detail: SIGNAL_META[kind].detail(rows.map(r => r.value)), dataAsOf: NOW() };
+        return { id: 'sig_' + kind, kind, count: rows.length, label: SIGNAL_META[kind].label,
+          detail: SIGNAL_META[kind].detail(rows.map(r => r.value)), source: 'greenmeadows', dataAsOf: NOW() };
       }).filter(Boolean);
       return ok({ items });
     }],
@@ -807,6 +910,15 @@ function createMock() {
       c.status = b.status;
       if (b.status === 'draft') { c.approvedBy = null; c.approvedAt = null; c.sentAt = null; }
       else { c.approvedBy = user().name; c.approvedAt = c.approvedAt || NOW(); if (b.status === 'sent') c.sentAt = NOW(); }
+      const to = hhName(c.householdId) || 'the practice';
+      logActivity(user().advisorId, { actor: 'advisor', subjectType: 'communication', subjectId: c.id,
+        summary: b.status === 'sent' ? 'Sent the message to ' + to
+          : b.status === 'approved' ? 'Approved the message to ' + to + ', ready to send'
+          : 'Returned the message to ' + to + ' to draft',
+        detail: b.status === 'sent' ? 'This left the firm and cannot be taken back.' : null,
+        /* Anything that has left the firm is recorded and is not undoable (TR-03). */
+        undoable: b.status !== 'sent',
+        undoWith: b.status === 'sent' ? null : { method: 'PATCH', path: '/communications/' + c.id, body: { status: b.status === 'approved' ? 'draft' : 'approved' } } });
       return ok({ ...commRow(c), body: c.body });
     }],
 
@@ -1021,7 +1133,7 @@ function createMock() {
       const items = nextActions(ids);
       const size = +q.size || 20;
       return ok({ items: items.slice(0, size), totalItems: items.length, dataAsOf: NOW(),
-        note: 'Drafts. Nothing here has been created; post a suggestedTask to /tasks to accept one.' });
+        note: 'These are drafts. Nothing has been created, and nothing will be until you add one to your follow-ups.' });
     }],
 
     /* ---- firm ownership (PO-12) ---- */

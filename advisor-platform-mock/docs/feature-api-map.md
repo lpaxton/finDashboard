@@ -17,7 +17,7 @@ Shareable version: https://claude.ai/code/artifact/d179b0d4-48da-44e7-bc51-58805
 | --- | --- |
 | Features with at least one API operation | **44** of 75 |
 | Features with no operation yet | **31** |
-| Operations carrying a requirement ID | **51** of 72 |
+| Operations carrying a requirement ID | **51** of 75 |
 
 ### Intelligence Platform
 

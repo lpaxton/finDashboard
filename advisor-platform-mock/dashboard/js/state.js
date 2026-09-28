@@ -4,7 +4,13 @@ import { $ } from './format.js';
 
 export const state = { session: null, view: null };
 
-/* The stored accent is a light-mode colour. Used as-is in dark mode it fails contrast
+/* The firm's accent paints the firm's mark, not the interface. The interactive colour
+   (--brand) is fixed by the design system, because a colour has to mean one thing everywhere
+   (UX_RULES ST-04): a red or orange firm accent driving --brand would collide with the
+   Prospecting role, with --crit, and with the coral focus ring. Leila's leaning, recorded in
+   ux/UX_DESIGN_SYSTEM.md §6, adopted here; reverse it by setting --brand below instead.
+
+   The stored accent is a light-mode colour. Used as-is in dark mode it fails contrast
    against the dark ground, so it is lifted toward the page ink first. A firm that needs
    exact brand reproduction in both themes needs two stored colours: a contract change. */
 export const isDark = () => document.documentElement.dataset.theme === 'dark'
@@ -20,7 +26,7 @@ export function forTheme(hex) {
 /* Branding is the one thing every role reads, so it is applied in the shell, not per view. */
 export function applyBranding(b) {
   if (!b) return;
-  if (b.accentColor) document.documentElement.style.setProperty('--brand', forTheme(b.accentColor));
+  if (b.accentColor) document.documentElement.style.setProperty('--firm-mark', forTheme(b.accentColor));
   if (b.firmName && state.session) {
     state.session.firm.name = b.firmName;
     $('subhead').textContent = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' }) + ' • ' + b.firmName;

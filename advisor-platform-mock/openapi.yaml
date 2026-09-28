@@ -819,6 +819,59 @@ paths:
         '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/NextActionList' } } } }
         '403': { $ref: '#/components/responses/Error' }
 
+  /activity:
+    get:
+      tags: [Reporting]
+      operationId: listActivity
+      summary: What the platform did, and what the advisor did
+      description: >
+        One record of everything that happened on the advisor's behalf — drafted, ranked,
+        flagged, reordered, dismissed, set aside, approved, sent on the advisor's yes — newest
+        first. It is the advisor's own history as well as the platform's: `undoable` marks the
+        entries that can still be stepped back, and `undoWith` names the operation that does it.
+        Nothing here creates anything. Requirement: X-05, X-04.
+      parameters:
+        - { $ref: '#/components/parameters/size' }
+        - name: since
+          in: query
+          schema: { type: string, format: date-time }
+          description: Only entries after this time.
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/ActivityList' } } } }
+        '403': { $ref: '#/components/responses/Error' }
+
+  /systems:
+    get:
+      tags: [Firm]
+      operationId: listSystems
+      summary: What the platform is connected to
+      description: >
+        Every system the platform reads from or writes to, who set each one up and when it last
+        synced, plus a plain statement of what the platform cannot see right now. An advisor who
+        does not own the firm sees this read-only. Requirement: X-08, X-04.
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/SystemList' } } } }
+        '403': { $ref: '#/components/responses/Error' }
+
+  /systems/{systemId}:
+    patch:
+      tags: [Firm]
+      operationId: updateSystem
+      summary: Connect or disconnect a system
+      description: >
+        Principal only, or an advisor who owns the firm alone. Connecting is recorded in the
+        activity log with who did it. No credential passes through this operation: the mock
+        stands in for a managed connection flow. Requirement: X-08, X-05.
+      parameters:
+        - { name: systemId, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/SystemUpdate' } } }
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/System' } } } }
+        '403': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+
   /firm/cap-table:
     get:
       tags: [Firm]
@@ -1203,6 +1256,14 @@ components:
         type: { type: string, example: Annual review }
         prepStatus: { $ref: '#/components/schemas/PrepStatus' }
         brief: { type: string, nullable: true, description: AI-drafted prep brief. Draft until the advisor accepts it. }
+        preparedAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: >
+            When the platform prepared the brief. Null when nothing has been prepared. A
+            prepared item has to be able to say what was done and when (X-04), and the meeting's
+            own start time is not that.
         briefSources:
           type: array
           description: Systems the brief drew from, for citation.
@@ -1267,7 +1328,10 @@ components:
 
     AlertStatus:
       type: string
-      enum: [open, dismissed, resolved]
+      description: >
+        snoozed is an alert the advisor has set aside until a time they chose. It is not
+        dismissed: it returns on its own, and until it does it is not on the screen.
+      enum: [open, dismissed, resolved, snoozed]
 
     AlertAction:
       type: object
@@ -1288,6 +1352,7 @@ components:
         householdName: { type: string, nullable: true, description: Null for practice-level alerts. }
         source: { $ref: '#/components/schemas/Source' }
         status: { $ref: '#/components/schemas/AlertStatus' }
+        snoozedUntil: { type: string, format: date-time, nullable: true, description: 'Set when status is snoozed. The alert returns to open at this time.' }
         action: { $ref: '#/components/schemas/AlertAction' }
         createdAt: { type: string, format: date-time }
 
@@ -1296,6 +1361,7 @@ components:
       required: [status]
       properties:
         status: { $ref: '#/components/schemas/AlertStatus' }
+        snoozedUntil: { type: string, format: date-time, description: 'Required when status is snoozed.' }
 
     AlertList:
       type: object
@@ -1316,6 +1382,7 @@ components:
         count: { type: integer }
         label: { type: string }
         detail: { type: string, example: 'About $61,200 in unrealized losses' }
+        source: { $ref: '#/components/schemas/Source' }
         dataAsOf: { type: string, format: date-time }
 
     SignalList:
@@ -1595,6 +1662,17 @@ components:
         meetingId: { type: string, nullable: true, description: 'The meeting this prospect is booked into, if any.' }
         createdAt: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time }
+        stageChangedAt:
+          type: string
+          format: date-time
+          description: >
+            When this prospect entered its current stage. How long something has been waiting is
+            not the same as how old it is, and it is the waiting that matters.
+        lastContactAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: 'Last contact either way. Null when there has been none since the record was made.'
         sync: { $ref: '#/components/schemas/SyncState' }
 
     Prospect:
@@ -2338,6 +2416,71 @@ components:
         refused: { type: boolean, description: 'True when the model declined the request.' }
         refusalCategory: { type: string, nullable: true }
         provenance: { $ref: '#/components/schemas/DraftProvenance' }
+
+    Activity:
+      type: object
+      required: [id, at, actor, summary]
+      properties:
+        id: { type: string }
+        at: { type: string, format: date-time }
+        actor: { type: string, enum: [platform, advisor], description: 'Who did it. The platform prepares; the advisor decides.' }
+        actorName: { type: string, nullable: true }
+        summary: { type: string, description: 'What happened, in the advisor''s words.' }
+        detail: { type: string, nullable: true }
+        subjectType: { type: string, nullable: true, enum: [alert, communication, task, meeting, household, prospect, system, onboarding] }
+        subjectId: { type: string, nullable: true }
+        undoable: { type: boolean, description: 'False once the thing cannot be taken back — anything that left the firm.' }
+        undoWith:
+          type: object
+          nullable: true
+          description: 'The operation that reverses this entry. Absent when undoable is false.'
+          properties:
+            method: { type: string, enum: [POST, PATCH, DELETE] }
+            path: { type: string, example: /alerts/a6 }
+            body: { type: object, additionalProperties: true }
+
+    ActivityList:
+      type: object
+      required: [items, totalItems]
+      properties:
+        items: { type: array, items: { $ref: '#/components/schemas/Activity' } }
+        totalItems: { type: integer }
+
+    SystemStatus:
+      type: string
+      enum: [connected, not_connected, error]
+
+    System:
+      type: object
+      required: [id, name, kind, status]
+      properties:
+        id: { type: string }
+        name: { type: string, example: Green Meadows }
+        kind: { type: string, enum: [custodian, crm, email, calendar, documents] }
+        status: { $ref: '#/components/schemas/SystemStatus' }
+        lastSyncAt: { type: string, format: date-time, nullable: true }
+        connectedBy: { type: string, nullable: true }
+        connectedAt: { type: string, format: date-time, nullable: true }
+        cannotSee:
+          type: string
+          nullable: true
+          description: >
+            What the platform cannot see because of this system's state, in one sentence. Null
+            when the system is connected and there is nothing to say.
+
+    SystemList:
+      type: object
+      required: [items, canEdit]
+      properties:
+        items: { type: array, items: { $ref: '#/components/schemas/System' } }
+        canEdit: { type: boolean, description: 'False for an advisor who does not administer the firm. The list is still shown.' }
+        note: { type: string, nullable: true, description: 'One sentence covering everything the platform cannot see right now.' }
+
+    SystemUpdate:
+      type: object
+      required: [status]
+      properties:
+        status: { type: string, enum: [connected, not_connected] }
 
     RedraftRequest:
       type: object

@@ -1,98 +1,310 @@
 /* The advisor's own sections. Everything here is internal: none of it may reach a client. */
 import { api } from './api.js';
-import { $, esc, money, moneyFull, pct, pctClass, fmtTime, fmtDate, localDate, daysAgo, dueLabel, syncBadge, syncNotice } from './format.js';
-import { toast, spark, head, panel, load, alertsList, openHousehold, bookPanel, subnav } from './ui.js';
+import { $, esc, money, moneyFull, pct, pctClass, fmtTime, fmtDate, localDate, daysAgo, daysBetween, dueLabel, syncBadge, syncNotice, sourceLine, CATEGORY } from './format.js';
+import { toast, spark, head, panel, load, alertsList, openHousehold, bookPanel, spine, roleMark, roleTabs, disclosure, wireDisclosures, snoozeChoices, SNOOZE_CHOICES, loadActivity, onUndo } from './ui.js';
+import { snooze, unsnooze, unsnoozeAll, dropExpiredSnoozes, get as vsGet, set as vsSet, isSnoozed } from './viewstate.js';
+import { ROLES, ROLE, collectRoleWork, rankRoles } from './roles.js';
 import { state } from './state.js';
 
-/* The role switcher stays the top level (X-15). These are sections inside the advisor view,
-   so the client-safe boundary is never one click away from an advisor's own sections. */
-export const ADV_SECTIONS = [['today', 'Today'], ['next', 'Next best action'], ['clients', 'Clients'],
-  ['communications', 'Communications'], ['prospects', 'Prospects'], ['onboarding', 'Onboarding'],
-  ['calendar', 'Calendar'], ['followups', 'Follow-ups'], ['playbooks', 'Playbooks'], ['reports', 'Reports']];
+/* The spine (UX_IA §2). Today, Inbox and Calendar are used every day by every role, so they sit
+   at the top. The four roles are part of the frame, in a fixed order that never changes
+   whatever Today does. Systems sits at the bottom. */
+export const ADV_SECTIONS = [['today', 'Today'], ['inbox', 'Inbox'], ['calendar', 'Calendar'],
+  ['role:bd', 'Prospecting'], ['role:ca', 'Clients'], ['role:op', 'Operations'], ['role:pd', 'Development'],
+  ['glance', 'Book at a glance'], ['systems', 'Systems']];
 export let advSection = 'today';
 
-export function advLoadStrip() {
+/* Tabs inside each role home (UX_IA §3). One level below the spine and no deeper (FO-07).
+   Compliance is principal-only in the contract, so it appears only for someone who can read it. */
+export const ROLE_TABS = {
+  bd: () => [['overview', 'Overview'], ['pipeline', 'Pipeline'], ['referrals', 'Referrals']],
+  ca: () => [['overview', 'Overview'], ['households', 'Households'], ['meetings', 'Meetings'], ['onboarding', 'Onboarding']],
+  op: () => [['overview', 'Overview'], ['reports', 'Reports'], ['billing', 'Billing & fees'],
+    ...(state.session && state.session.roles.includes('principal') ? [['compliance', 'Compliance']] : [])],
+  pd: () => [['playbooks', 'Playbooks'], ['scorecard', 'Scorecard']]
+};
+
+export function advLoadStrip(el) {
+  const target = el || $('strip');
+  if (!target) return Promise.resolve();
   return api('GET', '/summary').then(s => {
-    $('strip').innerHTML = `
+    target.innerHTML = `
       <div class="stat"><dt>Assets under management</dt><dd><div class="figure">${money(s.aum.value)}</div><div class="sub"><span class="${pctClass(s.aum.changeMtd)}">${pct(s.aum.changeMtd)}</span> this month</div>${spark(s.aum.trend, 'Assets under management, last 12 months')}</dd></div>
       <div class="stat"><dt>Households</dt><dd><div class="figure">${s.households}</div></dd></div>
       <div class="stat"><dt>Meetings this week</dt><dd><div class="figure">${s.meetingsThisWeek}</div></dd></div>
       <div class="stat"><dt>Open tasks</dt><dd><div class="figure">${s.tasksOpen}</div><div class="sub">${s.tasksDueToday} due today</div></dd></div>`;
-  }).catch(e => { $('strip').innerHTML = `<div class="err" style="padding:16px 0">${esc(e.message)}</div>`; });
+  }).catch(e => { target.innerHTML = `<div class="err" style="padding:16px 0">${esc(e.message)}</div>`; });
+}
+
+/* What the advisor pinned. The platform may suggest a pin but never adds one itself
+   (UX_IA §6.1, ST-07, TM-03). */
+const pins = () => vsGet('pins', []) || [];
+export const isPinned = (key) => pins().some(p => p.key === key);
+export function togglePin(key, label) {
+  const now = pins().filter(p => p.key !== key);
+  vsSet('pins', isPinned(key) ? now : [...now, { key, label }]);
 }
 
 export function advisorView() {
-  $('view').innerHTML = `<dl class="strip" id="strip"></dl>
-    <div class="viewbody">
-      <div id="navrail"><nav class="subnav" id="advnav" aria-label="Advisor sections"></nav></div>
+  $('view').innerHTML = `<div class="viewbody">
+      <div id="navrail"><nav class="subnav" id="advnav" aria-label="Advisor navigation"></nav></div>
       <div id="section"></div>
     </div>`;
-  advLoadStrip();
-  const go = (k) => { advSection = k; subnav($('advnav'), ADV_SECTIONS, k, go); ADV_RENDER[k](); };
+  const go = (k) => {
+    advSection = k;
+    drawSpine(go);
+    (ADV_RENDER[k] || ADV_RENDER.today)();
+  };
   go(advSection);
 }
 
-/* ---- Today ---- */
-export function advToday() {
-  $('section').innerHTML = `<div class="grid">
-    <div class="col">${panel('w-meetings')}</div>
-    <div class="col">${panel('w-alerts')}${panel('w-signals')}</div>
-  </div>`;
+function drawSpine(go) {
+  const p = pins();
+  spine($('advnav'), [
+    { items: [['today', 'Today'], ['inbox', 'Inbox'], ['calendar', 'Calendar']] },
+    { label: 'Your roles', items: ROLES.map(r => ['role:' + r.key, r.name, r.mark]) },
+    ...(p.length ? [{ label: 'Pinned', items: p.map(x => [x.key, x.label]) }] : []),
+    { items: [['glance', 'Book at a glance'], ['systems', 'Systems']] }
+  ], advSection, go);
+}
 
+export const goSection = (k) => { advSection = k; advisorView(); };
+
+/* A portfolio signal is computed from holdings, and now says so: Signal.source arrived with the
+   contract run. */
+
+/* ---- Today ---------------------------------------------------------------------------------
+ * Four role cards, one action each, one card leading (FO-01 to FO-04, FO-11). The number strip
+ * has moved to Book at a glance (UX_IA §4) and Next best action has folded into the cards, so
+ * nothing else competes for attention here (FO-03).
+ */
+export function advToday() {
+  $('section').innerHTML = `<div id="todayHead"></div><div class="rolecards" id="roleCards">
+    ${ROLES.map(() => '<div class="skel m" style="height:150px"></div>').join('')}</div>
+    <div class="grid" style="margin-top:20px"><div class="col">${panel('w-meetings')}</div><div class="col">${panel('w-signals')}</div></div>`;
+  drawRoleCards();
+  drawMeetings();
+  drawSignals();
+  onUndo(() => { drawRoleCards(); });
+}
+
+/* An item the advisor answered "not this" to is gone until something changes (CS-04, CS-05).
+   It lives in view state because there is nowhere in the contract to put a preference about a
+   suggestion; the reason teaches nothing yet, which is honest and is logged. */
+const itemKey = (w) => w.role + ':' + (w.action.id || w.meaning.slice(0, 40));
+const notThis = () => vsGet('notThis', []) || [];
+
+async function drawRoleCards() {
+  const host = $('roleCards');
+  if (!host) return;
+  dropExpiredSnoozes();
+  let work = [];
+  try { work = await collectRoleWork(state.session && state.session.advisorId); }
+  catch (e) { host.innerHTML = `<div class="err">${esc(e.message || "Couldn't work out today.")}</div>`; return; }
+
+  const hidden = new Set(notThis());
+  work = work.filter(w => !hidden.has(itemKey(w)) && !isSnoozed(itemKey(w)));
+  const pinnedOrder = !!vsGet('roleOrderPinned', false);
+  const { order, byRole, lead, reason } = rankRoles(work, pinnedOrder);
+
+  $('todayHead').innerHTML = `<div class="todayline">
+    ${reason ? `<button class="orderpill" id="whyOrder" aria-expanded="false"><span class="dot" aria-hidden="true"></span>Why today's order changed</button>` : ''}
+    <button class="btn quiet" id="pinOrder" aria-pressed="${pinnedOrder}">${pinnedOrder ? 'Unpin this order' : 'Pin this order'}</button>
+  </div><p class="orderwhy" id="orderWhy" hidden>${esc(reason || '')}</p>`;
+  const why = $('whyOrder');
+  if (why) why.onclick = () => {
+    const el = $('orderWhy'), open = el.hidden;
+    el.hidden = !open; why.setAttribute('aria-expanded', String(open));
+  };
+  $('pinOrder').onclick = () => { vsSet('roleOrderPinned', !pinnedOrder); drawRoleCards(); };
+
+  host.innerHTML = order.map(k => roleCard(k, byRole[k], k === lead && !pinnedOrder)).join('');
+  wireRoleCards(host, byRole);
+}
+
+function roleCard(key, items, isLead) {
+  const r = ROLE[key];
+  const top = items[0];
+  const rest = items.slice(1, 3);
+  const body = !top
+    /* An empty role says so in one sentence, and never invents a task (FO-05). */
+    ? `<p class="empty serif">Nothing pressing in ${esc(r.name.toLowerCase())} today.</p>`
+    : `<p class="card-meaning">${esc(top.meaning)}</p>
+       <div class="well">
+         <span class="well-label">Suggested</span>
+         <div class="well-actions">
+           <button class="btn primary" data-do="${esc(itemKey(top))}">${esc(top.action.label)}</button>
+           <button class="btn" data-later="${esc(itemKey(top))}">Not now</button>
+           <button class="btn quiet" data-notthis="${esc(itemKey(top))}">Not this</button>
+         </div>
+       </div>
+       <p class="source">${esc(sourceLine(top.source.kinds, top.source.at))}</p>
+       ${rest.length ? disclosure('role:' + key, `Show the next ${rest.length === 1 ? 'one' : rest.length}`,
+         { openLabel: 'Hide the next ' + (rest.length === 1 ? 'one' : rest.length),
+           body: `<ul class="rows">${rest.map(w => `<li><div class="grow"><div class="title">${esc(w.meaning)}</div>
+             <div class="source">${esc(sourceLine(w.source.kinds, w.source.at))}</div></div>
+             <button class="btn" data-do="${esc(itemKey(w))}">${esc(w.action.label)}</button></li>`).join('')}</ul>` }) : ''}`;
+  return `<article class="rolecard${isLead ? ' lead' : ''} role-${esc(key)}" data-role="${esc(key)}">
+    <div class="band">${roleMark(r.mark, key)}<span class="band-name">${esc(r.name)}</span>
+      ${isLead ? '<span class="chip">Leading today</span>' : ''}
+      <button class="pin" data-pinrole="${esc(key)}" aria-pressed="${isPinned('role:' + key)}" aria-label="${isPinned('role:' + key) ? 'Unpin' : 'Pin'} ${esc(r.name)}">${isPinned('role:' + key) ? '★' : '☆'}</button></div>
+    <div class="cardbody">${body}</div>
+    <button class="link cardlink" data-open-role="${esc(key)}">Open ${esc(r.name.toLowerCase())}</button>
+  </article>`;
+}
+
+function wireRoleCards(host, byRole) {
+  const all = Object.values(byRole).flat();
+  const find = (k) => all.find(w => itemKey(w) === k);
+  wireDisclosures(host);
+  host.querySelectorAll('[data-open-role]').forEach(b => b.onclick = () => goSection('role:' + b.dataset.openRole));
+  host.querySelectorAll('[data-pinrole]').forEach(b => b.onclick = () => {
+    const k = b.dataset.pinrole;
+    togglePin('role:' + k, ROLE[k].name);
+    advisorView();
+  });
+  host.querySelectorAll('[data-do]').forEach(b => b.onclick = () => runItemAction(find(b.dataset.do), b));
+  /* Not now, and the advisor picks when (CS-05). An item that stands on a real alert is set
+     aside through the contract, so it survives a change of browser and lands in the activity
+     log; anything else has nowhere in the contract to live and is kept in view state. The
+     difference is invisible to the advisor and is the honest one to make. */
+  host.querySelectorAll('[data-later]').forEach(b => b.onclick = () => {
+    const w = find(b.dataset.later), row = b.closest('.well-actions'), keep = row.innerHTML, well = b.closest('.well');
+    row.outerHTML = snoozeChoices(b.dataset.later);
+    const group = well.querySelector('.notnow');
+    group.querySelector('[data-snooze-cancel]').onclick = () => { group.outerHTML = `<div class="well-actions">${keep}</div>`; drawRoleCards(); };
+    group.querySelectorAll('[data-snooze]').forEach(c => c.onclick = async () => {
+      const until = SNOOZE_CHOICES.find(([k]) => k === c.dataset.when)[2]();
+      const said = 'Set aside. It comes back ' + c.textContent.toLowerCase() + '.';
+      if (w && w.alertId) {
+        try {
+          await api('PATCH', '/alerts/' + encodeURIComponent(w.alertId), { body: { status: 'snoozed', snoozedUntil: until.toISOString() } });
+          toast(said, { label: 'Undo', run: () => reopenAlert(w.alertId) });
+        } catch (e) { toast(e.message); }
+      } else {
+        snooze(itemKey(w), until);
+        toast(said, { label: 'Undo', run: () => { unsnooze(itemKey(w)); drawRoleCards(); } });
+      }
+      drawRoleCards();
+      loadActivity();
+    });
+    group.querySelector('[data-snooze]').focus();
+  });
+
+  host.querySelectorAll('[data-notthis]').forEach(b => b.onclick = async () => {
+    const w = find(b.dataset.notthis);
+    if (w && w.alertId) {
+      try {
+        await api('PATCH', '/alerts/' + encodeURIComponent(w.alertId), { body: { status: 'dismissed' } });
+        toast('Put away.', { label: 'Undo', run: () => reopenAlert(w.alertId) });
+      } catch (e) { toast(e.message); return; }
+    } else {
+      const k = itemKey(w);
+      vsSet('notThis', [...notThis(), k]);
+      toast('Put away. It will not come back unless something changes.',
+        { label: 'Undo', run: () => { vsSet('notThis', notThis().filter(x => x !== k)); drawRoleCards(); } });
+    }
+    drawRoleCards();
+    loadActivity();
+  });
+}
+
+async function reopenAlert(id) {
+  try { await api('PATCH', '/alerts/' + encodeURIComponent(id), { body: { status: 'open' } }); drawRoleCards(); loadActivity(); }
+  catch (e) { toast(e.message); }
+}
+
+async function runItemAction(w, btn) {
+  if (!w) return;
+  const a = w.action;
+  if (a.kind === 'household') return openHousehold(a.id, true);
+  if (a.kind === 'prospect') return openProspect(a.id, drawRoleCards);
+  if (a.kind === 'communication') return openComm(a.id, drawRoleCards);
+  if (a.kind === 'inbox') return goSection('inbox');
+  if (a.kind === 'role') return goSection('role:' + a.id);
+  if (a.kind === 'next-action') {
+    const t = a.nextAction.suggestedTask;
+    btn.disabled = true;
+    try {
+      await api('POST', '/tasks', { body: { title: t.title, dueDate: t.dueDate, householdId: t.householdId || undefined } });
+      toast('Added to your follow-ups.');
+      drawRoleCards();
+    } catch (e) { toast(e.message); btn.disabled = false; }
+  }
+}
+
+/* Today's meetings keep their place: they are time-bound, which is what earns a place (FO-03). */
+function drawMeetings() {
   load($('w-meetings'), "Today's meetings", () => api('GET', '/meetings'), (r) => {
     const list = r.items, nextIdx = list.findIndex(m => new Date(m.startsAt) > new Date());
     return head("Today's meetings", list.length + ' scheduled') + (list.length ? `<ol class="timeline">${list.map((m, i) => `
       <li class="meet${i === nextIdx ? ' next' : ''}"><div class="meet-row"><span class="time">${esc(fmtTime(m.startsAt))}</span><span class="client">${esc(m.householdName || m.prospectName || 'No client attached')}</span><span class="type">${esc(m.type)}</span>
       ${i === nextIdx ? '<span class="badge next">Next up</span>' : ''}<span class="badge ${m.prepStatus === 'ready' ? 'ready' : 'prep'}">${m.prepStatus === 'ready' ? 'Prep ready' : 'Needs prep'}</span></div>
-      <details class="brief" data-id="${esc(m.id)}"><summary>Prep brief</summary><p></p></details></li>`).join('')}</ol>` : '<p class="empty">No meetings today.</p>');
-  }, (el) => el.querySelectorAll('details.brief').forEach(d => d.addEventListener('toggle', async () => {
-    if (!d.open || d.dataset.loaded) return;
-    d.dataset.loaded = '1'; const p = d.querySelector('p'); p.textContent = 'Loading…';
-    try { const m = await api('GET', '/meetings/' + encodeURIComponent(d.dataset.id)); p.textContent = (m.brief || 'No brief yet.') + (m.briefSources ? ' Sources: ' + m.briefSources.join(', ') + '.' : ''); }
-    catch { p.textContent = "Couldn't load the brief."; d.dataset.loaded = ''; }
-  })));
-
-  const alertsLoader = () => api('GET', '/alerts');
-  const renderAlerts = (r) => head('Needs attention', r.items.length + ' items') + alertsList(r.items, { dismiss: true });
-  const afterAlerts = (el) => {
-    el.querySelectorAll('[data-alert-action]').forEach(b => b.onclick = () => {
-      if (b.dataset.alertAction === 'Open queue') { advSection = 'communications'; advisorView(); return; }
-      toast(b.dataset.alertAction + ' is not built yet.');
-    });
-    el.querySelectorAll('[data-dismiss]').forEach(b => b.onclick = async () => {
-      b.disabled = true;
-      try { await api('PATCH', '/alerts/' + encodeURIComponent(b.dataset.dismiss), { body: { status: 'dismissed' } }); toast('Alert dismissed.'); load(el, 'Needs attention', alertsLoader, renderAlerts, afterAlerts); }
-      catch (e) { toast(e.message); b.disabled = false; }
-    });
-  };
-  load($('w-alerts'), 'Needs attention', alertsLoader, renderAlerts, afterAlerts);
-
-  load($('w-signals'), 'Portfolio signals', () => api('GET', '/portfolio-signals'), (r) => head('Portfolio signals') + (r.items.length ? `<ul class="rows">${r.items.map(s => `
-    <li data-sig="${esc(s.id)}"><span class="count">${esc(s.count)}</span><div class="grow"><div class="title">${esc(s.label)}</div><div class="meta">${esc(s.detail)}</div></div>
-    <button class="btn" data-review aria-expanded="false">Review</button></li>`).join('')}</ul>` : '<p class="empty">No signals right now.</p>'),
-  (el) => el.querySelectorAll('[data-review]').forEach(b => b.onclick = async () => {
-    const li = b.closest('li'), open = li.querySelector('.subrows');
-    if (open) { open.remove(); b.setAttribute('aria-expanded', 'false'); b.textContent = 'Review'; return; }
-    b.disabled = true;
+      ${disclosure('brief:' + m.id, 'Show the prep brief', { openLabel: 'Hide the prep brief', cls: 'brief' })}</li>`).join('')}</ol>` : '<p class="empty">No meetings today.</p>');
+  }, (el) => wireDisclosures(el, async (key, inner) => {
+    inner.innerHTML = '<p class="meta">Loading…</p>';
     try {
-      const r = await api('GET', '/portfolio-signals/' + encodeURIComponent(li.dataset.sig) + '/items', { query: { size: 8 } });
-      li.insertAdjacentHTML('beforeend', `<ul class="subrows">${r.items.map(i => `<li><span><button class="link" data-hh="${esc(i.householdId)}">${esc(i.householdName)}</button> <span class="meta">${esc(i.maskedAccountNumber)}</span></span><span>${esc(i.detail)}</span></li>`).join('')}</ul>`);
-      li.querySelectorAll('[data-hh]').forEach(x => x.onclick = () => openHousehold(x.dataset.hh, true));
-      b.setAttribute('aria-expanded', 'true'); b.textContent = 'Hide';
-    } catch (e) { toast(e.message); } finally { b.disabled = false; }
+      const m = await api('GET', '/meetings/' + encodeURIComponent(key.slice('brief:'.length)));
+      /* The receipt: what the platform did, from what, and when (TR-04, UX-007). */
+      inner.innerHTML = `<p class="meta">${esc(m.brief || 'No brief yet.')}</p>`
+        + (m.preparedAt ? `<p class="receipt"><span class="dot" aria-hidden="true"></span>Prepared by the platform at ${esc(fmtTime(m.preparedAt))} from ${esc(sourceLine(m.briefSources).replace(/^From /, ''))}.</p>`
+          : m.briefSources ? `<p class="source">${esc(sourceLine(m.briefSources))}</p>` : '');
+    } catch { inner.innerHTML = '<p class="meta">The brief could not be loaded. Close this and open it again to retry.</p>'; }
   }));
 }
 
+/* Every signal leads with what it means and one suggested action (FO-09, CS-03, UX-011). */
+const SIGNAL_MEANING = {
+  tax_loss_harvesting: (s) => `${s.count} ${s.count === 1 ? 'household has' : 'households have'} losses worth harvesting. ${s.detail}.`,
+  concentration: (s) => `${s.count} ${s.count === 1 ? 'household is' : 'households are'} over the concentration limit. ${s.detail}.`,
+  allocation_drift: (s) => `${s.count} ${s.count === 1 ? 'household has' : 'households have'} drifted from target. ${s.detail}.`,
+  idle_cash: (s) => `${s.count} ${s.count === 1 ? 'household is' : 'households are'} holding more cash than the target. ${s.detail}.`
+};
+const SIGNAL_ACTION = {
+  tax_loss_harvesting: 'Show which households',
+  concentration: 'Show which households',
+  allocation_drift: 'Show which households',
+  idle_cash: 'Show which households'
+};
+
+function drawSignals() {
+  load($('w-signals'), 'Portfolio signals', () => api('GET', '/portfolio-signals'), (r) => head('Portfolio signals')
+    + (r.items.length ? `<ul class="rows">${r.items.map(s => `
+      <li data-sig="${esc(s.id)}"><div class="grow">
+        <div class="title">${esc((SIGNAL_MEANING[s.kind] || (() => s.label))(s))}</div>
+        <div class="source">${esc(sourceLine(s.source, s.dataAsOf))}</div>
+        ${disclosure('signal:' + s.id, SIGNAL_ACTION[s.kind] || 'Show which households', { openLabel: 'Hide the households' })}
+      </div></li>`).join('')}</ul>` : '<p class="empty">No signals right now.</p>'),
+  (el) => wireDisclosures(el, async (key, inner) => {
+    inner.innerHTML = '<p class="meta">Loading…</p>';
+    try {
+      const r = await api('GET', '/portfolio-signals/' + encodeURIComponent(key.slice('signal:'.length)) + '/items', { query: { size: 8 } });
+      inner.innerHTML = `<ul class="subrows">${r.items.map(i => `<li><span><button class="link" data-hh="${esc(i.householdId)}">${esc(i.householdName)}</button> <span class="meta">${esc(i.maskedAccountNumber)}</span></span><span>${esc(i.detail)}</span></li>`).join('')}</ul>`;
+      inner.querySelectorAll('[data-hh]').forEach(x => x.onclick = () => openHousehold(x.dataset.hh, true));
+    } catch { inner.innerHTML = '<p class="meta">These households could not be loaded. Close this and open it again to retry.</p>'; }
+  }));
+}
+
+/* ---- Book at a glance -----------------------------------------------------------------------
+ * The four-number strip, off Today and given its own quiet place (UX_IA §4). GET /summary keeps
+ * a home rather than losing one.
+ */
+export function advGlance() {
+  $('section').innerHTML = `<h2 class="pagehead">Book at a glance</h2><dl class="strip" id="strip"></dl>
+    <p class="hint">A standing picture of the book. Nothing here needs an answer today — what does is on Today.</p>`;
+  advLoadStrip($('strip'));
+}
+
 /* ---- Clients ---- */
-export function advClients() {
-  $('section').innerHTML = `<div class="grid">${panel('w-book', 'wide')}${panel('w-team', 'wide')}</div>`;
+export function advClients(host) {
+  (host || $('section')).innerHTML = `<div class="grid">${panel('w-book', 'wide')}${panel('w-team', 'wide')}</div>`;
   bookPanel({ scope: 'own', canShare: true, id: 'w-book', title: 'Book of business', size: 10 });
   teamSharePanelFor('w-team');
 }
 
-/* ---- Follow-ups ---- */
-export function advFollowups() {
-  $('section').innerHTML = `<div class="grid">${panel('w-tasks', 'wide')}</div>`;
+/* ---- Follow-ups: a tab of the Inbox, because a follow-up is something waiting on someone ---- */
+export function followupsPanel(host) {
+  host.innerHTML = `<div class="grid">${panel('w-tasks', 'wide')}</div>`;
   const run = () => load($('w-tasks'), 'Follow-ups', () => api('GET', '/tasks'), (r) => head('Follow-ups', r.openCount + ' open') + (r.items.length ? `<ul class="rows">${r.items.map(t => { const d = dueLabel(t.dueDate); return `
     <li class="task${t.status === 'done' ? ' done' : ''}"><label><input type="checkbox" data-task="${esc(t.id)}" ${t.status === 'done' ? 'checked' : ''}>
     <span class="grow"><span class="title">${esc(t.title)}</span>${t.origin === 'meeting' ? '<span class="tag">From meeting</span>' : ''}${syncBadge(t.sync)}
@@ -107,11 +319,11 @@ export function advFollowups() {
 
 /* ---- Communications: the approval gate. Nothing leaves the firm without a human (X-03). ---- */
 export const COMM_BADGE = { draft: ['prep', 'Awaiting approval'], approved: ['ready', 'Approved, queued'], sent: ['plain', 'Sent'] };
-export function advComms() {
-  $('section').innerHTML = `<div class="grid">${panel('w-comms', 'wide')}</div>`;
-  let status = '';
+export function commsPanel(host, initialStatus = '') {
+  host.innerHTML = `<div class="grid">${panel('w-comms', 'wide')}</div>`;
+  let status = initialStatus;
   const run = () => load($('w-comms'), 'Communications', () => api('GET', '/communications', { query: { status, size: 20 } }), (r) =>
-    `<div class="panel-head"><h2>Communications</h2><label class="hint">Show <select id="cmfilter" aria-label="Filter messages by status"><option value="">All</option><option value="draft">Awaiting approval</option><option value="approved">Approved</option><option value="sent">Sent</option></select></label></div>`
+    `<div class="panel-head"><h2>Messages</h2><label class="hint">Show <select id="cmfilter" aria-label="Filter messages by status"><option value="">All</option><option value="draft">Awaiting approval</option><option value="approved">Approved</option><option value="sent">Sent</option></select></label></div>`
     + (r.items.length ? `<ul class="rows">${r.items.map(c => { const [cls, label] = COMM_BADGE[c.status]; return `
       <li><div class="grow"><div class="title">${esc(c.subject)}</div>
       <div class="meta">${esc(c.householdName || 'Practice')} • ${esc(c.channel)} • ${esc(daysAgo(c.createdAt))}${c.draftedBy === 'ai' ? ' • AI draft' : ''}${c.complianceReview ? ' • <span class="due-hot">compliance review</span>' : ''}</div>
@@ -156,9 +368,11 @@ export async function openComm(id, done) {
 }
 
 /* ---- Prospects ---- */
+/* Where the lead came from. Not a data source: this is the prospect's own origin. */
+export const LEAD_SOURCE = { referral: 'A referral', website: 'The website', event: 'An event', other: 'Somewhere else' };
 export const STAGE_LABEL = { lead: 'Lead', contacted: 'Contacted', meeting_scheduled: 'Meeting scheduled', proposal: 'Proposal', onboarding: 'Onboarding', converted: 'Converted' };
-export function advProspects() {
-  $('section').innerHTML = `<div class="grid">${panel('w-pros', 'wide')}</div>`;
+export function advProspects(host) {
+  (host || $('section')).innerHTML = `<div class="grid">${panel('w-pros', 'wide')}</div>`;
   const run = () => load($('w-pros'), 'Prospects', () => api('GET', '/prospects', { query: { size: 100 } }), (r) => {
     const total = r.items.reduce((a, p) => a + (p.estimatedAssets || 0), 0);
     return head('Prospects', r.totalItems + ' in the pipeline, about ' + money(total)) + `<div class="kanban">${r.stages.map(st => {
@@ -166,7 +380,7 @@ export function advProspects() {
       return `<div class="kcol"><h3>${esc(STAGE_LABEL[st])} <span class="count">${col.length}</span></h3>
         ${col.length ? col.map(p => `<article class="kcard" data-pros="${esc(p.id)}" tabindex="0" role="button" aria-label="Open ${esc(p.name)}">
           <div class="title">${esc(p.name)}</div>
-          <div class="meta">${p.estimatedAssets ? esc(money(p.estimatedAssets)) : 'Assets unknown'} • ${esc(p.source)}</div>
+          <div class="meta">${p.estimatedAssets ? esc(money(p.estimatedAssets)) : 'Assets unknown'} • ${esc(LEAD_SOURCE[p.source] || p.source)}</div>
           ${p.meetingId ? '<div class="meta">Meeting booked</div>' : ''}</article>`).join('') : '<p class="empty">Empty</p>'}</div>`;
     }).join('')}</div>` + syncNotice(r.items);
   }, (el) => el.querySelectorAll('[data-pros]').forEach(c => {
@@ -185,7 +399,7 @@ export async function openProspect(id, done) {
     const stages = Object.keys(STAGE_LABEL), i = stages.indexOf(p.stage), next = stages[i + 1];
     dlg.innerHTML = `<button class="btn quiet close" data-close>Close</button><h2 id="dlgTitle">${esc(p.name)}</h2>
       <div><span class="badge plain">${esc(STAGE_LABEL[p.stage])}</span></div>
-      <dl class="defs"><dt>Estimated assets</dt><dd>${p.estimatedAssets ? moneyFull(p.estimatedAssets) : 'Unknown'}</dd><dt>Source</dt><dd>${esc(p.source)}</dd><dt>First seen</dt><dd>${esc(daysAgo(p.createdAt))}</dd></dl>
+      <dl class="defs"><dt>Estimated assets</dt><dd>${p.estimatedAssets ? moneyFull(p.estimatedAssets) : 'Unknown'}</dd><dt>Came from</dt><dd>${esc(LEAD_SOURCE[p.source] || p.source)}</dd><dt>First seen</dt><dd>${esc(daysAgo(p.createdAt))}</dd></dl>
       <h3>Intake notes</h3><p class="draft">${esc(p.intakeNotes || 'No notes yet.')}</p>
       ${next ? `<div class="actions"><button class="btn primary" id="prAdv">Move to ${esc(STAGE_LABEL[next])}</button>` : '<p class="hint">This prospect has converted.</p><div class="actions">'}
         <button class="btn" id="prMatch">Which advisor fits?</button></div>
@@ -210,8 +424,8 @@ export async function openProspect(id, done) {
 }
 
 /* ---- Onboarding, and importing a book ---- */
-export function advOnboarding() {
-  $('section').innerHTML = `<div class="grid"><div class="col">${panel('w-onb')}</div><div class="col">${panel('w-mig')}</div></div>`;
+export function advOnboarding(host) {
+  (host || $('section')).innerHTML = `<div class="grid"><div class="col">${panel('w-onb')}</div><div class="col">${panel('w-mig')}</div></div>`;
   const run = () => load($('w-onb'), 'New clients', () => api('GET', '/onboarding'), (r) =>
     head('New clients', r.items.length + ' in progress') + (r.items.length ? r.items.map(o => `
       <article class="onb" data-onb="${esc(o.id)}"><div class="onb-head"><div><div class="title">${esc(o.name)}</div>
@@ -393,35 +607,170 @@ export async function openMeeting(id, done) {
   } catch (e) { dlg.innerHTML = `<button class="btn quiet close" data-close>Close</button><p class="err">${esc(e.message)}</p>`; }
 }
 
-export const ADV_RENDER = { today: advToday, next: advNext, clients: advClients, communications: advComms,
-  prospects: advProspects, onboarding: advOnboarding, calendar: advCalendar, followups: advFollowups,
-  reports: advReports, playbooks: advPlaybooks };
-
-/* ---- Next best action (PL-02) ----------------------------------------------------------
- * One prioritised list across the book. Every row is a draft: accepting one posts it to
- * /tasks, which is the only thing that creates anything.
+/* ---- Inbox --------------------------------------------------------------------------------
+ * Messages to answer, drafts to approve and follow-ups due, in one place. Communications and
+ * Follow-ups merge because both are "waiting on someone" (UX_IA §4). Each item also shows on
+ * the person's record, so there are two doors to it and only one item.
  */
-export function advNext() {
-  $('section').innerHTML = `<div class="grid">${panel('w-next', 'wide')}</div>`;
-  const run = () => load($('w-next'), 'Next best action', () => api('GET', '/next-actions', { query: { size: 25 } }), (r) =>
-    head('Next best action', r.totalItems + ' suggested') + (r.items.length ? `<ul class="rows">${r.items.map(a => `
-      <li><span class="sev ${esc(a.priority)}" title="${esc(a.priority)} priority"></span>
-      <div class="grow"><div class="title">${esc(a.title)}</div>
-        <div class="meta">${esc(a.reason)}</div>
-        <div class="meta">${esc(a.householdName || 'Practice')} • ${a.citations.map(c => esc(c.source)).join(', ')}</div></div>
-      <div class="actions"><button class="btn" data-accept="${esc(a.id)}">Add as follow-up</button></div></li>`).join('')}</ul>
-      <p class="hint">${esc(r.note)}</p>` : '<p class="empty">Nothing needs doing right now.</p>'),
-  (el, r) => el.querySelectorAll('[data-accept]').forEach(b => b.onclick = async () => {
-    const a = r.items.find(x => x.id === b.dataset.accept);
-    b.disabled = true;
+export function advInbox() {
+  $('section').innerHTML = `<h2 class="pagehead">Inbox</h2>
+    <div id="inboxTabs"></div>
+    <div class="grid" style="margin-top:16px">${panel('w-inbox', 'wide')}</div>`;
+  const tabs = [['approve', 'Drafts to approve'], ['followups', 'Follow-ups'], ['all', 'Everything sent']];
+  const go = (k) => {
+    vsSet('inboxTab', k);
+    roleTabs($('inboxTabs'), tabs, k, go);
+    if (k === 'followups') return followupsPanel($('w-inbox'));
+    commsPanel($('w-inbox'), k === 'approve' ? 'draft' : '');
+  };
+  go(vsGet('inboxTab', 'approve'));
+}
+
+/* ---- Role homes ---------------------------------------------------------------------------
+ * "Choosing a role opens its home: the role's priorities — the same ones that feed its card on
+ * Today — and an overview of how that part of the business is going" (UX_IA §3). Overviews are
+ * sentences and simple shapes, not tile walls.
+ */
+export function advRoleHome(key) {
+  const r = ROLE[key];
+  $('section').innerHTML = `<h2 class="pagehead"><span class="headmark">${roleMark(r.mark, key)}</span>${esc(r.full)}</h2>
+    <div id="roleTabs"></div><div id="roleBody" style="margin-top:16px"></div>`;
+  const tabs = ROLE_TABS[key]();
+  const go = (t) => {
+    vsSet('roleTab:' + key, t);
+    roleTabs($('roleTabs'), tabs, t, go);
+    (ROLE_PANEL[key][t] || ROLE_PANEL[key][tabs[0][0]])($('roleBody'));
+  };
+  const saved = vsGet('roleTab:' + key, tabs[0][0]);
+  go(tabs.some(([k]) => k === saved) ? saved : tabs[0][0]);
+}
+
+/* The role's own priorities, drawn from the same place its Today card is (ST-02, FO-09). */
+function roleOverview(key) {
+  return async (el) => {
+    el.innerHTML = `<div class="grid">${panel('w-rolepri', 'wide')}</div>`;
+    const host = $('w-rolepri');
+    host.innerHTML = head(ROLE[key].name + ' priorities') + '<div class="skel"></div><div class="skel m"></div>';
     try {
-      await api('POST', '/tasks', { body: { title: a.suggestedTask.title, dueDate: a.suggestedTask.dueDate,
-        householdId: a.suggestedTask.householdId || undefined } });
-      toast('Added to your follow-ups.'); b.textContent = 'Added'; advLoadStrip();
-    } catch (e) { toast(e.message); b.disabled = false; }
+      const work = (await collectRoleWork(state.session && state.session.advisorId)).filter(w => w.role === key);
+      host.innerHTML = head(ROLE[key].name + ' priorities', work.length ? work.length + ' to answer' : '')
+        + (work.length ? `<ul class="rows">${work.map(w => `<li><div class="grow"><div class="title">${esc(w.meaning)}</div>
+            <div class="source">${esc(sourceLine(w.source.kinds, w.source.at))}</div></div>
+            <button class="btn" data-ritem="${esc(itemKey(w))}">${esc(w.action.label)}</button></li>`).join('')}</ul>`
+          : `<p class="empty serif">Nothing pressing in ${esc(ROLE[key].name.toLowerCase())} today.</p>`);
+      host.querySelectorAll('[data-ritem]').forEach(b => b.onclick = () =>
+        runItemAction(work.find(w => itemKey(w) === b.dataset.ritem), b));
+    } catch (e) { host.innerHTML = head(ROLE[key].name + ' priorities') + `<div class="err">${esc(e.message)}</div>`; }
+  };
+}
+
+/* Referrals: who came to the firm because someone sent them. Drawn from each prospect's own
+   origin, which is the only referral data the contract holds — there is no record of who made
+   the referral, so the thank-you half of CS-09's referral window cannot be built yet. Logged. */
+function referralsPanel(el) {
+  el.innerHTML = `<div class="grid">${panel('w-ref', 'wide')}</div>`;
+  load($('w-ref'), 'Referrals', () => api('GET', '/prospects', { query: { size: 100 } }), (r) => {
+    const refs = r.items.filter(p => p.source === 'referral');
+    const value = refs.reduce((a, p) => a + (p.estimatedAssets || 0), 0);
+    return head('Referrals', refs.length + ' in the pipeline, about ' + money(value))
+      + (refs.length ? `<ul class="rows">${refs.map(p => `<li><div class="grow">
+        <div class="title">${esc(p.name)}</div>
+        <div class="meta">${esc(STAGE_LABEL[p.stage])} • ${p.estimatedAssets ? esc(money(p.estimatedAssets)) : 'Assets unknown'} • ${daysBetween(p.stageChangedAt)} days at this stage</div>
+        <div class="source">${esc(sourceLine('crm', p.lastContactAt || p.createdAt))}</div></div>
+        <button class="btn" data-pros="${esc(p.id)}">Open</button></li>`).join('')}</ul>`
+        : '<p class="empty">Nobody has been referred to you yet.</p>');
+  }, (el2) => el2.querySelectorAll('[data-pros]').forEach(b => b.onclick = () => openProspect(b.dataset.pros, () => referralsPanel(el))));
+}
+
+/* Meetings inside the Clients home: what is booked and whether it is prepared. The Calendar in
+   the spine is for moving things; this is for knowing where you stand. */
+function clientMeetingsPanel(el) {
+  el.innerHTML = `<div class="grid">${panel('w-cm', 'wide')}</div>`;
+  const to = new Date(); to.setDate(to.getDate() + 14);
+  load($('w-cm'), 'Meetings', () => api('GET', '/meetings', { query: { from: localDate(new Date()), to: localDate(to) } }), (r) =>
+    head('Meetings', 'Next 14 days') + (r.items.length ? `<ul class="rows">${r.items.map(m => `
+      <li><div class="grow"><div class="title">${esc(m.householdName || m.prospectName || 'No client attached')}</div>
+      <div class="meta">${esc(fmtDate(m.startsAt.slice(0, 10)))} at ${esc(fmtTime(m.startsAt))} • ${esc(m.type)}</div></div>
+      <span class="badge ${m.prepStatus === 'ready' ? 'ready' : 'prep'}">${m.prepStatus === 'ready' ? 'Prep ready' : 'Needs prep'}</span>
+      <button class="btn" data-mt="${esc(m.id)}">Open</button></li>`).join('')}</ul>` : '<p class="empty">Nothing is booked in the next two weeks.</p>'),
+  (el2) => el2.querySelectorAll('[data-mt]').forEach(b => b.onclick = () => openMeeting(b.dataset.mt, () => clientMeetingsPanel(el))));
+}
+
+/* What the firm charges this advisor's households (AX-10). */
+function billingPanel(el) {
+  el.innerHTML = `<div class="grid">${panel('w-fees', 'wide')}</div>`;
+  load($('w-fees'), 'Billing and fees', () => api('GET', '/billing/fees', { query: { size: 100 } }), (r) =>
+    head('Billing and fees', money(r.items.reduce((a, f) => a + f.annualFee, 0)) + ' a year across ' + r.items.length + ' households')
+    + `<div class="tablewrap"><table><thead><tr><th>Household</th><th class="num">Assets</th><th class="num">Rate</th><th class="num">Annual fee</th><th>Basis</th></tr></thead><tbody>
+      ${r.items.map(f => `<tr><td>${esc(f.householdName)}</td><td class="num">${money(f.aum)}</td><td class="num">${f.annualRatePct}%</td><td class="num">${money(f.annualFee)}</td><td>${f.override ? '<span class="badge warn">Override</span>' : 'Schedule'}</td></tr>`).join('')}</tbody></table></div>`
+    + `<p class="hint">Changing what a household is charged is done on the household itself, where the reason is recorded with it.</p>`);
+}
+
+function compliancePanel(el) {
+  el.innerHTML = `<div class="grid">${panel('w-comp', 'wide')}</div>`;
+  load($('w-comp'), 'Compliance', () => api('GET', '/firm/compliance', { query: { size: 20 } }), (r) =>
+    head('Compliance', r.totalItems + ' items') + (r.items.length ? `<ul class="rows">${r.items.map(c => `
+      <li><div class="grow"><div class="title">${esc(c.title)}</div>
+      <div class="meta">${esc(CATEGORY[c.category] || c.category)} • ${esc(c.advisorName || 'The firm')} • due ${esc(fmtDate(c.dueDate))}</div></div>
+      <span class="badge ${c.status === 'overdue' ? 'crit' : c.status === 'done' ? 'ok' : 'plain'}">${esc(c.status)}</span></li>`).join('')}</ul>`
+      : '<p class="empty">Nothing is outstanding.</p>'));
+}
+
+function scorecardPanel(el) {
+  el.innerHTML = `<div class="grid">${panel('w-score', 'wide')}</div>`;
+  load($('w-score'), 'Your scorecard', () => api('GET', '/firm/advisors/' + encodeURIComponent(SCORE_ID()) + '/scorecard'), (s) =>
+    head('Your scorecard', esc(s.advisorName)) + metricRows(s.metrics)
+    + '<p class="hint">Compared with the firm median. Where you sit against named colleagues is shown to a principal only. Nothing here is shared with the firm.</p>');
+}
+
+const ROLE_PANEL = {
+  bd: { overview: roleOverview('bd'), pipeline: (el) => advProspects(el), referrals: referralsPanel },
+  ca: { overview: roleOverview('ca'), households: (el) => advClients(el), meetings: clientMeetingsPanel, onboarding: (el) => advOnboarding(el) },
+  op: { overview: roleOverview('op'), reports: (el) => advReports(el), billing: billingPanel, compliance: compliancePanel },
+  pd: { playbooks: (el) => advPlaybooks(el), scorecard: scorecardPanel }
+};
+
+/* ---- Systems (UX_IA §5) ---------------------------------------------------------------------
+ * What the platform is connected to, who set each up, when it last synced, and a plain
+ * statement of what it cannot see right now. Set up by whoever administers the firm; every
+ * other advisor sees it read-only, because knowing what the platform cannot see is not an
+ * administrator's privilege.
+ */
+export function advSystems() {
+  $('section').innerHTML = `<h2 class="pagehead">Systems</h2><div class="grid">${panel('w-sys', 'wide')}</div>`;
+  const run = () => load($('w-sys'), 'Systems', () => api('GET', '/systems'), (r) =>
+    head('Systems', r.items.filter(x => x.status === 'connected').length + ' of ' + r.items.length + ' connected')
+    + (r.note ? `<p class="hint gap">${esc(r.note)}</p>` : '')
+    + `<ul class="rows">${r.items.map(x => `<li><div class="grow">
+        <div class="title">${esc(x.name)}</div>
+        <div class="meta">${esc(SYSTEM_KIND[x.kind] || x.kind)}${x.connectedBy ? ' • set up by ' + esc(x.connectedBy) : ''}</div>
+        ${x.cannotSee ? `<div class="meta gap">${esc(x.cannotSee)}</div>` : ''}
+        ${x.lastSyncAt ? `<div class="source">Last synced ${esc(fmtTime(x.lastSyncAt))}</div>` : ''}</div>
+      <span class="badge ${x.status === 'connected' ? 'ok' : x.status === 'error' ? 'crit' : 'plain'}">${x.status === 'connected' ? 'Connected' : x.status === 'error' ? 'Not working' : 'Not connected'}</span>
+      ${r.canEdit ? `<button class="btn" data-sys="${esc(x.id)}" data-to="${x.status === 'connected' ? 'not_connected' : 'connected'}">${x.status === 'connected' ? 'Disconnect' : 'Connect'}</button>` : ''}</li>`).join('')}</ul>`
+    + (r.canEdit ? '' : '<p class="hint">Connections are set up by whoever administers the firm. You can see what they are, and what the platform cannot see because of them.</p>'),
+  (el) => el.querySelectorAll('[data-sys]').forEach(b => b.onclick = async () => {
+    b.disabled = true;
+    try { await api('PATCH', '/systems/' + encodeURIComponent(b.dataset.sys), { body: { status: b.dataset.to } });
+      toast(b.dataset.to === 'connected' ? 'Connected.' : 'Disconnected.'); run(); loadActivity(); }
+    catch (e) { toast(e.message); b.disabled = false; }
   }));
   run();
 }
+const SYSTEM_KIND = { custodian: 'Custodian', crm: 'CRM', email: 'Email', calendar: 'Calendar', documents: 'Documents' };
+
+export const ADV_RENDER = {
+  today: advToday, inbox: advInbox, calendar: advCalendar, glance: advGlance, systems: advSystems,
+  'role:bd': () => advRoleHome('bd'), 'role:ca': () => advRoleHome('ca'),
+  'role:op': () => advRoleHome('op'), 'role:pd': () => advRoleHome('pd')
+};
+
+/* ---- Next best action (PL-02) ----------------------------------------------------------
+ * No longer a section. Every suggestion now arrives inside the role card it belongs to
+ * (FO-11, UX-008), so /next-actions is read by roles.js rather than drawn as its own list.
+ * Nothing was lost: the same items, with the same reasons and the same sources, in the place
+ * the advisor is already looking.
+ */
 
 /* ---- Reporting and the advisor's own scorecard (PO-07, AX-08) ---- */
 const fmtMetric = (m) => m.unit === 'usd' ? money(m.value) : m.value.toLocaleString('en-US');
@@ -438,8 +787,8 @@ export function metricRows(metrics) {
   }).join('')}</ul>`;
 }
 
-export function advReports() {
-  $('section').innerHTML = `<div class="grid"><div class="col">${panel('w-report')}</div><div class="col">${panel('w-score')}</div></div>`;
+export function advReports(host) {
+  (host || $('section')).innerHTML = `<div class="grid">${panel('w-report', 'wide')}</div>`;
   let days = 30;
   const runReport = () => load($('w-report'), 'Practice report', () => api('GET', '/reports/practice', { query: { from: backDate(days) } }), (r) =>
     `<div class="panel-head"><h2>Practice report</h2><label class="hint">Last <select id="repDays" aria-label="Reporting period">
@@ -450,10 +799,6 @@ export function advReports() {
         <li><div class="grow"><div class="title">${esc(x.label)}</div></div><span>${x.count}</span></li>`).join('')}</ul>` : '').join(''),
   (el) => { const f = el.querySelector('#repDays'); f.value = String(days); f.onchange = () => { days = +f.value; runReport(); }; });
   runReport();
-
-  load($('w-score'), 'Your scorecard', () => api('GET', '/firm/advisors/' + encodeURIComponent(SCORE_ID()) + '/scorecard'), (s) =>
-    head('Your scorecard', esc(s.advisorName)) + metricRows(s.metrics)
-    + '<p class="hint">Compared with the firm median. Where you sit against named colleagues is shown to a principal only.</p>');
 }
 
 const BREAKDOWN = { meetingsByType: 'Meetings by type', communicationsByStatus: 'Messages by status', complianceByStatus: 'Compliance by status' };
@@ -464,8 +809,8 @@ const SCORE_ID = () => (state.session && state.session.advisorId) || 'adv1';
  * Running one IS the advisor's explicit action, so unlike a suggestion these create real
  * follow-ups rather than drafts. The dates come from each step's offset from the anchor.
  */
-export function advPlaybooks() {
-  $('section').innerHTML = `<div class="grid">${panel('w-pb', 'wide')}</div>`;
+export function advPlaybooks(host) {
+  (host || $('section')).innerHTML = `<div class="grid">${panel('w-pb', 'wide')}</div>`;
   load($('w-pb'), 'Playbooks', () => Promise.all([api('GET', '/playbooks'), api('GET', '/households', { query: { size: 100, sort: 'name,asc' } })]),
     ([pbs, hh]) => head('Playbooks', pbs.items.length + ' available') + pbs.items.map(pb => `
       <article class="onb" data-pb="${esc(pb.id)}"><div class="onb-head"><div>

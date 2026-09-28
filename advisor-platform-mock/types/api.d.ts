@@ -107,6 +107,12 @@ export interface Meeting {
   prepStatus: PrepStatus;
   /** AI-drafted prep brief. Draft until the advisor accepts it. */
   brief?: string | null;
+  /**
+   * When the platform prepared the brief. Null when nothing has been prepared. A prepared item
+   * has to be able to say what was done and when (X-04), and the meeting's own start time is not
+   * that. Format: date-time.
+   */
+  preparedAt?: string | null;
   /** Systems the brief drew from, for citation. */
   briefSources?: Source[];
 }
@@ -157,7 +163,11 @@ export interface TaskList {
 
 export type Severity = 'high' | 'medium' | 'low';
 
-export type AlertStatus = 'open' | 'dismissed' | 'resolved';
+/**
+ * snoozed is an alert the advisor has set aside until a time they chose. It is not dismissed:
+ * it returns on its own, and until it does it is not on the screen.
+ */
+export type AlertStatus = 'open' | 'dismissed' | 'resolved' | 'snoozed';
 
 export interface AlertAction {
   type: 'review' | 'open_queue' | 'draft_email' | 'send_reminder';
@@ -176,6 +186,8 @@ export interface Alert {
   householdName?: string | null;
   source?: Source;
   status: AlertStatus;
+  /** Set when status is snoozed. The alert returns to open at this time. Format: date-time. */
+  snoozedUntil?: string | null;
   action?: AlertAction;
   /** Format: date-time. */
   createdAt: string;
@@ -183,6 +195,8 @@ export interface Alert {
 
 export interface AlertUpdate {
   status: AlertStatus;
+  /** Required when status is snoozed. Format: date-time. */
+  snoozedUntil?: string;
 }
 
 export interface AlertList {
@@ -198,6 +212,7 @@ export interface Signal {
   label: string;
   /** Example: "About $61,200 in unrealized losses". */
   detail?: string;
+  source?: Source;
   /** Format: date-time. */
   dataAsOf?: string;
 }
@@ -447,6 +462,16 @@ export interface ProspectSummary {
   createdAt: string;
   /** Format: date-time. */
   updatedAt: string;
+  /**
+   * When this prospect entered its current stage. How long something has been waiting is not the
+   * same as how old it is, and it is the waiting that matters. Format: date-time.
+   */
+  stageChangedAt?: string;
+  /**
+   * Last contact either way. Null when there has been none since the record was made. Format:
+   * date-time.
+   */
+  lastContactAt?: string | null;
   sync?: SyncState;
 }
 
@@ -1137,6 +1162,66 @@ export interface AiDraft {
   provenance: DraftProvenance;
 }
 
+export interface Activity {
+  id: string;
+  /** Format: date-time. */
+  at: string;
+  /** Who did it. The platform prepares; the advisor decides. */
+  actor: 'platform' | 'advisor';
+  actorName?: string | null;
+  /** What happened, in the advisor's words. */
+  summary: string;
+  detail?: string | null;
+  subjectType?: 'alert' | 'communication' | 'task' | 'meeting' | 'household' | 'prospect' | 'system' | 'onboarding' | null;
+  subjectId?: string | null;
+  /** False once the thing cannot be taken back — anything that left the firm. */
+  undoable?: boolean;
+  /** The operation that reverses this entry. Absent when undoable is false. */
+  undoWith?: {
+    method?: 'POST' | 'PATCH' | 'DELETE';
+    /** Example: "/alerts/a6". */
+    path?: string;
+    body?: Record<string, unknown>;
+  } | null;
+}
+
+export interface ActivityList {
+  items: Activity[];
+  totalItems: number;
+}
+
+export type SystemStatus = 'connected' | 'not_connected' | 'error';
+
+export interface System {
+  id: string;
+  /** Example: "Green Meadows". */
+  name: string;
+  kind: 'custodian' | 'crm' | 'email' | 'calendar' | 'documents';
+  status: SystemStatus;
+  /** Format: date-time. */
+  lastSyncAt?: string | null;
+  connectedBy?: string | null;
+  /** Format: date-time. */
+  connectedAt?: string | null;
+  /**
+   * What the platform cannot see because of this system's state, in one sentence. Null when the
+   * system is connected and there is nothing to say.
+   */
+  cannotSee?: string | null;
+}
+
+export interface SystemList {
+  items: System[];
+  /** False for an advisor who does not administer the firm. The list is still shown. */
+  canEdit: boolean;
+  /** One sentence covering everything the platform cannot see right now. */
+  note?: string | null;
+}
+
+export interface SystemUpdate {
+  status: 'connected' | 'not_connected';
+}
+
 export interface RedraftRequest {
   tone?: 'Warm and direct' | 'Formal' | 'Brief';
   /** What the advisor wants covered. Defaults to the existing draft. */
@@ -1486,6 +1571,24 @@ export interface Operations {
     path: '/next-actions';
     request: never;
     response: NextActionList;
+  };
+  listActivity: {
+    method: 'GET';
+    path: '/activity';
+    request: never;
+    response: ActivityList;
+  };
+  listSystems: {
+    method: 'GET';
+    path: '/systems';
+    request: never;
+    response: SystemList;
+  };
+  updateSystem: {
+    method: 'PATCH';
+    path: '/systems/{systemId}';
+    request: SystemUpdate;
+    response: System;
   };
   getCapTable: {
     method: 'GET';

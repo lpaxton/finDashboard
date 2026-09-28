@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "advisor-mock",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["start", "--prefix", "advisor-platform-mock"],
+      "port": 4010
+    }
+  ]
+}
