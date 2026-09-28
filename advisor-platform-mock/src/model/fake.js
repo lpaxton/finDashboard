@@ -48,10 +48,11 @@ function meetingAgenda({ householdName, type, brief, signals = [], lastContact }
   ].join('\n');
 }
 
-function emailDraft({ householdName, subject, tone, points = [] } = {}) {
+/* No "Subject:" line: the subject is its own field in the draft frame, and repeating it inside
+   the body showed up as a duplicate the moment the message was drawn as it will arrive
+   (UX_RULES TR-02). */
+function emailDraft({ householdName, tone, points = [] } = {}) {
   return [
-    `Subject: ${subject || 'Following up'}`,
-    '',
     `Dear ${householdName || 'client'},`,
     '',
     ...(points.length ? points.map(p => p + '.') : ['Following up on our last conversation.']),

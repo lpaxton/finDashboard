@@ -439,7 +439,22 @@ export interface CommunicationSummary {
 export type Communication = CommunicationSummary & {
   /** The full message text. */
   body: string;
+  /** Who last changed the text. Null when nobody has. */
+  editedBy?: string | null;
+  /** Format: date-time. */
+  editedAt?: string | null;
 };
+
+/**
+ * At least one field. Text and status may be sent together: approving an edited draft is one
+ * decision for the advisor, and should be one call.
+ */
+export interface CommunicationUpdate {
+  status?: CommunicationStatus;
+  subject?: string;
+  /** The message text, exactly as it will arrive. */
+  body?: string;
+}
 
 export interface CommunicationPage {
   items: CommunicationSummary[];
@@ -1428,12 +1443,10 @@ export interface Operations {
     request: never;
     response: Communication;
   };
-  approveCommunication: {
+  updateCommunication: {
     method: 'PATCH';
     path: '/communications/{communicationId}';
-    request: {
-      status: CommunicationStatus;
-    };
+    request: CommunicationUpdate;
     response: Communication;
   };
   listProspects: {

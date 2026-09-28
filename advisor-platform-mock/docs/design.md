@@ -27,6 +27,79 @@ Entries are newest first.
 
 ## Log
 
+### 28 September 2026 · TR-02 — the draft frame and the send confirmation
+
+The last two components of the fifteen in `ux/UX_DESIGN_SYSTEM.md` §5, and the highest-value
+remaining work by the research check: they sit on F3, the only finding every advisor in the
+study agreed on.
+
+**Asked for** — TR-02: *"What you edit is what they get. A draft is shown exactly as it will
+arrive, so there is no separate preview. Anything leaving the firm gets one confirmation: who it
+goes to, from whom, what's attached, and whether it can be recalled."* Design system §5: a
+dashed 2px violet frame, a "Draft · not sent" label on `--ai-deep`, editable in place; and an
+`--elev-3` sheet saying "This leaves the firm".
+
+**Built**
+
+- **The draft frame.** The message is drawn as it will arrive — To, From, subject, body — and
+  the fields the advisor types into *are* the message: no borders, no form furniture, the same
+  type the client reads. Dashed violet while it is still ours, solid and read-only once it has
+  gone. An approved message is still dashed, because it has not been sent either; its label
+  reads "Approved · not sent yet".
+- **Editing in place.** Saved on blur, with *Undo* in the toast and a line in the activity log.
+  The receipt under the frame changes from "Drafted by the platform" to "Drafted by the platform,
+  edited by Dana Whitfield", because after an edit it is not only the platform's words.
+- **The send confirmation.** An `--elev-3` sheet on send only: to, from, subject, what is
+  attached, the compliance flag if there is one, and "Once it goes it cannot be recalled."
+  Focus lands on *Not yet*, and Escape means *Not yet*.
+- **It opens in place.** The message used to open in a modal over the page; it now opens inside
+  the Inbox with one step back (FO-06). A message reached from a role card on Today opens in its
+  own home rather than on top of Today.
+- **A rewrite lands in the frame.** *Rewrite it for me* used to render a second draft beside the
+  message with a Copy button — which is the separate preview TR-02 forbids. It now offers *Use
+  this wording*, which puts the text in the frame and saves it the same way a typed edit is, so
+  it is undoable and in the log. Copy stays where there is no frame to land in: meeting summaries
+  and agendas.
+
+**Contract** — `PATCH /communications/{id}` now takes `subject` and `body` as well as `status`,
+and `operationId` moved from `approveCommunication` to `updateCommunication`, because an
+operation that edits text should not be named for approving. `Communication` gained `editedBy`
+and `editedAt`. Editing a sent message is refused with 409: what left the firm is what the client
+has. An edited AI draft has `draftedBy` set to `advisor` — after the advisor rewrites it, it is
+their message.
+
+**Not built**
+
+- **Version history.** S1 names it alongside audit trail and source attribution as a trust
+  prerequisite, and the activity log records *that* an edit happened but keeps only one step
+  back, not the succession of drafts. Still open.
+- **A real recipient.** "To" is a household, because a household is all the contract models —
+  no named person, no address. The sheet says "Delacroix household · by email" and cannot say
+  who or where. Worth a field if this is ever more than a POC.
+- **Attachments.** The sheet says "Nothing", truthfully: the contract has no attachments. TR-02
+  asks the confirmation to name what is attached, so the line is there and will have something
+  to say when there is.
+
+**Implications**
+
+1. **The frame found a content bug nothing else would have.** The offline draft generator opened
+   every email with a `Subject: …` line inside the body, which was invisible when the body was a
+   blob in a dialog and an obvious duplicate the moment the message was drawn with its own
+   subject field. Fixed in `src/model/fake.js` and in the `email_draft` prompt, and the frame
+   strips a leading subject line anyway, because a connected model may still send one. **Drawing
+   a thing as it will really appear is itself a test.**
+2. **Saving on blur rather than behind a button** is a deliberate reading of F3 — *"if the
+   approval UI is clunky, advisors skip it"* — and it is only safe because the edit is
+   recorded and reversible. The two go together; neither would be right alone.
+3. **One shared `<dialog>` now has variants.** The send confirmation styles it as a sheet, and an
+   Escape-close used to leave that class behind and restyle the next dialog to open. The class is
+   now cleared on `close` in `app.js`. Anything else that adds a variant should do the same.
+4. **`runDraft` was leaking system names** into the "Read from" list — `greenmeadows` rather than
+   *custodian records*. A UX-002 miss, found while adding *Use this wording*. Fixed, and it was
+   the last one: the sweep now holds across every screen.
+
+---
+
 ### 28 September 2026 · UX-008 to UX-011, the IA pass, and the contract run
 
 Everything left in `ux/`: the four fields the design needed, Today rebuilt around the four

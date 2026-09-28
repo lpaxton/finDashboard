@@ -309,6 +309,48 @@ footer { margin-top: 28px; color: var(--muted); font-size: 13px; }
 /* Source line: what kind of source, and how recent. Mono, quiet, never removed (TR-06, TR-10). */
 .source { font: 400 12px/1.5 var(--mono); color: var(--muted); }
 
+/* The draft frame (design system §5, product rule 1). Dashed violet means not yet real, and
+   only that: nothing sent or final is ever dashed. The fields the advisor types into are the
+   message itself — no border, no form furniture, the same type the client will read — because
+   TR-02 says what you edit is what they get, with no separate preview. */
+.msg { position: relative; margin: 6px 0 18px; }
+.msg-label { display: inline-block; font: 500 11px/1 var(--mono); text-transform: uppercase; letter-spacing: 0.08em;
+  color: var(--surface); background: var(--ai-deep); padding: 6px 10px; border-radius: var(--radius-1) var(--radius-1) 0 0; }
+.msg-label.sent { background: var(--mist); color: var(--muted); }
+.msg-frame { border: 2px dashed var(--ai); border-radius: 0 var(--radius-2) var(--radius-2) var(--radius-2);
+  background: var(--surface); padding: 18px 20px 20px; }
+.msg[data-state="sent"] .msg-frame { border-style: solid; border-color: var(--line); border-width: 1px; padding: 19px 21px 21px; }
+.msg-head { display: grid; gap: 4px 20px; margin: 0 0 14px; padding-bottom: 12px; border-bottom: 1px solid var(--line); }
+.msg-head > div { display: grid; grid-template-columns: 56px 1fr; gap: 12px; align-items: baseline; }
+.msg-head dt { font: 400 12px/1.6 var(--mono); color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; }
+.msg-head dd { margin: 0; }
+.msg-subject, .msg-body { display: block; width: 100%; background: none; border: 0; padding: 4px 6px; margin: 0 -6px;
+  border-radius: var(--radius-1); color: var(--ink); resize: none; }
+.msg-subject { font: 600 18px/1.35 var(--sans); margin-bottom: 6px; }
+.msg-body { font: 400 15px/1.65 var(--sans); overflow: hidden; }
+.msg-subject:hover:not([readonly]), .msg-body:hover:not([readonly]) { background: var(--mist); }
+.msg-subject:focus, .msg-body:focus { background: var(--mist); outline: 2px solid var(--accent); outline-offset: 1px; }
+.msg-subject[readonly], .msg-body[readonly] { cursor: default; }
+.msg .source { margin: 8px 2px 0; }
+.msg-panel .panel-head { align-items: center; }
+.msg-actions { margin-top: 4px; flex-wrap: wrap; align-items: center; }
+.warnline { color: var(--warn); }
+.link.back { font-weight: 500; }
+
+/* The send confirmation (TR-01, TR-02). --elev-3, because it is the one thing that floats above
+   the page, and the quiet button is the one that keeps the message here. */
+dialog.sheet { max-width: 460px; border: 1px solid var(--line); border-radius: var(--radius-2);
+  box-shadow: var(--elev-3); padding: 26px 28px 22px; }
+.sheet-title { font: 600 22px/1.25 var(--serif); margin: 0 0 16px; }
+.sheet-defs { margin: 0 0 16px; }
+.sheet-warn { margin: 0 0 18px; font-size: 14px; color: var(--ink); }
+.sheet-actions { gap: 10px; }
+
+/* Label that exists for a screen reader and not for the eye: the message's own words say what
+   the field is, so a visible label would be furniture on a page pretending to be an email. */
+.vh { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden;
+  clip-path: inset(50%); white-space: nowrap; border: 0; }
+
 .draft { white-space: pre-wrap; background: var(--bg); border: 1px solid var(--line); border-radius: 8px;
   padding: 12px 14px; margin: 8px 0 14px; font-size: 14px; line-height: 1.55; }
 

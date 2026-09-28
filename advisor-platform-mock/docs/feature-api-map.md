@@ -53,7 +53,7 @@ Shareable version: https://claude.ai/code/artifact/d179b0d4-48da-44e7-bc51-58805
 | Feature | API operation | Source |
 | --- | --- | --- |
 | **COMM-01** AI email drafting | `GET /communications`<br>`PATCH /communications/{communicationId}`<br>`POST /communications/{communicationId}/redraft` | Model, Platform |
-| **COMM-02** Tone personalisation | `GET /communications`<br>`POST /communications/{communicationId}/redraft` | Model, Platform |
+| **COMM-02** Tone personalisation | `GET /communications`<br>`PATCH /communications/{communicationId}`<br>`POST /communications/{communicationId}/redraft` | Model, Platform |
 | **COMM-03** Communication tracker | `GET /communications` | Platform |
 | **COMM-04** Client monitoring | `GET /alerts` | Green Meadows |
 | **COMM-05** Client Sentiment Index | — *Regulatory review* | — |

@@ -698,7 +698,7 @@ function createMock() {
   const alertOut = ({ advisorId, ...a }) => ({ ...a, householdName: a.householdId ? hhById(a.householdId).name : null });
 
   // List shapes leave the heavy field out; the by-id operation adds it back.
-  const commRow = ({ advisorId, body, ...c }) => ({ ...c, householdName: hhName(c.householdId), advisorName: advName(advisorId), sync: syncState() });
+  const commRow = ({ advisorId, body, ...c }) => ({ ...c, householdName: hhName(c.householdId), advisorName: advName(advisorId), editedBy: c.editedBy || null, editedAt: c.editedAt || null, sync: syncState() });
   const prospectRow = ({ advisorId, intakeNotes, ...p }) => ({ ...p, sync: syncState() });
   const onbRow = ({ advisorId, ...o }) => ({ ...o,
     stepsComplete: o.steps.filter(s => s.status === 'done').length, stepsTotal: o.steps.length,
@@ -905,7 +905,28 @@ function createMock() {
     ['PATCH', /^\/communications\/([^/]+)$/, (m, q, b) => {
       if (!isRole('advisor')) return forbid();
       const c = COMMS.find(x => x.id === m[1] && x.advisorId === user().advisorId); if (!c) return notFound('Message');
-      if (!b || !['approved', 'sent', 'draft'].includes(b.status)) return fail(400, 'bad_request', 'Status must be draft, approved or sent.');
+      if (!b || (b.status === undefined && b.subject === undefined && b.body === undefined))
+        return fail(400, 'bad_request', 'Send a status, a subject or a body.');
+      if (b.status !== undefined && !['approved', 'sent', 'draft'].includes(b.status))
+        return fail(400, 'bad_request', 'Status must be draft, approved or sent.');
+
+      /* What you edit is what they get (UX_RULES TR-02), which only holds while it is still
+         here. Once it has left the firm the client has what they have, so the text is closed. */
+      const edits = ['subject', 'body'].filter(k => b[k] !== undefined && String(b[k]).trim() !== c[k]);
+      if (edits.length) {
+        if (c.status === 'sent') return fail(409, 'conflict', 'That message has been sent. What the client received cannot be changed.');
+        if (edits.some(k => !String(b[k]).trim())) return fail(400, 'bad_request', 'A message needs a subject and something to say.');
+        const before = Object.fromEntries(edits.map(k => [k, c[k]]));
+        for (const k of edits) c[k] = String(b[k]).trim();
+        c.editedBy = user().name; c.editedAt = NOW();
+        /* An edited AI draft is the advisor's words now, not the platform's. */
+        c.draftedBy = 'advisor';
+        logActivity(user().advisorId, { actor: 'advisor', subjectType: 'communication', subjectId: c.id,
+          summary: 'Edited the message to ' + (hhName(c.householdId) || 'the practice'),
+          detail: edits.includes('body') ? 'The text changed.' : 'The subject changed.',
+          undoable: true, undoWith: { method: 'PATCH', path: '/communications/' + c.id, body: before } });
+      }
+      if (b.status === undefined) return ok({ ...commRow(c), body: c.body });
       if (b.status === 'sent' && c.status === 'draft') return fail(409, 'conflict', 'A draft must be approved before it is sent.');
       c.status = b.status;
       if (b.status === 'draft') { c.approvedBy = null; c.approvedAt = null; c.sentAt = null; }

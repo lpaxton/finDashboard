@@ -70,8 +70,8 @@ Open follow-ups: ${(c.tasks || []).join('; ') || 'none'}`
     effort: 'medium',
     system: `${HOUSE_RULES}
 
-Draft an email from the adviser to the client. Open with a subject line as "Subject: ...", then
-the body. Keep it under 200 words. Say the one thing the email is for, give the client what they
+Draft the body of an email from the adviser to the client. The subject line is a separate field
+and is not yours to write: do not open with "Subject:" or repeat it. Keep it under 200 words. Say the one thing the email is for, give the client what they
 need to act, and offer a next step. No summary of the relationship, no filler.
 
 The requested tone changes the register, never the facts:

@@ -53,4 +53,6 @@ document.addEventListener('click', (e) => {
   if (e.target.closest('[data-close]')) $('dlg').close();
 });
 
+$('dlg').addEventListener('close', () => { $('dlg').className = ''; });
+
 boot();

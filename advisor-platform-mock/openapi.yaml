@@ -493,17 +493,19 @@ paths:
         '404': { $ref: '#/components/responses/Error' }
     patch:
       tags: [Communications]
-      operationId: approveCommunication
-      summary: Approve, send or return a message to draft
+      operationId: updateCommunication
+      summary: Edit a draft, or approve, send and return it
       description: >
-        The human-in-the-loop gate on anything that leaves the firm. A draft must be approved
-        before it can be sent; sending an unapproved draft is refused with 409. The approver and
-        the time are recorded. Requirement: COMM-01, X-03, X-05.
+        The human-in-the-loop gate on anything that leaves the firm, and the only way to change
+        what a message says. A draft must be approved before it can be sent; sending an
+        unapproved draft is refused with 409. Editing a sent message is refused with 409, because
+        what left the firm is what the client has. The approver, the editor and the times are
+        recorded. Requirement: COMM-01, COMM-02, X-03, X-05.
       parameters:
         - { $ref: '#/components/parameters/communicationId' }
       requestBody:
         required: true
-        content: { application/json: { schema: { type: object, required: [status], properties: { status: { $ref: '#/components/schemas/CommunicationStatus' } } } } }
+        content: { application/json: { schema: { $ref: '#/components/schemas/CommunicationUpdate' } } }
       responses:
         '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Communication' } } } }
         '400': { $ref: '#/components/responses/Error' }
@@ -1636,6 +1638,19 @@ components:
           required: [body]
           properties:
             body: { type: string, description: The full message text. }
+            editedBy: { type: string, nullable: true, description: 'Who last changed the text. Null when nobody has.' }
+            editedAt: { type: string, format: date-time, nullable: true }
+
+    CommunicationUpdate:
+      type: object
+      description: >
+        At least one field. Text and status may be sent together: approving an edited draft is
+        one decision for the advisor, and should be one call.
+      minProperties: 1
+      properties:
+        status: { $ref: '#/components/schemas/CommunicationStatus' }
+        subject: { type: string, minLength: 1 }
+        body: { type: string, minLength: 1, description: 'The message text, exactly as it will arrive.' }
 
     CommunicationPage:
       type: object

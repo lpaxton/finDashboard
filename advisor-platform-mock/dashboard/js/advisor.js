@@ -1,6 +1,6 @@
 /* The advisor's own sections. Everything here is internal: none of it may reach a client. */
 import { api } from './api.js';
-import { $, esc, money, moneyFull, pct, pctClass, fmtTime, fmtDate, localDate, daysAgo, daysBetween, dueLabel, syncBadge, syncNotice, sourceLine, CATEGORY } from './format.js';
+import { $, esc, money, moneyFull, pct, pctClass, fmtTime, fmtDate, localDate, daysAgo, daysBetween, dueLabel, syncBadge, syncNotice, sourceLine, sourceKind, CATEGORY } from './format.js';
 import { toast, spark, head, panel, load, alertsList, openHousehold, bookPanel, spine, roleMark, roleTabs, disclosure, wireDisclosures, snoozeChoices, SNOOZE_CHOICES, loadActivity, onUndo } from './ui.js';
 import { snooze, unsnooze, unsnoozeAll, dropExpiredSnoozes, get as vsGet, set as vsSet, isSnoozed } from './viewstate.js';
 import { ROLES, ROLE, collectRoleWork, rankRoles } from './roles.js';
@@ -219,7 +219,7 @@ async function runItemAction(w, btn) {
   const a = w.action;
   if (a.kind === 'household') return openHousehold(a.id, true);
   if (a.kind === 'prospect') return openProspect(a.id, drawRoleCards);
-  if (a.kind === 'communication') return openComm(a.id, drawRoleCards);
+  if (a.kind === 'communication') { vsSet('openComm', a.id); vsSet('inboxTab', 'approve'); return goSection('inbox'); }
   if (a.kind === 'inbox') return goSection('inbox');
   if (a.kind === 'role') return goSection('role:' + a.id);
   if (a.kind === 'next-action') {
@@ -320,51 +320,194 @@ export function followupsPanel(host) {
 /* ---- Communications: the approval gate. Nothing leaves the firm without a human (X-03). ---- */
 export const COMM_BADGE = { draft: ['prep', 'Awaiting approval'], approved: ['ready', 'Approved, queued'], sent: ['plain', 'Sent'] };
 export function commsPanel(host, initialStatus = '') {
-  host.innerHTML = `<div class="grid">${panel('w-comms', 'wide')}</div>`;
   let status = initialStatus;
-  const run = () => load($('w-comms'), 'Communications', () => api('GET', '/communications', { query: { status, size: 20 } }), (r) =>
-    `<div class="panel-head"><h2>Messages</h2><label class="hint">Show <select id="cmfilter" aria-label="Filter messages by status"><option value="">All</option><option value="draft">Awaiting approval</option><option value="approved">Approved</option><option value="sent">Sent</option></select></label></div>`
-    + (r.items.length ? `<ul class="rows">${r.items.map(c => { const [cls, label] = COMM_BADGE[c.status]; return `
-      <li><div class="grow"><div class="title">${esc(c.subject)}</div>
-      <div class="meta">${esc(c.householdName || 'Practice')} • ${esc(c.channel)} • ${esc(daysAgo(c.createdAt))}${c.draftedBy === 'ai' ? ' • AI draft' : ''}${c.complianceReview ? ' • <span class="due-hot">compliance review</span>' : ''}</div>
-      ${c.approvedBy ? `<div class="meta">Approved by ${esc(c.approvedBy)}</div>` : ''}</div>
-      <span class="badge ${cls}">${esc(label)}</span>${syncBadge(c.sync)}
-      <button class="btn" data-open="${esc(c.id)}">Open</button></li>`; }).join('')}</ul>` + syncNotice(r.items) : '<p class="empty">No messages match.</p>'),
-  (el) => {
-    const f = el.querySelector('#cmfilter'); f.value = status; f.onchange = () => { status = f.value; run(); };
-    el.querySelectorAll('[data-open]').forEach(b => b.onclick = () => openComm(b.dataset.open, run));
-  });
-  run();
+
+  const drawList = () => {
+    host.innerHTML = `<div class="grid">${panel('w-comms', 'wide')}</div>`;
+    load($('w-comms'), 'Messages',
+      () => api('GET', '/communications', { query: { status, size: 20 } }),
+      (r) => `<div class="panel-head"><h2>Messages</h2><label class="hint">Show <select id="cmfilter" aria-label="Filter messages by status"><option value="">All</option><option value="draft">Awaiting approval</option><option value="approved">Approved</option><option value="sent">Sent</option></select></label></div>`
+        + (r.items.length ? `<ul class="rows">${r.items.map(c => { const [cls, label] = COMM_BADGE[c.status]; return `
+          <li><div class="grow"><div class="title">${esc(c.subject)}</div>
+          <div class="meta">${esc(c.householdName || 'Practice')} \u2022 ${esc(c.channel)} \u2022 ${esc(daysAgo(c.createdAt))}${c.complianceReview ? ' \u2022 <span class="due-hot">compliance review</span>' : ''}</div>
+          ${c.approvedBy ? `<div class="meta">Approved by ${esc(c.approvedBy)}</div>` : ''}</div>
+          <span class="badge ${cls}">${esc(label)}</span>${syncBadge(c.sync)}
+          <button class="btn" data-open="${esc(c.id)}">${c.status === 'draft' ? 'Read and approve' : 'Open'}</button></li>`; }).join('')}</ul>` + syncNotice(r.items)
+          : '<p class="empty serif">No messages match.</p>'),
+      (el) => {
+        const f = el.querySelector('#cmfilter'); f.value = status; f.onchange = () => { status = f.value; drawList(); };
+        el.querySelectorAll('[data-open]').forEach(b => b.onclick = () => openComm(b.dataset.open, drawList, host));
+      });
+  };
+
+  /* A message asked for by name — from a role card on Today — opens straight into its frame
+     rather than dropping the advisor at a list to find it again (FO-06). */
+  const waiting = vsGet('openComm');
+  if (waiting) { vsSet('openComm', undefined); openComm(waiting, drawList, host); } else { drawList(); }
 }
 
-export async function openComm(id, done) {
-  const dlg = $('dlg');
-  dlg.innerHTML = '<p class="empty">Loading…</p>'; dlg.showModal();
+/* ---- The message: the draft frame and the send confirmation (TR-01, TR-02) ---------------
+ * "What you edit is what they get. A draft is shown exactly as it will arrive, so there is no
+ * separate preview" (TR-02). So this is not a form with a preview beside it: the fields the
+ * advisor types into ARE the message, styled as the message. The dashed violet frame is the
+ * only thing that says it has not been sent (product rule 1, design system §1.5), and it stays
+ * dashed until it actually leaves — an approved message has not been sent either.
+ *
+ * It opens in place, where the advisor was, and gives back one step (FO-06).
+ */
+
+/* What the recipient is told, in the order the advisor needs to check it. Channel and household
+ * are all the contract models: there is no named person and no address on a household, which is
+ * why "To" is a household and not an inbox. Raised in docs/design.md. */
+const CHANNEL_WORD = { email: 'by email', letter: 'by post', portal: 'in their client portal' };
+
+function messageFrom() {
+  const s = state.session;
+  return s ? s.name + ' \u00b7 ' + s.firm.name : 'your firm';
+}
+
+export async function openComm(id, done, host) {
+  const el = host || $('w-comms') || $('section');
+  el.innerHTML = `<div class="panel"><div class="skel"></div><div class="skel m"></div><div class="skel s"></div></div>`;
   try {
     const c = await api('GET', '/communications/' + encodeURIComponent(id));
-    const [cls, label] = COMM_BADGE[c.status];
-    dlg.innerHTML = `<button class="btn quiet close" data-close>Close</button><h2 id="dlgTitle">${esc(c.subject)}</h2>
-      <div><span class="badge ${cls}">${esc(label)}</span>${c.complianceReview ? ' <span class="badge crit">Compliance review</span>' : ''}</div>
-      <dl class="defs"><dt>To</dt><dd>${esc(c.householdName || 'Practice')}</dd><dt>Channel</dt><dd>${esc(c.channel)}</dd><dt>Tone</dt><dd>${esc(c.tone || 'Not set')}</dd><dt>Drafted</dt><dd>${esc(c.draftedBy === 'ai' ? 'By AI, ' + daysAgo(c.createdAt).toLowerCase() : daysAgo(c.createdAt))}</dd>${c.approvedBy ? `<dt>Approved</dt><dd>${esc(c.approvedBy)}</dd>` : ''}</dl>
-      <h3>Draft</h3><p class="draft">${esc(c.body)}</p>
-      <p class="hint">${c.status === 'draft' ? 'This is a draft. It cannot be sent until an advisor approves it, and the approval is recorded.' : c.status === 'approved' ? 'Approved and queued. Sending is the last step.' : 'This message has been sent.'}</p>
-      <div class="actions">
-      ${c.status !== 'sent' ? `<button class="btn" id="cmRedraft">Redraft</button>
-        <select id="cmTone" aria-label="Tone"><option>Warm and direct</option><option>Formal</option><option>Brief</option></select>` : ''}
-      ${c.status === 'draft' ? '<button class="btn primary" data-act="approved">Approve</button>' : ''}
-      ${c.status === 'approved' ? '<button class="btn primary" data-act="sent">Send now</button><button class="btn" data-act="draft">Return to draft</button>' : ''}</div>
-      <div id="cmDraft"></div>`;
-    const rd = $('cmRedraft');
-    if (rd) rd.onclick = () => runDraft(rd, $('cmDraft'), 'POST', '/communications/' + encodeURIComponent(id) + '/redraft', { tone: $('cmTone').value });
-    dlg.querySelectorAll('[data-act]').forEach(b => b.onclick = async () => {
-      b.disabled = true;
+    drawComm(el, c, done);
+  } catch (e) {
+    el.innerHTML = `<div class="panel"><p class="err">${esc(e.message)}</p></div>`;
+  }
+}
+
+function drawComm(el, c, done) {
+  const sent = c.status === 'sent';
+  const [cls, statusLabel] = COMM_BADGE[c.status];
+  /* Dashed while it is still ours; solid once it has gone. Nothing sent is ever dashed. */
+  const frameLabel = sent ? 'Sent ' + daysAgo(c.sentAt || c.createdAt).toLowerCase()
+    : c.status === 'approved' ? 'Approved \u00b7 not sent yet' : 'Draft \u00b7 not sent';
+
+  el.innerHTML = `<section class="panel wide msg-panel">
+    <div class="panel-head">
+      <button class="link back" id="cmBack">\u2190 All messages</button>
+      <span class="badge ${cls}">${esc(statusLabel)}</span>
+    </div>
+
+    <article class="msg" data-state="${esc(c.status)}">
+      <span class="msg-label${sent ? ' sent' : ''}">${esc(frameLabel)}</span>
+      <div class="msg-frame">
+        <dl class="msg-head">
+          <div><dt>To</dt><dd>${esc(c.householdName || 'The practice')} <span class="meta">${esc(CHANNEL_WORD[c.channel] || c.channel)}</span></dd></div>
+          <div><dt>From</dt><dd>${esc(messageFrom())}</dd></div>
+        </dl>
+        <label class="vh" for="cmSubject">Subject</label>
+        <input class="msg-subject" id="cmSubject" value="${esc(c.subject)}" ${sent ? 'readonly' : ''}>
+        <label class="vh" for="cmBody">Message</label>
+        <textarea class="msg-body" id="cmBody" rows="1" ${sent ? 'readonly' : ''}>${esc(c.body)}</textarea>
+      </div>
+      <p class="source" id="cmReceipt">${esc(commReceipt(c))}</p>
+    </article>
+
+    ${c.complianceReview && !sent ? '<p class="hint warnline">Flagged for compliance review. It should not go out until that is done.</p>' : ''}
+
+    <div class="actions msg-actions">
+      ${sent ? ''
+        : c.status === 'draft'
+          ? '<button class="btn primary" id="cmApprove">Approve</button><button class="btn" id="cmRedraft">Rewrite it for me</button>'
+          : '<button class="btn primary" id="cmSend">Send</button><button class="btn" id="cmReturn">Back to draft</button><button class="btn" id="cmRedraft">Rewrite it for me</button>'}
+      ${sent ? '' : '<select id="cmTone" aria-label="Tone for a rewrite"><option>Warm and direct</option><option>Formal</option><option>Brief</option></select>'}
+    </div>
+    <div id="cmDraft"></div>
+  </section>`;
+
+  $('cmBack').onclick = () => done();
+  const subject = $('cmSubject'), body = $('cmBody');
+  autoGrow(body);
+
+  if (!sent) {
+    /* Saved when the advisor looks away, not when they hunt for a Save button. The edit is
+       recorded and can be taken back, which is what makes saving quietly safe (TR-07). */
+    async function save(field, input, was) {
+      const val = input.value.trim();
+      if (val === was || !val) { input.value = was; return; }
       try {
-        await api('PATCH', '/communications/' + encodeURIComponent(id), { body: { status: b.dataset.act } });
-        toast(b.dataset.act === 'approved' ? 'Approved. It is queued, not sent.' : b.dataset.act === 'sent' ? 'Sent.' : 'Returned to draft.');
-        dlg.close(); done();
-      } catch (e) { toast(e.message); b.disabled = false; }
-    });
-  } catch (e) { dlg.innerHTML = `<button class="btn quiet close" data-close>Close</button><p class="err">${esc(e.message)}</p>`; }
+        const updated = await api('PATCH', '/communications/' + encodeURIComponent(c.id), { body: { [field]: val } });
+        c[field] = val; c.editedBy = updated.editedBy; c.editedAt = updated.editedAt; c.draftedBy = 'advisor';
+        $('cmReceipt').textContent = commReceipt(c);
+        toast('Saved.', { label: 'Undo', run: async () => {
+          try { await api('PATCH', '/communications/' + encodeURIComponent(c.id), { body: { [field]: was } }); c[field] = was; input.value = was; autoGrow(body); $('cmReceipt').textContent = commReceipt(c); loadActivity(); }
+          catch (e) { toast(e.message); }
+        } });
+        loadActivity();
+      } catch (e) { toast(e.message); input.value = was; autoGrow(body); }
+    }
+    subject.onblur = () => save('subject', subject, c.subject);
+    body.onblur = () => save('body', body, c.body);
+    body.oninput = () => autoGrow(body);
+
+    const rd = $('cmRedraft');
+    if (rd) rd.onclick = () => runDraft(rd, $('cmDraft'), 'POST', '/communications/' + encodeURIComponent(c.id) + '/redraft',
+      { tone: $('cmTone').value },
+      /* Straight into the frame, saved the same way a typed edit is — so it is undoable, it is
+         in the log, and the message still lives in exactly one place. */
+      (text) => {
+        /* A model may still open with a subject line even though it was asked not to. Put it
+           where it belongs rather than letting the message say it twice. */
+        const m = /^\s*Subject:\s*(.+?)\n+/i.exec(text);
+        if (m) { text = text.slice(m[0].length); const wasSubj = c.subject; subject.value = m[1].trim(); save('subject', subject, wasSubj); }
+        const was = c.body; body.value = text.trim(); autoGrow(body); save('body', body, was);
+      });
+
+    const move = async (status, said) => {
+      try {
+        await api('PATCH', '/communications/' + encodeURIComponent(c.id), { body: { status } });
+        toast(said);
+        loadActivity();
+        const fresh = await api('GET', '/communications/' + encodeURIComponent(c.id));
+        drawComm(el, fresh, done);
+      } catch (e) { toast(e.message); }
+    };
+    const ap = $('cmApprove');
+    if (ap) ap.onclick = () => move('approved', 'Approved. It is queued, not sent.');
+    const rt = $('cmReturn');
+    if (rt) rt.onclick = () => move('draft', 'Back to draft.');
+    const sd = $('cmSend');
+    if (sd) sd.onclick = () => confirmSend(c, () => move('sent', 'Sent.'));
+  }
+}
+
+/* The one-line receipt: what the platform did, or what the advisor did to it (TR-04). */
+function commReceipt(c) {
+  if (c.editedBy) return 'Drafted by the platform, edited by ' + c.editedBy + ' \u00b7 ' + daysAgo(c.editedAt).toLowerCase();
+  if (c.draftedBy === 'ai') return 'Drafted by the platform ' + daysAgo(c.createdAt).toLowerCase() + ' \u00b7 in a ' + (c.tone || 'plain').toLowerCase() + ' tone';
+  return 'Written by ' + (c.advisorName || 'an advisor') + ' \u00b7 ' + daysAgo(c.createdAt).toLowerCase();
+}
+
+const autoGrow = (t) => { t.style.height = 'auto'; t.style.height = t.scrollHeight + 'px'; };
+
+/* The send confirmation (TR-01, TR-02). One sheet, above the page, naming who it goes to, who
+ * it comes from, what is attached and whether it can be called back. It is the last thing
+ * between a draft and a client, so it says so plainly and it is not the default button.
+ */
+export function confirmSend(c, send) {
+  const dlg = $('dlg');
+  dlg.className = 'sheet';
+  dlg.innerHTML = `<h2 id="dlgTitle" class="sheet-title">This leaves the firm</h2>
+    <dl class="defs sheet-defs">
+      <dt>To</dt><dd>${esc(c.householdName || 'The practice')} <span class="meta">${esc(CHANNEL_WORD[c.channel] || c.channel)}</span></dd>
+      <dt>From</dt><dd>${esc(messageFrom())}</dd>
+      <dt>Subject</dt><dd>${esc(c.subject)}</dd>
+      <dt>Attached</dt><dd>Nothing</dd>
+    </dl>
+    ${c.complianceReview ? '<p class="hint warnline">This message is flagged for compliance review.</p>' : ''}
+    <p class="sheet-warn">Once it goes it cannot be recalled.</p>
+    <div class="actions sheet-actions">
+      <button class="btn primary" id="sendGo">Send it</button>
+      <button class="btn" id="sendNo">Not yet</button>
+    </div>`;
+  dlg.showModal();
+  $('sendNo').focus();
+  /* Escape closes it too, and Escape means 'not yet'. The class is cleared on close in
+     app.js, so the next thing to use this dialog is not styled as a sheet. */
+  $('sendNo').onclick = () => dlg.close();
+  $('sendGo').onclick = () => { dlg.close(); send(); };
 }
 
 /* ---- Prospects ---- */
@@ -845,7 +988,11 @@ export function teamSharePanelFor(elId) {
 
 /* A draft is shown beside what it was made from, never in place of it, and is labelled with
    what produced it — including when that was the offline generator rather than a model. */
-export async function runDraft(btn, out, method, path, body) {
+/* `use` is given when there is somewhere for the draft to go. TR-02 says a draft is shown
+   exactly as it will arrive and there is no separate preview — so where a frame exists, a
+   rewrite belongs in it, not in a second block beside it. Copy stays for the drafts with no
+   frame to land in: a meeting summary, an agenda. */
+export async function runDraft(btn, out, method, path, body, use) {
   btn.disabled = true;
   out.innerHTML = '<div class="skel"></div><div class="skel s"></div>';
   try {
@@ -854,19 +1001,23 @@ export async function runDraft(btn, out, method, path, body) {
       out.innerHTML = `<p class="err">The model declined this request${r.refusalCategory ? ' (' + esc(r.refusalCategory) + ')' : ''}.</p>`;
       return;
     }
-    out.innerHTML = `<div class="answer">
-      <p class="demo-lbl">Draft</p>
+    out.innerHTML = `<div class="answer suggestion">
+      <p class="demo-lbl">${use ? 'Suggested rewrite' : 'Draft'}</p>
       <p class="draft">${esc(r.draft)}</p>
       ${r.provenance.readFrom && r.provenance.readFrom.length ? `<div class="answer-cites"><strong>Read from</strong>
-        <ul>${r.provenance.readFrom.map(c => `<li><span class="tag">${esc(c.source)}</span> ${esc(c.label)}</li>`).join('')}</ul></div>` : ''}
+        <ul>${r.provenance.readFrom.map(c => `<li><span class="tag">${esc(sourceKind(c.source))}</span> ${esc(c.label)}</li>`).join('')}</ul></div>` : ''}
       <p class="hint">${r.provenance.live ? 'Drafted by ' + esc(r.provenance.model) : 'Written offline: no model is connected'}
-        • prompt ${esc(r.provenance.promptVersion)}. A draft — nothing has been saved or sent.</p>
-      <button class="btn" data-copy>Copy</button></div>`;
+        \u2022 prompt ${esc(r.provenance.promptVersion)}. ${use ? 'Nothing has changed until you use it.' : 'A draft \u2014 nothing has been saved or sent.'}</p>
+      <div class="actions">${use ? '<button class="btn primary" data-use>Use this wording</button><button class="btn" data-discard>Keep what I have</button>' : '<button class="btn" data-copy>Copy</button>'}</div></div>`;
     const copy = out.querySelector('[data-copy]');
     if (copy) copy.onclick = async () => {
       try { await navigator.clipboard.writeText(r.draft); toast('Copied.'); }
       catch { toast('Select the text to copy it.'); }
     };
+    const useBtn = out.querySelector('[data-use]');
+    if (useBtn) useBtn.onclick = () => { out.innerHTML = ''; use(r.draft); };
+    const discard = out.querySelector('[data-discard]');
+    if (discard) discard.onclick = () => { out.innerHTML = ''; };
   } catch (e) { out.innerHTML = `<p class="err">${esc(e.message)}</p>`; }
   finally { btn.disabled = false; }
 }
