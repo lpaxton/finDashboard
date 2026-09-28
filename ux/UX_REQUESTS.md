@@ -8,7 +8,9 @@
 > wrote them. What was built, what was not and why is in `advisor-platform-mock/docs/design.md`;
 > the order it was built in is in `advisor-platform-mock/docs/ux-build-plan.md`.
 >
-> **Three things need a [PO] call before they can be built** — see the bottom of this file.
+> **Two requests were raised from the build** (Batch 3, UX-012 and UX-013), out of reading
+> `UX_RESEARCH.md` against what was built. **Three more things need a [PO] call before they can
+> be built** — see the bottom of this file.
 
 The log of what design asks build for, and what comes back. One entry per request. Luke's
 `docs/design.md` records what was built; this file records what was asked for and why, so the
@@ -200,6 +202,63 @@ Why: FO-09 (meaning first, then a suggested action) · CS-03.
 Done looks like: the wireframe (to follow).
 Spec: UX_RULES.md FO-09, CS-03.
 Build notes: (Luke) Signals lead with their meaning and open in place. The suggested action is *Show which households* rather than a drafted step, because portfolio signals have no automation behind them in the contract. `docs/design.md`, 28 Sept.
+
+
+---
+
+## Batch 3 — raised by the build, from the research (28 September 2026)
+
+*These two run the other way down the log: the build asking design, which is the return path in
+`UX_README.md` §3 step 4. They came out of reading `UX_RESEARCH.md` against what was built —
+the full check is in `advisor-platform-mock/docs/ux-research-check.md`. Numbers are taken from
+the next free ones; renumber or reject them freely, they are yours.*
+
+### UX-012 · Life events have nowhere to live
+Touches: **Plumbing**
+Status: Needs a decision · Tag: [PO] · Views: Advisor (Client later)
+Asked for: A way for the platform to surface a change in a client's life — and a rule for when
+it must not. F4 lists what S1's advisors named: job changes, relocations, new family members,
+divorce, inheritance, large transactions, birthdays and anniversaries, retirement horizon,
+children reaching college age, overspending and pay swings. The same finding asks for the
+opposite as well: sensitive events never enter a draft, and a client going through a divorce
+gets a full automation clamp, inspectable and with reasons.
+Why: F4, and it is **HEARD** — one of the three clearest asks in the only primary research we
+have. CS-09 already names "life events" as something that counts as slipping, and TR-08 and
+product rule 3 govern what may be said about them.
+Done looks like: a life event reaches the right role card with what happened, how the platform
+knows and one suggested action (CS-03) — and a named class of event that the platform notices
+and deliberately says nothing about, where the advisor can see that it is holding back and why.
+Spec: UX_RULES.md CS-09, CS-03, TR-08 · UX_RESEARCH.md F4.
+Build notes: (Luke) **Nothing exists to build on.** No endpoint, no field, no data source, and
+no feature among the 75 — `UX_RESEARCH.md` §7 already says so: *"life-event detection is not a
+named feature."* The phrase appears once in the code, in a comment in `dashboard/js/roles.js`
+quoting the rule it cannot implement. The restraint half has no precedent anywhere in the build:
+every rule implemented so far governs what to show, and this one governs what to withhold.
+§5 of the research notes that restraint rules are the row no competitor ships.
+This needs a feature and a data source before it can be designed, so it is a [PO] call first.
+
+### UX-013 · The four roles are untested, and they are the frame
+Touches: **Room** *(potentially everything on Today)*
+Status: Needs a decision · Tag: [PO] · Views: Advisor
+Asked for: Put FO-01's four roles in front of advisors before anything more is built into them —
+and settle what Development is for, or whether it is a role at all.
+Why: `UX_RESEARCH.md` F9 says the advisor is **planner, relationship manager and small-business
+owner** — three, tagged OURS. FO-01 says **prospecting · client advisor · business operations ·
+professional development** — four. They do not map: planner and relationship manager both fold
+into client advisor, small-business owner splits across prospecting and operations, and
+**professional development has no root in F9 at all.** So the organising principle of the whole
+advisor view is the team's framing of the team's framing, and no advisor has been asked.
+§9 question 9 already has the question written down.
+Done looks like: advisors recognise their week in the four roles, or they tell us the shape it
+really has. Either answer is worth having before more is built on it.
+Spec: UX_RULES.md FO-01, FO-02, CS-01 · UX_RESEARCH.md F9, §9.9 · UX_IA.md §2, §3.
+Build notes: (Luke) Built as specified, and it works — but the roles are now the frame of
+everything: the spine, Today's cards, the role homes and the ranking in `dashboard/js/roles.js`.
+Two observations from building it. **Development is the emptiest card because it is the role
+with no evidence behind it**, not because its endpoints are thin — it shows one scorecard metric
+because that is all there is, and I would not build Practice or Learning into it until this is
+answered. And the navigation A/B test parked in `UX_IA.md` §7 is worth more now, not less:
+the build committed to Option B and the other board still exists.
 
 
 ---
