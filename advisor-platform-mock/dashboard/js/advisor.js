@@ -936,7 +936,7 @@ export function advReports(host) {
   const runReport = () => load($('w-report'), 'Practice report', () => api('GET', '/reports/practice', { query: { from: backDate(days) } }), (r) =>
     `<div class="panel-head"><h2>Practice report</h2><label class="hint">Last <select id="repDays" aria-label="Reporting period">
       <option value="30">30 days</option><option value="90">90 days</option></select></label></div>`
-    + `<p class="hint">${esc(r.from)} to ${esc(r.to)}, against ${esc(r.previousFrom)} to ${esc(r.previousTo)}.</p>`
+    + `<p class="hint">${esc(fmtDate(r.from))} to ${esc(fmtDate(r.to))}, against ${esc(fmtDate(r.previousFrom))} to ${esc(fmtDate(r.previousTo))}.</p>`
     + metricRows(r.metrics)
     + Object.entries(r.breakdowns).map(([k, rows]) => rows.length ? `<h3>${esc(BREAKDOWN[k] || k)}</h3><ul class="rows">${rows.map(x => `
         <li><div class="grow"><div class="title">${esc(x.label)}</div></div><span>${x.count}</span></li>`).join('')}</ul>` : '').join(''),

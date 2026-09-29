@@ -515,6 +515,29 @@ test('no contract operation is left without a UI', () => {
   assert.deepEqual(missing, [], 'operations with no UI: ' + missing.join(', '));
 });
 
+/* The no-UI test above checks a path is mentioned somewhere. Four firm-scope capabilities were
+   served and documented for weeks while the Firm view reached none of them, because the advisor
+   view calls the same paths for one book. Scope is the thing that was missing, so scope is what
+   this asserts. */
+test('the firm view reaches the firm-scope operations, not just the paths', () => {
+  const js = fs.readFileSync(path.join(__dirname, '..', 'dashboard', 'js', 'firm.js'), 'utf8');
+  const want = [
+    ["/next-actions", "firm-wide priorities (PL-02)"],
+    ["/alerts", "firm alerts (AX-05)"],
+    ["/reports/practice", "the practice report at firm scale (PO-07)"],
+    ["/communications", "the review queue across the firm (COMM-03)"],
+    ["/scorecard", "one advisor against the firm (AX-08)"],
+    ["/firm/advisors/", "one advisor's own figures (PO-06)"]
+  ];
+  const missing = want.filter(([p]) => !js.includes(p)).map(([p, why]) => `${p} — ${why}`);
+  assert.deepEqual(missing, [], 'the Firm view no longer reaches: ' + missing.join('; '));
+  // The first four are only firm-scope if they ask for it.
+  for (const p of ['/next-actions', '/alerts', '/reports/practice', '/communications']) {
+    const call = js.slice(js.indexOf(`'${p}'`));
+    assert.match(call.slice(0, 200), /scope: 'firm'/, `${p} is called from the Firm view without scope=firm`);
+  }
+});
+
 /* ---- the query surface ---- */
 
 test('a query is scoped like every other operation', async () => {

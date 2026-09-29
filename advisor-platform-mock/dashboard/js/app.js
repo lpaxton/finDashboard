@@ -14,7 +14,9 @@ const VIEW_LABEL = { firm: 'Firm', advisor: 'Advisor', client: 'Client' };
 function showView(v) {
   state.view = v;
   const s = state.session, first = s.name.split(' ')[0], h = new Date().getHours();
-  $('greeting').textContent = v === 'firm' ? 'Firm overview' : v === 'client' ? 'Welcome, ' + first
+  // 'The firm', not 'Firm overview': the view has seven sections now and Overview is one of
+  // them, so naming the whole view after a section made the page title argue with the nav.
+  $('greeting').textContent = v === 'firm' ? 'The firm' : v === 'client' ? 'Welcome, ' + first
     : (h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening') + ', ' + first;
   $('subhead').textContent = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' }) + ' • ' + s.firm.name;
   const tabs = $('tabs');

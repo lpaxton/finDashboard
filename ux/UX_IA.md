@@ -1,8 +1,11 @@
 # UX information architecture — advisor view
 
-*v0.1 · 26 September 2026 · Owner: Leila Mitchell · Decisions from the wireframe session on
+*v0.2 · 29 September 2026 · Owner: Leila Mitchell · Decisions from the wireframe session on
 26 Sept. The wireframes live on the canvas "Advisor Today — wireframes" (boards 1–11).
 Rules referenced are in `UX_RULES.md`.*
+
+*v0.2 — the Firm pass (§6 #3) was called and built; §1 and §6 updated. Nothing in the advisor
+view changed.*
 
 ---
 
@@ -12,12 +15,23 @@ Rules referenced are in `UX_RULES.md`.*
 | --- | --- |
 | **Advisor** | **The focus now.** Every rule in `UX_RULES.md` is written for it |
 | **Client** | A required deliverable, designed in a later pass. Already protected by the product rules: clients see only what an advisor approved |
-| **Firm** | **Parked.** Luke's current Firm view (Overview · Billing · Ownership · Branding) stays as built. Not an oversight: a deliberate choice to keep the POC focused |
+| **Firm** | **Done — the Firm pass, 29 September.** Overview · Advisors · Compliance · Reports · Billing & fees · Ownership · Branding. Was parked at four sections; §6 #3 was called and built |
 
-**A possible simplification for the Firm pass:** the Operations role and the Firm view overlap
-heavily. In a small firm, the Firm view may simply be the Operations role seen across the whole
-firm rather than one advisor's book. If that holds, it becomes the principal's version of the
-Operations role home, not a separate product.
+**The simplification held.** The doc's lean was that in a small firm the Firm view is the
+Operations role seen across the whole firm rather than one advisor's book — the principal's
+version of the Operations role home, not a separate product. That is what was built: the
+Operations role's concerns at firm scale (priorities, compliance, reports, money), plus the three
+places that are the firm itself and have no Operations equivalent (Advisors, Ownership,
+Branding). It does **not** show Dana her own four role cards; she already has those in the
+Advisor view for her own book, and repeating them here would answer "how is my book going" twice
+and "how is the firm going" never. That settles `UX_RULES.md` open decision 6.
+
+**What the pass actually unlocked.** Four firm-scope capabilities had been served and documented
+for some time while no screen reached them, because the advisor view calls the same paths for one
+book and scope was the missing half: `GET /next-actions?scope=firm` (PL-02),
+`GET /reports/practice?scope=firm` (PO-07), `GET /communications?scope=firm` (COMM-03, the review
+queue) and `GET /firm/advisors/{id}/scorecard` (AX-08). A test now asserts the scope, not just
+the path.
 
 **Note on the two switches in the build today:** the "Sign in as" bar (Dana / Marcus / Grace) is
 a development tool and won't ship. The Firm / Advisor tabs are a real feature, shown only to
@@ -118,11 +132,11 @@ what the platform can't see right now.
 
 ## 6. Open
 
-| # | Question | Tag |
-| --- | --- | --- |
-| 1 | **Pinned:** does the advisor set the pins, or are pins suggested from their habits? *Leaning, for discussion:* the platform may **suggest** a pin ("You open the Ito household most mornings — pin it?"), but never adds one itself. That keeps ST-07 (what the advisor sets, stays) and TM-03 (it learns in the open). | [UX] |
-| 2 | Tabs for each role home beyond Prospecting: confirm when each is wireframed | [UX] |
-| 3 | The Firm pass: is the Firm view the Operations role at firm scale? | [PO] |
+| # | Question | Tag | Status |
+| --- | --- | --- | --- |
+| 1 | **Pinned:** does the advisor set the pins, or are pins suggested from their habits? *Leaning, for discussion:* the platform may **suggest** a pin ("You open the Ito household most mornings — pin it?"), but never adds one itself. That keeps ST-07 (what the advisor sets, stays) and TM-03 (it learns in the open). | [UX] | Open |
+| 2 | Tabs for each role home beyond Prospecting: confirm when each is wireframed | [UX] | Open |
+| 3 | ~~The Firm pass: is the Firm view the Operations role at firm scale?~~ | [PO] | **Yes, built 29 Sept.** See §1 |
 
 ## 7. Parked for user testing
 

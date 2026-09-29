@@ -185,7 +185,7 @@ signal, not user evidence. **Leila: bring this back when the next round of user 
 | 3 | What counts as time-critical? | [UX] | **Answered** → FO-04 |
 | 4 | Whose voice in a multi-advisor firm? | [PO] | **Firm brand, personal voice** → TM-07 |
 | 5 | The mirror: in this POC or later? | [PO] | **Later** (parked) |
-| 6 | Does the Firm view show Dana her own four role cards, or the firm's operations? | [UX] | Next pass |
+| 6 | Does the Firm view show Dana her own four role cards, or the firm's operations? | [UX] | **The firm's operations** — built 29 Sept. See `UX_IA.md` §1 |
 | 7 | Where does *Next best action* go? | [UX] | **Inside the role cards** → FO-11 |
 | 8 | TR-10 (insight names its source) — keep? | [UX] | **Kept** |
 

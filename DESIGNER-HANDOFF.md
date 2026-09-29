@@ -132,13 +132,13 @@ design that colours every increase green is wrong regardless of how it looks.
 
 ## 5. What exists today
 
-Ten sections in the adviser view, four in the firm view, and the client portal. All of it is
+Ten sections in the adviser view, seven in the firm view, and the client portal. All of it is
 working against real data, not placeholders.
 
 **Adviser:** Today · Next best action · Clients · Communications · Prospects · Onboarding ·
 Calendar · Follow-ups · Playbooks · Reports
 
-**Firm:** Overview · Billing · Ownership · Branding
+**Firm:** Overview · Advisors · Compliance · Reports · Billing & fees · Ownership · Branding
 
 **Client portal:** accounts, value chart, items shared by the adviser, documents, fees,
 preferences, and a meeting request form.

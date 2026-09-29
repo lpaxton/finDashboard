@@ -27,6 +27,87 @@ Entries are newest first.
 
 ## Log
 
+### 29 September 2026 · The Firm pass — UX_IA §6 #3, a [PO] decision
+
+**Asked for.** Luke: "do the firm view IA pass." The question was recorded in `ux/UX_IA.md` §6 as
+decision 3 and tagged **[PO]** — the product owner's call, not the designer's — and in
+`ux/UX_RULES.md` as open decision 6: *does the Firm view show Dana her own four role cards, or
+the firm's operations?*
+
+**Decided.** The firm's operations. Dana already has her own four role cards in the Advisor view
+for her own book. Repeating them under **Firm** would answer "how is my book going" twice and
+"how is the firm going" never. This follows the lean the IA doc itself recorded: in a small firm
+the Firm view is the Operations role seen across the whole firm, so it is the principal's version
+of the Operations role home rather than a separate product.
+
+**Built.** `dashboard/js/firm.js`, from four sections to seven:
+
+| Section | What it is | New? |
+| --- | --- | --- |
+| Overview | Firm-wide priorities, then what else is open, then the households | Rebuilt |
+| Advisors | The roster, and one advisor against the firm | Moved out of Overview, and grown |
+| Compliance | The firm's obligations, and the messages waiting for review | Moved out of Overview, and grown |
+| Reports | The practice report at firm scale | **New** |
+| Billing & fees | Unchanged — renamed from "Billing" to say it holds both | Renamed |
+| Ownership | Unchanged | — |
+| Branding | Unchanged | — |
+
+**What the pass actually unlocked.** Four capabilities were being served and documented while no
+screen reached them. Not a gap anyone would have spotted from the contract: the advisor view
+calls the same paths for one book, so the paths looked used. **Scope** was the missing half.
+
+| Operation | Requirement | Now reached from |
+| --- | --- | --- |
+| `GET /next-actions?scope=firm` | PL-02 | Firm → Overview |
+| `GET /reports/practice?scope=firm` | PO-07 | Firm → Reports |
+| `GET /communications?scope=firm` | COMM-03 | Firm → Compliance |
+| `GET /firm/advisors/{id}/scorecard` | AX-08 | Firm → Advisors |
+
+A test — *"the firm view reaches the firm-scope operations, not just the paths"* — now asserts
+`scope: 'firm'` is present on each call, not merely that the path appears somewhere in the
+dashboard. The existing no-UI test could not have caught this and still cannot; the two sit side
+by side deliberately.
+
+**Two things the pass fixed on the way.**
+
+*The overview was a tile wall.* Four equal panels, the shape `UX_IA` §3 argues against
+("priorities lead, overviews are sentences and simple shapes"). It now leads with what needs the
+principal, and the advisors table and the compliance list — both of which had outgrown a panel on
+a summary screen — moved to sections of their own.
+
+*Two panels were telling the same story.* "Needs you" is built from the alerts, so showing the
+ranked list beside the raw alert stream repeated the same three rows verbatim. The second panel
+is now **"Also open"** — what is open and *not* already named on the left. The overlap is
+computed, not guessed, in two ways: an alert-kind next action cites its alert by id, and a
+contact-kind one, which cites the CRM instead, is matched to the no-contact alert on the same
+household via the `draft_email` action the contract gives exactly those alerts. No title
+matching.
+
+**Not built.**
+
+- **Opening an advisor's own dashboard read-only.** The old advisor dialog carried a line saying
+  this was "a decision still open in the requirements doc". It still is. The scorecard answers
+  *how is this advisor doing*; it does not answer *what is this advisor looking at*. That needs
+  either a contract decision about advisor-scoped reads by a principal or an explicit consent
+  model, and it is not a styling question.
+- **Re-ordering the compliance list by state.** Overdue items ought to lead. `GET
+  /firm/compliance` has no `sort` parameter and the response is paged, so sorting in the browser
+  would order a page rather than the obligations — which would read as correct and be wrong. The
+  panel now says "oldest due first", which is what the contract actually serves, and the badges
+  carry the state. **Implication:** a `sort` parameter on that operation is a small contract
+  change if you want it.
+
+**Implications.**
+
+- **No contract change.** Every operation above already existed and already accepted `scope`.
+- `UX_IA.md` is now **v0.2**; §1 and §6 #3 updated. `UX_RULES.md` open decision 6 closed.
+- The view's page title changed from "Firm overview" to **"The firm"**, because "Overview" is now
+  one of seven sections and the title was arguing with the nav.
+- **Needs a decision:** the read-only advisor dashboard, above. Everything else in this entry is
+  built and settled.
+
+---
+
 ### 28 September 2026 · TR-02 — the draft frame and the send confirmation
 
 The last two components of the fifteen in `ux/UX_DESIGN_SYSTEM.md` §5, and the highest-value

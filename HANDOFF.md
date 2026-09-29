@@ -42,7 +42,7 @@ advisor-platform-mock/
   dashboard/js/ui.js      shared DOM layer: panel loading, toasts, tables, dialogs, sub-nav
   dashboard/js/state.js   the little that crosses view boundaries, including branding
   dashboard/js/advisor.js the ten advisor sections
-  dashboard/js/firm.js    overview, billing, ownership, branding
+  dashboard/js/firm.js    overview, advisors, compliance, reports, billing & fees, ownership, branding
   dashboard/js/client.js  the client portal
   dashboard/js/app.js     entry point: sign in, pick a view, global click handlers
   types/api.d.ts          a type per schema plus an Operations map; generated, never hand-edited
@@ -326,8 +326,8 @@ buildable now.
 - **Dates in the mock are relative to the day it starts.** Restart or `POST /_mock/reset` to re-anchor. Weekly counts depend on the current weekday.
 - **Mock-only endpoints** live under `/_mock` and `/healthz`; they are not part of the contract.
 - **Injecting states for testing:** `x-mock-fail: 503`, `x-mock-delay: 1500`; in the dashboard's in-page mock, add `?fail=alerts` to the page URL.
-- **Placeholder actions:** some alert buttons still show a "not built yet" message; Open queue now goes to Communications. "Open advisor dashboard read-only" from the firm view is not built; the drill-down shows summary numbers only.
-- **Views and sections.** The role switcher (Firm, Advisor, Client) is the top level, per X-15. Inside the advisor view a sub-nav holds Today, Next best action, Clients, Communications, Prospects, Onboarding, Calendar, Follow-ups, Playbooks and Reports; inside the firm view, Overview, Billing, Ownership and Branding. Sections were kept below the role switcher deliberately, so an advisor's own work never sits at the same level as the client-safe boundary.
+- **Placeholder actions:** some alert buttons still show a "not built yet" message; Open queue now goes to Communications. "Open advisor dashboard read-only" from the firm view is not built; Firm → Advisors shows an advisor's current figures and their scorecard against the firm, which is how they are doing, not what they are looking at. Logged in docs/design.md as needing a decision.
+- **Views and sections.** The role switcher (Firm, Advisor, Client) is the top level, per X-15. Inside the advisor view a sub-nav holds Today, Next best action, Clients, Communications, Prospects, Onboarding, Calendar, Follow-ups, Playbooks and Reports; inside the firm view, Overview, Advisors, Compliance, Reports, Billing & fees, Ownership and Branding (the Firm pass, 29 Sept — UX_IA §6 #3). Sections were kept below the role switcher deliberately, so an advisor's own work never sits at the same level as the client-safe boundary.
 
 **Every AI output is a draft, and this is structural rather than a rule to remember.** Six surfaces produce them — suggested next steps, next best action, queries, meeting summaries, agendas and message redrafts — and all six return `accepted: false`, create nothing, and carry provenance saying what produced them and what they read. A draft becomes real only when an advisor acts: posting a task, approving a message. If a new AI feature does not follow that shape, it is the feature that is wrong.
 
