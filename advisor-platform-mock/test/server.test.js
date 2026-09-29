@@ -886,3 +886,15 @@ test('every requirement id named in the contract is a real one', () => {
     .filter(id => { const [p, n] = id.split('-'); return Number(n) < 1 || Number(n) > sizes[p]; });
   assert.deepEqual(bad, [], 'the contract references requirement ids that do not exist: ' + bad.join(', '));
 });
+
+// The section nav is mounted outside #view so it can move above the header on a phone, which
+// means replacing the view does not remove it. The client portal has no sections, and was
+// inheriting whichever nav was rendered last — the firm spine, Ownership and Billing included.
+test('a view with no sections cannot inherit the last one\'s nav', () => {
+  const app = fs.readFileSync(path.join(__dirname, '..', 'dashboard', 'js', 'app.js'), 'utf8');
+  const fn = app.slice(app.indexOf('function showView'), app.indexOf('async function boot'));
+  assert.match(fn, /querySelectorAll\('\.subnav'\)[\s\S]{0,40}remove\(\)/,
+    'showView must clear the section nav before rendering, or a view without sections keeps the last one');
+  const client = fs.readFileSync(path.join(__dirname, '..', 'dashboard', 'js', 'client.js'), 'utf8');
+  assert.doesNotMatch(client, /subnav\(/, 'the client portal has no sections and must not render a nav');
+});

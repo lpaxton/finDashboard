@@ -5,7 +5,8 @@
       "name": "advisor-mock",
       "runtimeExecutable": "npm",
       "runtimeArgs": ["start", "--prefix", "advisor-platform-mock"],
-      "port": 4010
+      "port": 4010,
+      "autoPort": true
     }
   ]
 }

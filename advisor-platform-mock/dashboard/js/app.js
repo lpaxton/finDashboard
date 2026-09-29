@@ -27,6 +27,11 @@ function showView(v) {
   ask.hidden = v === 'client';
   $('actBtn').hidden = v !== 'advisor';
   closeAsk(); closeActivity();
+  // The section nav is mounted outside #view so it can move above the header on a phone, which
+  // means replacing the view does not remove it. A view that has no sections must therefore not
+  // inherit the last one's: the client portal was showing the firm spine, Ownership and all.
+  // Cleared here rather than in each view, so a new view cannot forget.
+  document.querySelectorAll('.subnav').forEach(n => n.remove());
   setAskContext(v === 'firm' ? 'firm' : 'own', null, v === 'firm' ? 'the whole firm' : 'your book');
   VIEWS[v]();
 }
