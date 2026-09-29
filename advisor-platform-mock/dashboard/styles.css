@@ -483,64 +483,52 @@ dialog.sheet { max-width: 460px; border: 1px solid var(--line); border-radius: v
 .orderwhy { margin: 0 0 14px; color: var(--muted); font-size: 14px; }
 
 /* ---- The role cards (FO-01, FO-02, FO-04) ---- */
-/* Two up, never three. auto-fit gave as many columns as would fit, which on a wide screen was
-   three cards and a fourth left hanging on its own row — four cards want a 2x2, not a 3+1.
-   The count is capped, but the decision is still made by the space the grid actually has rather
-   than by the width of the window: opening Ask takes 420px out of the page without changing the
-   viewport, so a viewport media query would not notice. Hence a container query. */
+/* Today's role sections.
+   These were cards: a coloured band, a border, a gradient fill on whichever one led. Luke asked
+   for the boxes removed and the two things they were actually doing kept — which role leads,
+   and the order they sit in. Both live in the markup and the ranking now, not in the chrome.
+
+   What is left is a heading, a hairline, and the work. The role's mark keeps its colour, which
+   is the one place ST-02 needs it and is small enough not to read as a status. Nothing else on
+   Today is coloured except alert severity and the violet of a suggestion.
+
+   Two up, never three: auto-fit gave as many columns as would fit, which on a wide screen was
+   three and a fourth hanging alone on the next row. Four sections want a 2x2. The count is
+   capped, but the decision still belongs to the space the grid has rather than the width of the
+   window — opening Ask takes 420px out of the page without changing the viewport, so a media
+   query would not notice it. Hence a container query. */
 #section { container-type: inline-size; }
-.rolecards { display: grid; grid-template-columns: 1fr; gap: 16px; align-items: start; }
+.rolecards { display: grid; grid-template-columns: 1fr; gap: 28px 32px; align-items: start; }
 @container (min-width: 620px) {
   .rolecards { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
-.rolecard { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-2);
-  box-shadow: var(--elev-1); overflow: hidden; display: flex; flex-direction: column;
-  transition: box-shadow var(--dur-base) var(--ease); }
-.rolecard:hover { box-shadow: var(--elev-2); }
 
-/* Every card wears its own role colour on its edge, and the rule under its band is the same
-   colour, so the band reads as part of the card rather than a lid on it. The four roles are
-   part of the frame and always carry the same colour (ST-02); this is that colour said once
-   more, quietly, around the whole card. */
-.rolecard.role-bd { border-color: var(--role-bd); }
-.rolecard.role-ca { border-color: var(--role-ca); }
-.rolecard.role-op { border-color: var(--role-op); }
-.rolecard.role-pd { border-color: var(--role-pd); }
-.band { height: 34px; display: flex; align-items: center; gap: 9px; padding: 0 12px; color: #FBFAF6; }
-.rolecard.role-bd .band { background: var(--role-bd-deep); border-bottom: 1px solid var(--role-bd); }
-.rolecard.role-ca .band { background: var(--role-ca-deep); border-bottom: 1px solid var(--role-ca); }
-.rolecard.role-op .band { background: var(--role-op-deep); border-bottom: 1px solid var(--role-op); }
-.rolecard.role-pd .band { background: var(--role-pd-deep); border-bottom: 1px solid var(--role-pd); }
-.band .rolemark { background: var(--glass-fill); border: 1px solid var(--glass-line); }
-.band-name { font: 600 14px/1 var(--sans); }
-.band .chip { margin-left: auto; font: 400 10px/1 var(--mono); text-transform: uppercase; letter-spacing: 0.08em;
-  background: var(--glass-fill); border: 1px solid var(--glass-line); border-radius: var(--radius-pill);
-  padding: 4px 9px; backdrop-filter: blur(var(--glass-blur)); }
-.band .pin { margin-left: auto; background: none; border: 0; color: #FBFAF6; font-size: 15px; line-height: 1; padding: 4px; }
-.band .chip + .pin { margin-left: 8px; }
-.cardbody { padding: 14px 16px 6px; flex: 1; }
+.rolesec { display: flex; flex-direction: column; }
+
+/* The coloured header stays: it is how a role is recognised (ST-02), and it was never the part
+   that made these feel like boxes. What went is everything around it — the border, the fill, the
+   gradient behind the body. So the band is now a bar that names the section rather than the lid
+   of a card, rounded on all four corners because there is no longer a box for it to cap. */
+.rolesec-head { display: flex; align-items: center; gap: 9px; margin: 0 0 14px;
+  height: 34px; padding: 0 12px; border-radius: var(--radius-1);
+  font: 600 14px/1 var(--sans); color: #FBFAF6; }
+.rolesec.role-bd .rolesec-head { background: var(--role-bd-deep); }
+.rolesec.role-ca .rolesec-head { background: var(--role-ca-deep); }
+.rolesec.role-op .rolesec-head { background: var(--role-op-deep); }
+.rolesec.role-pd .rolesec-head { background: var(--role-pd-deep); }
+.rolesec-name { font: inherit; }
+/* The leading section says it leads in words, in the chip. It needs no second treatment: the
+   order already puts it first, and "Why today's order changed" already explains why (ST-03). */
+.rolesec-head .rolemark { background: var(--glass-fill); border: 1px solid var(--glass-line); }
+.rolesec-head .chip { margin-left: auto; font: 400 10px/1 var(--mono); text-transform: uppercase;
+  letter-spacing: 0.08em; background: var(--glass-fill); border: 1px solid var(--glass-line);
+  border-radius: var(--radius-pill); padding: 4px 9px; backdrop-filter: blur(var(--glass-blur)); }
+.rolesec-head .pin { margin-left: auto; background: none; border: 0; color: #FBFAF6;
+  font-size: 15px; line-height: 1; padding: 4px; }
+.rolesec-head .chip + .pin { margin-left: 8px; }
+.rolesec-body { flex: 1; }
 .card-meaning { margin: 0 0 12px; font-size: 15px; line-height: 1.45; }
-.cardlink { margin: 0 16px 14px; align-self: flex-start; }
-
-/* The card that leads today (FO-04).
-   It was a filled card — the role's full gradient behind everything — which made it carry the
-   colour twice, once in the band and again across the body, and forced a parallel set of styles
-   for every control inside it: white text, glass buttons, a glass well. It is now an ordinary
-   card wearing the leading role's colour on its edge. Two things follow from that.
-
-   The lead is drawn in the role's own colour rather than in a fixed green, because which role
-   leads changes daily (ST-03). Green is what you see when Clients leads.
-
-   And the suggestion well goes back to violet here like everywhere else. On a filled card it
-   had to become frosted glass to stay readable, which meant "the platform suggested this"
-   looked like one thing on the leading card and another on the rest — the inconsistency
-   UX_RULES ST-04 exists to prevent. Removing the fill removes the exception. */
-/* Now that every card is outlined in its role colour, the one that leads cannot be marked by
-   having a colour — it is marked by weight. Twice the edge and a lift off the page, which is
-   the same distinction made in two ways rather than a colour that means something different on
-   one card than on the others. FO-04 asks for one card that leads; this is it, and the
-   "LEADING TODAY" chip in the band says so in words as well. */
-.rolecard.lead { box-shadow: var(--elev-2); border-width: 2px; }
+.cardlink { margin: 10px 0 0; align-self: flex-start; }
 
 /* ---- The suggestion well: the platform's own voice, in violet (CS-03, CS-05) ---- */
 .well { background: var(--ai-soft); border-left: 3px solid var(--ai-deep-edge); border-radius: 0 var(--radius-1) var(--radius-1) 0;

@@ -139,6 +139,15 @@ async function drawRoleCards() {
   wireRoleCards(host, byRole);
 }
 
+/* A role's work on Today. It used to be a card — a coloured band, a border, and on the leading
+   one a full-bleed gradient behind everything. Luke asked for the boxes gone and the two things
+   that were doing the actual work kept: which role leads, and the order they are in (ST-03).
+
+   So this is a section, not a card. The role still names itself, the lead still says it leads,
+   and the order is still whatever rankRoles decided this morning. What went is the chrome: no
+   band, no border, no fill, no per-role colour on the container. The only colour left on Today
+   is the role's own mark, which is the one place ST-02 needs it, and the violet of the
+   suggestion well, which means what it means everywhere. */
 function roleCard(key, items, isLead) {
   const r = ROLE[key];
   const top = items[0];
@@ -161,13 +170,13 @@ function roleCard(key, items, isLead) {
            body: `<ul class="rows">${rest.map(w => `<li><div class="grow"><div class="title">${esc(w.meaning)}</div>
              <div class="source">${esc(sourceLine(w.source.kinds, w.source.at))}</div></div>
              <button class="btn" data-do="${esc(itemKey(w))}">${esc(t(w.action.label))}</button></li>`).join('')}</ul>` }) : ''}`;
-  return `<article class="rolecard${isLead ? ' lead' : ''} role-${esc(key)}" data-role="${esc(key)}">
-    <div class="band">${roleMark(r.mark, key)}<span class="band-name">${esc(r.name)}</span>
+  return `<section class="rolesec${isLead ? ' lead' : ''} role-${esc(key)}" data-role="${esc(key)}">
+    <h3 class="rolesec-head">${roleMark(r.mark, key)}<span class="rolesec-name">${esc(r.name)}</span>
       ${isLead ? `<span class="chip">${esc(t('Leading today'))}</span>` : ''}
-      <button class="pin" data-pinrole="${esc(key)}" aria-pressed="${isPinned('role:' + key)}" aria-label="${esc(t(isPinned('role:' + key) ? 'Unpin {what}' : 'Pin {what}', { what: r.name }))}">${isPinned('role:' + key) ? '★' : '☆'}</button></div>
-    <div class="cardbody">${body}</div>
+      <button class="pin" data-pinrole="${esc(key)}" aria-pressed="${isPinned('role:' + key)}" aria-label="${esc(t(isPinned('role:' + key) ? 'Unpin {what}' : 'Pin {what}', { what: r.name }))}">${isPinned('role:' + key) ? '★' : '☆'}</button></h3>
+    <div class="rolesec-body">${body}</div>
     <button class="link cardlink" data-open-role="${esc(key)}">${esc(t('Open {what}', { what: r.name.toLowerCase() }))}</button>
-  </article>`;
+  </section>`;
 }
 
 function wireRoleCards(host, byRole) {

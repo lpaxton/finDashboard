@@ -27,6 +27,52 @@ Entries are newest first.
 
 ## Log
 
+### 29 September 2026 · The role cards become role sections
+
+**Asked for,** over four messages while looking at the screen: *"i hate the boards. let's remove
+them"* → *"keep the 'Leading Today' and order of the card"* → *"keep the colored headers of the
+cards"* → *"just remove the colored borders."*
+
+**Built.** Today's four role cards are no longer cards. Each is a plain section: the coloured
+header bar, then the work beneath it. No border, no card background, no fill behind the leading
+one.
+
+| Kept | Gone |
+| --- | --- |
+| The coloured header per role — this is how a role is recognised (ST-02) | The card border, in any colour |
+| "Leading today", and the order rankRoles decided (ST-03) | The full-bleed gradient on the leading card |
+| The pin, the mark, the suggestion well, the sources, the disclosure | The card surface and its shadow |
+
+**Two things worth recording, because they were decided rather than defaulted.**
+
+*The leading section is marked by a word, not a treatment.* It was a filled card, then a 2px
+border, and now it is the chip that says **LEADING TODAY** plus the fact that it comes first.
+FO-04 asks for one card that leads; the order does that work and *"Why today's order changed"*
+already explains it. If that reads as too quiet in use, the fix is a stronger chip rather than
+bringing back a fill.
+
+*The header bar is rounded on all four corners now,* not just the top two. It used to cap a box.
+With the box gone it is a bar that names a section, and a top-rounded bar with square bottom
+corners floating over plain text reads like a lid that lost its jar.
+
+**What this cost.** The filled leading card required a parallel set of styles for everything
+inside it — white text, glass buttons, glass well, a lighter link, a lighter source line —
+because the card behind them was dark and saturated. All of that is gone: **the lead card's
+overrides went from eleven rules to none.** The suggestion well is violet on every section
+rather than violet on three and frosted on the fourth, which is the ST-04 inconsistency I had
+logged as an open question two entries ago. It is closed, not by arguing it, but because the
+thing that caused it no longer exists.
+
+**For Leila.** This is a real departure from the wireframes, which drew these as cards. The
+information architecture is untouched — same four roles, same ranking, same one-action-each
+(FO-01 to FO-04, FO-11) — but the visual weight of Today has dropped a long way. Worth a look
+before the next round of testing. Checked in both themes and at three widths.
+
+**Implications.** `styles.css` and one function in `advisor.js`. No contract change, no change
+to what the screen says or does.
+
+---
+
 ### 29 September 2026 · The leading card is an outline, not a fill
 
 **Asked for.** Luke, on why the Clients card looked green and Prospecting red: "remove the color
