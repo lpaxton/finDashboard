@@ -27,6 +27,37 @@ Entries are newest first.
 
 ## Log
 
+### 29 September 2026 · The leading card is an outline, not a fill
+
+**Asked for.** Luke, on why the Clients card looked green and Prospecting red: "remove the color
+background on the clients card. make the border of the card the same green as the bottom border."
+
+**Built.** `.rolecard.lead` no longer fills with the role's gradient. It is an ordinary card with
+a **2px border in the leading role's colour**, and the rule under its band in the same colour so
+the band reads as part of the card rather than as a lid on it.
+
+**Not hard-coded green.** Which role leads changes daily (ST-03), so the border takes the colour
+of whichever role it is. Green is what you see when Clients leads; it will be amber on a day
+Operations leads.
+
+**It also closed something I had raised as a question rather than a bug.** On a filled card the
+suggestion well had to become frosted glass to stay readable
+(`.rolecard.lead .well { background: var(--glass-fill) }`), which meant *"the platform suggested
+this"* was violet on three cards and glass on the fourth — and, because the lead rotates, the
+same suggestion was violet one morning and glass the next. That is the inconsistency ST-04
+exists to prevent. Removing the fill removed the exception, and with it a parallel set of styles
+for every control inside the lead card: white text, glass buttons, glass well, a lighter link.
+**Eleven rules became eight**, and the leading card now differs from the others in one property.
+
+**For Leila.** The role colours themselves are untouched and still carry their meaning: the band
+on every card keeps the role gradient. What changed is that the lead is now marked by *weight*
+rather than by *fill*. Worth confirming that reads as strongly as the filled card did — FO-04
+asks for one card that leads, and an outline is quieter than a fill. Checked in both themes.
+
+**Implications.** None beyond styling. No contract change, no markup change; `styles.css` only.
+
+---
+
 ### 29 September 2026 · French, and the machinery for any other language (AX-12)
 
 **Asked for.** Luke: "we also need an option in the settings to change the language to French."

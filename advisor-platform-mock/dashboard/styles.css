@@ -506,22 +506,30 @@ dialog.sheet { max-width: 460px; border: 1px solid var(--line); border-radius: v
 .card-meaning { margin: 0 0 12px; font-size: 15px; line-height: 1.45; }
 .cardlink { margin: 0 16px 14px; align-self: flex-start; }
 
-/* One deep card per screen, at most: the one that leads today (FO-04). */
-.rolecard.lead { box-shadow: var(--elev-2); border-color: transparent; color: #FBFAF6; }
-.rolecard.lead.role-bd { background: var(--role-bd-deep); }
-.rolecard.lead.role-ca { background: var(--role-ca-deep); }
-.rolecard.lead.role-op { background: var(--role-op-deep); }
-.rolecard.lead.role-pd { background: var(--role-pd-deep); }
-.rolecard.lead .band { background: none; border-bottom: 1px solid var(--glass-line); }
-.rolecard.lead .source, .rolecard.lead .meta, .rolecard.lead .empty { color: rgba(251, 250, 246, 0.82); }
-.rolecard.lead .cardlink { color: #FBFAF6; }
-.rolecard.lead .btn { border-color: var(--glass-line); background: var(--glass-fill); color: #FBFAF6;
-  backdrop-filter: blur(var(--glass-blur)); }
-.rolecard.lead .btn.primary { background: var(--surface); color: var(--ink); border-color: var(--surface); }
-.rolecard.lead .btn.quiet { background: none; border-color: transparent; color: rgba(251, 250, 246, 0.86); }
-.rolecard.lead .well { background: var(--glass-fill); border-left-color: var(--glass-line); }
-.rolecard.lead .well-label { background: var(--glass-fill); border: 1px solid var(--glass-line); }
-.rolecard.lead .disc-toggle[aria-expanded="true"] { border-color: var(--glass-line); color: #FBFAF6; }
+/* The card that leads today (FO-04).
+   It was a filled card — the role's full gradient behind everything — which made it carry the
+   colour twice, once in the band and again across the body, and forced a parallel set of styles
+   for every control inside it: white text, glass buttons, a glass well. It is now an ordinary
+   card wearing the leading role's colour on its edge. Two things follow from that.
+
+   The lead is drawn in the role's own colour rather than in a fixed green, because which role
+   leads changes daily (ST-03). Green is what you see when Clients leads.
+
+   And the suggestion well goes back to violet here like everywhere else. On a filled card it
+   had to become frosted glass to stay readable, which meant "the platform suggested this"
+   looked like one thing on the leading card and another on the rest — the inconsistency
+   UX_RULES ST-04 exists to prevent. Removing the fill removes the exception. */
+.rolecard.lead { box-shadow: var(--elev-2); border-width: 2px; }
+.rolecard.lead.role-bd { border-color: var(--role-bd); }
+.rolecard.lead.role-ca { border-color: var(--role-ca); }
+.rolecard.lead.role-op { border-color: var(--role-op); }
+.rolecard.lead.role-pd { border-color: var(--role-pd); }
+/* The rule under the band is the same colour as the edge it meets, so the band reads as part of
+   the card rather than as a lid sitting on it. */
+.rolecard.lead.role-bd .band { border-bottom: 1px solid var(--role-bd); }
+.rolecard.lead.role-ca .band { border-bottom: 1px solid var(--role-ca); }
+.rolecard.lead.role-op .band { border-bottom: 1px solid var(--role-op); }
+.rolecard.lead.role-pd .band { border-bottom: 1px solid var(--role-pd); }
 
 /* ---- The suggestion well: the platform's own voice, in violet (CS-03, CS-05) ---- */
 .well { background: var(--ai-soft); border-left: 3px solid var(--ai-deep-edge); border-radius: 0 var(--radius-1) var(--radius-1) 0;
