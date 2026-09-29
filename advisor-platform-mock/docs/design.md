@@ -49,10 +49,32 @@ exists to prevent. Removing the fill removed the exception, and with it a parall
 for every control inside the lead card: white text, glass buttons, glass well, a lighter link.
 **Eleven rules became eight**, and the leading card now differs from the others in one property.
 
+**Then, same session, Luke: "make the board half the width and then apply this same rule to the
+other cards in their colors" / "make the cards so they are 2 over 2".**
+
+*Two up, never three.* The grid was `auto-fit, minmax(290px, 1fr)`, which on a wide screen gave
+**three cards and a fourth hanging alone on the next row**. Four cards want a 2×2. The count is
+capped at two now — but the decision still belongs to the space the grid has rather than the
+width of the window, which matters because opening Ask takes 420px out of the page *without
+changing the viewport*, so a media query would not notice. It is a **container query** on
+`#section`. Verified: 2×2 at 872px, one column when Ask drops the section to 452px, back to 2×2
+on close.
+
+*Every card wears its role colour.* The outline treatment is now on all four — coral, teal,
+amber, sage — with the rule under each band in the same colour.
+
+*Which forced a better answer for the leading card.* If every card has a coloured edge, the lead
+cannot be marked by having a colour. It is marked by **weight**: 2px instead of 1px, and the
+lift it already had. That is the same distinction said two ways instead of a colour that means
+one thing on one card and something else on the rest, and the "LEADING TODAY" chip still says it
+in words.
+
 **For Leila.** The role colours themselves are untouched and still carry their meaning: the band
 on every card keeps the role gradient. What changed is that the lead is now marked by *weight*
 rather than by *fill*. Worth confirming that reads as strongly as the filled card did — FO-04
-asks for one card that leads, and an outline is quieter than a fill. Checked in both themes.
+asks for one card that leads, and 2px against 1px is a quiet distinction. If it is too quiet,
+the next step is a tinted band on the lead only, not a return to the fill. Checked in both
+themes and at three widths.
 
 **Implications.** None beyond styling. No contract change, no markup change; `styles.css` only.
 
