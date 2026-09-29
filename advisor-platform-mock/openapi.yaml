@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Advisor Platform API (dashboard domains)
-  version: 0.3.0-draft
+  version: 0.3.1-draft
   description: |
     Draft contract for the advisor dashboard. Not built yet: this spec is the design.
     The backend service aggregates Green Meadows (custodial data) and other sources
@@ -26,6 +26,14 @@ info:
     - Account numbers are always masked (last 4 digits only).
     - Every request may send `x-trace-id`; the backend echoes it and forwards it to Green Meadows
       as x_gm_ext_traceid.
+    - `sort` is `field,direction`. A field may have an order of its own rather than an
+      alphabetical one, in which case the operation says so and lists the order; ascending always
+      means the least urgent first, so `,desc` leads with what needs attention.
+
+    Changes since 0.3.0-draft
+    - `GET /firm/compliance` takes `sort`, and its default order is now `status,desc`: overdue,
+      then open, then done, each by due date with the oldest first. It was `dueDate,asc`, which
+      put a finished obligation above a late one.
 servers:
   - url: https://api.example.com/v1
     description: Placeholder. Set when the backend is deployed.
@@ -351,6 +359,10 @@ paths:
           schema: { type: string }
         - { $ref: '#/components/parameters/page' }
         - { $ref: '#/components/parameters/size' }
+        - name: sort
+          in: query
+          description: "Properties: status, dueDate, title. status is ordered by urgency, not alphabetically: ascending runs done, open, overdue, so the default status,desc puts overdue first. Items of equal status are ordered by due date, oldest first."
+          schema: { type: string, default: 'status,desc' }
       responses:
         '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/CompliancePage' } } } }
         '403': { $ref: '#/components/responses/Error' }

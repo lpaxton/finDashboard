@@ -230,6 +230,38 @@ test('the compliance review queue reconciles with the alert that counts it', asy
   assert.ok((await call('dana', 'GET', '/communications/cm1')).data.body, 'fetching one message must include its body');
 });
 
+/* A compliance list ordered purely by due date puts a thing that is done above a thing that is
+   late. The status order is urgency, not alphabet, and must survive anyone renaming a status. */
+test('compliance leads with what is overdue, and the page is the one that is ordered', async () => {
+  const rank = { overdue: 0, open: 1, done: 2 };
+  const all = (await call('dana', 'GET', '/firm/compliance?size=100')).data.items;
+  assert.ok(all.length > 3, 'need enough items for the order to mean anything');
+  assert.ok(all.some(c => c.status === 'done') && all.some(c => c.status === 'overdue'),
+    'the fixture must hold both, or this asserts nothing');
+
+  for (let i = 1; i < all.length; i++) {
+    const [prev, cur] = [all[i - 1], all[i]];
+    assert.ok(rank[prev.status] <= rank[cur.status],
+      `${prev.status} must not follow ${cur.status}`);
+    if (prev.status === cur.status) {
+      assert.ok(prev.dueDate <= cur.dueDate, 'within one status, the oldest due date leads');
+    }
+  }
+  assert.equal(all[0].status, 'overdue', 'overdue leads');
+
+  // The ordering is the server's, so the first page is the first page of the whole list and not
+  // the first few records re-sorted. That is the thing the browser could not have done.
+  const first = (await call('dana', 'GET', '/firm/compliance?size=2')).data;
+  assert.equal(first.totalItems, all.length);
+  assert.deepEqual(first.items.map(c => c.id), all.slice(0, 2).map(c => c.id));
+
+  // The direction still means what it means everywhere else, and due date is still available.
+  const asc = (await call('dana', 'GET', '/firm/compliance?sort=status,asc&size=100')).data.items;
+  assert.equal(asc[0].status, 'done');
+  const byDue = (await call('dana', 'GET', '/firm/compliance?sort=dueDate,asc&size=100')).data.items;
+  assert.deepEqual(byDue.map(c => c.dueDate), [...byDue.map(c => c.dueDate)].sort());
+});
+
 test('firm scope on communications is principal-only', async () => {
   assert.equal((await call('marcus', 'GET', '/communications?scope=firm')).status, 403);
   assert.equal((await call('grace', 'GET', '/communications')).status, 403);

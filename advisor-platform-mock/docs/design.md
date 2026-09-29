@@ -27,6 +27,46 @@ Entries are newest first.
 
 ## Log
 
+### 29 September 2026 · Compliance leads with what is overdue — contract 0.3.1-draft
+
+**Asked for.** Luke, on reading the Firm pass entry below: "add the sort param so overdue leads."
+
+**Built.** `GET /firm/compliance` takes `sort`, and its **default is now `status,desc`**: overdue,
+then open, then done, each by due date with the oldest first. It was `dueDate,asc`, which put a
+finished obligation from three weeks ago above one that is late.
+
+The order is a property of the status, not of the alphabet. `status` is ranked explicitly —
+`['done', 'open', 'overdue']`, listed least-urgent first so that `,asc` and `,desc` keep their
+ordinary meaning everywhere in the API. A status nobody planned for sorts **last**, so it is
+visible at the end of the list rather than silently leading it.
+
+That the alphabet happens to agree today (`done` < `open` < `overdue`) is a coincidence and is
+treated as one: renaming a status to `urgent` would quietly invert the list if the order were
+left to `localeCompare`.
+
+**Where.** `paged()` in `src/mock-core.js` gained two options — `rank`, for a field whose order
+is its own, and `tie`, the field that settles equal ranks, always ascending. Both are general;
+`/firm/compliance` is the first operation to use them. The dashboard asks for `status,desc`
+explicitly rather than relying on the default, so the screen declares the order it is showing,
+and the panel now reads **"overdue first"**.
+
+**Verified.** A test asserts the rank order, the due-date tie-break, that `,asc` still inverts it,
+that `sort=dueDate,asc` still works for anyone who wants the old order, and — the point of doing
+this on the server — that the **first page is the first page of the whole list**, not the first
+few records re-sorted. Checked by injecting three faults in turn (the old default restored, the
+rank listed backwards, the tie-break removed); each failed the test before it was put back.
+
+**Implications.**
+
+- **Contract change, backwards-compatible in shape but not in order.** `info.version` is now
+  **0.3.1-draft**, with a "Changes since 0.3.0-draft" note in the spec description. No schema
+  changed; `types/api.d.ts` regenerated with no diff beyond the version line.
+- A **general convention** is now written into the spec's Conventions block: a `sort` field may
+  have an order of its own, in which case the operation lists it, and ascending always means
+  least urgent first. Worth holding to if other lists get ranked ordering later.
+
+---
+
 ### 29 September 2026 · The Firm pass — UX_IA §6 #3, a [PO] decision
 
 **Asked for.** Luke: "do the firm view IA pass." The question was recorded in `ux/UX_IA.md` §6 as
@@ -90,12 +130,10 @@ matching.
   *how is this advisor doing*; it does not answer *what is this advisor looking at*. That needs
   either a contract decision about advisor-scoped reads by a principal or an explicit consent
   model, and it is not a styling question.
-- **Re-ordering the compliance list by state.** Overdue items ought to lead. `GET
-  /firm/compliance` has no `sort` parameter and the response is paged, so sorting in the browser
-  would order a page rather than the obligations — which would read as correct and be wrong. The
-  panel now says "oldest due first", which is what the contract actually serves, and the badges
-  carry the state. **Implication:** a `sort` parameter on that operation is a small contract
-  change if you want it.
+- **Re-ordering the compliance list by state.** ~~Overdue items ought to lead.~~ **Luke said add
+  it — built the same day, see the entry above.** The reason it could not be done in the browser
+  stands and is worth keeping on the record: the response is paged, so sorting in the browser
+  would order a page rather than the obligations, which would read as correct and be wrong.
 
 **Implications.**
 
@@ -104,7 +142,8 @@ matching.
 - The view's page title changed from "Firm overview" to **"The firm"**, because "Overview" is now
   one of seven sections and the title was arguing with the nav.
 - **Needs a decision:** the read-only advisor dashboard, above. Everything else in this entry is
-  built and settled.
+  built and settled. *(The compliance ordering was the other open item; Luke called it the same
+  day and it is built — see the entry above.)*
 
 ---
 

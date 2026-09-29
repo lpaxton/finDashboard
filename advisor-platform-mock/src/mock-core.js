@@ -651,13 +651,24 @@ function createMock() {
   const forbid = () => fail(403, 'forbidden', "Your role can't access this.");
   const notFound = (what) => fail(404, 'not_found', what + ' not found.');
 
-  function paged(items, q, def) {
+  /* One field, one direction, as the contract documents it.
+     `opts.rank` lets an operation say a field has an order of its own: a compliance status runs
+     done, open, overdue, which is neither alphabetical nor the order the records were written
+     in. Ranks are listed lowest-first so that ',asc' and ',desc' keep their ordinary meaning.
+     `opts.tie` names the field that settles equal ranks, always ascending — within a rank the
+     oldest is still the one that has waited longest. */
+  function paged(items, q, def, opts = {}) {
     const [k, d] = (q.sort || def).split(','); const dir = d === 'asc' ? 1 : -1;
-    const sorted = [...items].sort((a, b) => {
-      const x = a[k], y = b[k];
+    const rank = opts.rank && opts.rank[k];
+    const cmp = (x, y) => {
       if (x == null) return 1; if (y == null) return -1;
-      return (typeof x === 'number' ? x - y : String(x).localeCompare(String(y))) * dir;
-    });
+      return typeof x === 'number' ? x - y : String(x).localeCompare(String(y));
+    };
+    // An unranked value sorts last rather than first, so a status nobody planned for is visible
+    // at the end of the list instead of silently leading it.
+    const val = (x) => rank ? (rank.indexOf(x[k]) + 1 || rank.length + 1) : x[k];
+    const sorted = [...items].sort((a, b) =>
+      cmp(val(a), val(b)) * dir || (opts.tie ? cmp(a[opts.tie], b[opts.tie]) : 0));
     const size = +q.size || 20, page = +q.page || 0;
     return { items: sorted.slice(page * size, page * size + size), page, size, totalItems: items.length };
   }
@@ -1380,7 +1391,9 @@ function createMock() {
       let list = COMPLIANCE;
       if (q.status) list = list.filter(c => c.status === q.status);
       if (q.advisorId) list = list.filter(c => c.advisorId === q.advisorId);
-      return ok(paged(list, q, 'dueDate,asc'));
+      /* Overdue leads. A compliance list ordered purely by due date puts a thing that is done
+         above a thing that is late, which is the opposite of what the list is for. */
+      return ok(paged(list, q, 'status,desc', { rank: { status: ['done', 'open', 'overdue'] }, tie: 'dueDate' }));
     }],
 
     /* ---- what the firm pays for the platform (PO-10). Principal only: an advisor has no

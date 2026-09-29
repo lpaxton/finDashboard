@@ -14,7 +14,7 @@ Custodial data comes from the **Green Meadows API** (the reference is at `develo
 
 **Where things stand:** requirements, a draft API contract, a complete mock server, and a three-view dashboard running against that mock all exist. The real backend does not exist. Nothing has been connected to Green Meadows yet, and the owner does not yet have sandbox credentials in this project.
 
-The contract and mock cover 72 operations and the dashboard reaches every one of them; a test fails if an operation is ever left without a UI. That surface includes everything ported from the Meridian Wealth Advisor Desk mockup (communications, prospects, onboarding, book migration, calendar and meeting capture, allocation, billing, branding), a Green Meadows adapter built on transcribed response shapes, a query surface, and a model layer behind the drafting features.
+The contract and mock cover 75 operations and the dashboard reaches every one of them; a test fails if an operation is ever left without a UI. That surface includes everything ported from the Meridian Wealth Advisor Desk mockup (communications, prospects, onboarding, book migration, calendar and meeting capture, allocation, billing, branding), a Green Meadows adapter built on transcribed response shapes, a query surface, and a model layer behind the drafting features.
 
 ## 2. What is in the repo
 
@@ -26,14 +26,14 @@ advisor-platform-mock/
   README.md               how to run and use the mock server
   package.json            npm start, npm test (no dependencies, Node 18+, ES modules)
   server.js               HTTP layer: routing, sign-in, CORS, failure injection, static files
-  src/mock-core.js        the dataset and all 72 operations; imported by the server AND the dashboard
+  src/mock-core.js        the dataset and all 75 operations; imported by the server AND the dashboard
   src/model/              the model layer: client (SDK optional), prompts (versioned), the
                           offline generator, and the capability functions. Drafts only.
   src/greenmeadows/       the custodian integration. schemas.js holds shapes transcribed from
                           the reference; credentials.js, client.js, mappers.js and adapter.js
                           are the adapter; fake.js is a Green Meadows shaped like the real one.
                           Read its README first.
-  openapi.yaml            the API contract, v0.3 draft
+  openapi.yaml            the API contract, v0.3.1-draft
   dashboard/index.html    a 42-line shell: markup, stylesheet, one module script
   dashboard/styles.css    all styling; colour tokens defined once in :root
   dashboard/js/config.js  the only file to edit when connecting to a real backend
@@ -128,11 +128,11 @@ Where that query surface should live, what its contract needs from day one, and 
 
 Three clusters are untouched: advisor development (AX-05 to AX-09, five features), marketing and sales enablement (GP-04 to GP-10, seven), and everything downstream of reading a document (IP-05, RTI-02, AX-03). Five of the marketing ones are on the regulatory list in section 5, so that order starts with compliance, not code.
 
-## 6. The API contract (`openapi.yaml`, v0.3 draft)
+## 6. The API contract (`openapi.yaml`, v0.3.1-draft)
 
 One API, role-scoped: the caller's role decides what each endpoint returns. Firm-wide data uses `scope=firm` (principal only). Client-portal endpoints live under `/me`.
 
-72 operations across 60 paths.
+75 operations across 63 paths, 123 schemas. Counts are from the contract itself; run `npm run types` to re-read them.
 
 | Group | Operations |
 | --- | --- |

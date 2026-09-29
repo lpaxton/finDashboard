@@ -4,7 +4,7 @@
  * GENERATED FROM openapi.yaml. Do not edit by hand: run `npm run types`.
  * `npm test` fails if this file and the contract disagree.
  *
- * Contract version 0.3.0-draft.
+ * Contract version 0.3.1-draft.
  */
 
 export interface Error {

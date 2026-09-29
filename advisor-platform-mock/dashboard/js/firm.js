@@ -147,11 +147,11 @@ export function firmCompliance() {
 
   let cstatus = '';
   const runComp = () => load($('f-comp'), 'Obligations',
-    () => api('GET', '/firm/compliance', { query: { status: cstatus, size: 12 } }),
-    /* Oldest due first is what the contract serves and it is not re-sorted here: the list is
-       paged, so ordering the page would order a page rather than the obligations. The head says
-       which order it is in, and the badges carry the state. */
-    (r) => `<div class="panel-head"><h2>Obligations</h2><span class="hint">oldest due first</span><label class="hint">Show
+    /* The order is asked for rather than assumed. It is also the operation's default, but a
+       screen that states the order it wants cannot quietly inherit a different one later, and
+       the list is paged — reordering it here would order a page rather than the obligations. */
+    () => api('GET', '/firm/compliance', { query: { status: cstatus, sort: 'status,desc', size: 12 } }),
+    (r) => `<div class="panel-head"><h2>Obligations</h2><span class="hint">overdue first</span><label class="hint">Show
         <select id="cfilter" aria-label="Filter compliance by status">
           <option value="">All</option><option value="overdue">Overdue</option>
           <option value="open">Open</option><option value="done">Done</option></select></label></div>`
