@@ -262,6 +262,71 @@ test('compliance leads with what is overdue, and the page is the one that is ord
   assert.deepEqual(byDue.map(c => c.dueDate), [...byDue.map(c => c.dueDate)].sort());
 });
 
+/* Supervision (PO-06). The decision recorded in docs/design.md: a principal may read an
+   advisor's book, because it is the firm's book and supervising it is their job — but it is a
+   narrowing of access they already have, it is not impersonation, and the advisor is told. */
+test('advisorId narrows firm scope and gives the principal nothing new', async () => {
+  const firm = (await call('dana', 'GET', '/households?scope=firm&size=100')).data;
+  const his = (await call('dana', 'GET', '/households?scope=firm&advisorId=adv2&size=100')).data;
+  assert.ok(his.totalItems > 0 && his.totalItems < firm.totalItems, 'it must narrow, not widen');
+
+  // Every household it returns was already in the unfiltered firm-scope response. That is the
+  // claim the whole decision rests on: no 403 moved.
+  const all = new Set(firm.items.map(h => h.id));
+  assert.ok(his.items.every(h => all.has(h.id)), 'advisorId must not reach a record scope=firm cannot');
+
+  // Without scope=firm it is meaningless rather than permissive, so it is refused outright.
+  assert.equal((await call('dana', 'GET', '/households?advisorId=adv2')).status, 400);
+  // And it is not a way around the role boundary.
+  assert.equal((await call('marcus', 'GET', '/households?scope=firm&advisorId=adv1')).status, 403);
+  assert.equal((await call('grace', 'GET', '/households?scope=firm&advisorId=adv1')).status, 403);
+  assert.equal((await call('dana', 'GET', '/households?scope=firm&advisorId=nobody')).status, 404);
+
+  for (const p of ['/next-actions', '/communications']) {
+    const wide = (await call('dana', 'GET', `${p}?scope=firm&size=100`)).data;
+    const one = (await call('dana', 'GET', `${p}?scope=firm&advisorId=adv2&size=100`)).data;
+    assert.ok(one.items.length && one.items.length < wide.items.length, `${p} must narrow`);
+  }
+});
+
+test('supervision is not impersonation: an advisor\'s own screen stays theirs', async () => {
+  // None of these takes advisorId, so a principal asking for one gets their own, not Marcus's.
+  // If any of them ever starts honouring it, this fails and the decision gets re-made on purpose.
+  for (const p of ['/activity', '/meetings', '/tasks', '/prospects', '/onboarding', '/portfolio-signals']) {
+    const mine = (await call('dana', 'GET', `${p}?size=100`)).data;
+    const asked = (await call('dana', 'GET', `${p}?scope=firm&advisorId=adv2&size=100`)).data;
+    assert.deepEqual(asked.items.map(x => x.id), mine.items.map(x => x.id),
+      `${p} must ignore advisorId — supervision does not hand over another advisor's screen`);
+  }
+  // And a principal cannot act in the advisor's name: writes stay bound to the owner.
+  const his = (await call('dana', 'GET', '/communications?scope=firm&advisorId=adv2&status=draft')).data.items[0];
+  assert.ok(his, 'need one of Marcus\'s drafts');
+  assert.equal((await call('dana', 'PATCH', '/communications/' + his.id, { status: 'approved' })).status, 404);
+});
+
+test('being read is told to the advisor, in their own activity log', async () => {
+  const before = (await call('marcus', 'GET', '/activity')).data.items;
+  assert.ok(!before.some(a => a.actor === 'principal'), 'nothing yet');
+
+  await call('dana', 'GET', '/households?scope=firm&advisorId=adv2');
+  const after = (await call('marcus', 'GET', '/activity')).data.items;
+  const entry = after.find(a => a.actor === 'principal');
+  assert.ok(entry, 'Marcus must be told that his book was opened');
+  assert.match(entry.summary, /Dana Whitfield/, 'it must name who looked');
+  assert.equal(entry.undoable, false);
+
+  // A second read in the same visit is the same visit, not a second notification.
+  await call('dana', 'GET', '/next-actions?scope=firm&advisorId=adv2');
+  await call('dana', 'GET', '/communications?scope=firm&advisorId=adv2');
+  const again = (await call('marcus', 'GET', '/activity')).data.items.filter(a => a.actor === 'principal');
+  assert.equal(again.length, 1, 'one entry per principal per day, not one per request');
+
+  // Dana filtering to her own book is not supervision and tells nobody anything.
+  await call('dana', 'GET', '/households?scope=firm&advisorId=adv1');
+  assert.ok(!(await call('dana', 'GET', '/activity')).data.items.some(a => a.actor === 'principal'),
+    'reading your own book is not a supervisory read');
+});
+
 test('firm scope on communications is principal-only', async () => {
   assert.equal((await call('marcus', 'GET', '/communications?scope=firm')).status, 403);
   assert.equal((await call('grace', 'GET', '/communications')).status, 403);
@@ -563,6 +628,9 @@ test('the firm view reaches the firm-scope operations, not just the paths', () =
   ];
   const missing = want.filter(([p]) => !js.includes(p)).map(([p, why]) => `${p} — ${why}`);
   assert.deepEqual(missing, [], 'the Firm view no longer reaches: ' + missing.join('; '));
+  // The supervisory read has a door too, and it is a deliberate press rather than a page load.
+  assert.match(js, /advisorId: id/, 'Firm > Advisors must still be able to open an advisor\'s book (PO-06)');
+  assert.match(js, /id="openBook"/, 'opening a book must stay an explicit action, not something arriving here does');
   // The first four are only firm-scope if they ask for it.
   for (const p of ['/next-actions', '/alerts', '/reports/practice', '/communications']) {
     const call = js.slice(js.indexOf(`'${p}'`));

@@ -3,7 +3,7 @@
 import { api } from './api.js';
 import { $, esc, money, moneyFull, pct, pctClass, fmtDate, localDate, daysAgo, CATEGORY } from './format.js';
 import { toast, spark, head, panel, load, sortTable, nextSort, alertsList, bookPanel, subnav } from './ui.js';
-import { applyBranding } from './state.js';
+import { applyBranding, state } from './state.js';
 /* The scorecard and the practice report are the same metric shape the advisor's own Reports
    section renders. One renderer, so a firm number and a book number never disagree on form. */
 import { metricRows } from './advisor.js';
@@ -93,7 +93,8 @@ export function firmOverview() {
 export function firmAdvisors() {
   $('section').innerHTML = `<h2 class="pagehead">Advisors</h2>
     <div class="grid">${panel('f-advisors', 'wide')}</div>
-    <div class="grid" style="margin-top:20px">${panel('f-score', 'wide')}</div>`;
+    <div class="grid" style="margin-top:20px">${panel('f-score', 'wide')}</div>
+    <div id="f-bookwrap"></div>`;
 
   const st = { sort: 'aum,desc', picked: null };
   const cols = [{ key: 'name', label: 'Advisor' }, { key: 'households', label: 'Households', num: true },
@@ -114,7 +115,7 @@ export function firmAdvisors() {
       el.querySelectorAll('[data-sort]').forEach(b => b.onclick = () => {
         st.sort = nextSort(st.sort, b.dataset.sort, b.dataset.sort === 'name'); runAdv();
       });
-      el.querySelectorAll('[data-adv]').forEach(b => b.onclick = () => showScorecard(b.dataset.adv, b.textContent));
+      el.querySelectorAll('[data-adv]').forEach(b => b.onclick = () => showScorecard(b.dataset.adv, b.textContent.trim()));
       if (!st.picked && r.items.length) showScorecard(r.items[0].id, r.items[0].name);
     });
   runAdv();
@@ -125,6 +126,7 @@ export function firmAdvisors() {
      the scorecard has no period for. */
   function showScorecard(id, name) {
     st.picked = id;
+    closeBook();
     const url = '/firm/advisors/' + encodeURIComponent(id);
     load($('f-score'), name,
       () => Promise.all([api('GET', url), api('GET', url + '/scorecard')]),
@@ -134,8 +136,69 @@ export function firmAdvisors() {
            <dt>Open alerts</dt><dd>${a.openAlerts}</dd></dl>`
         + `<p class="source">${esc(fmtDate(s.from))} to ${esc(fmtDate(s.to))}</p>`
         + metricRows(s.metrics)
-        + '<p class="hint">Rank is shown to a principal only. An advisor reading their own scorecard sees the firm median and no placing.</p>');
+        + '<p class="hint">Rank is shown to a principal only. An advisor reading their own scorecard sees the firm median and no placing.</p>'
+        /* The book is not opened by arriving here. Selecting a name reads a row; reading someone's
+           book is a separate act, so it takes a separate press — and the press is what the
+           advisor is told about. Auto-opening would put "Dana opened your book" in four people's
+           activity logs for one glance at the roster. */
+        + (a.id === ownAdvisorId()
+          ? '<p class="hint">This is your own book. It is the Advisor view, where you can act in it.</p>'
+          : `<button class="btn" id="openBook" data-adv="${esc(a.id)}">Open ${esc(a.name.split(' ')[0])}&rsquo;s book</button>
+             <p class="hint">Read-only, and ${esc(a.name.split(' ')[0])} is told: it appears in their activity log.</p>`),
+      (el, [a]) => { const b = el.querySelector('#openBook'); if (b) b.onclick = () => openBook(a.id, a.name); });
   }
+}
+
+const ownAdvisorId = () => (state.session && state.session.advisorId) || null;
+
+function closeBook() { const w = $('f-bookwrap'); if (w) w.innerHTML = ''; }
+
+/* Supervision, not impersonation (PO-06, and the question left open in HANDOFF section 9).
+   What a principal gets is the firm's records for this advisor's households — which they can
+   already read in full at firm scope, so nothing here is a new permission, only a narrower one.
+   What they do not get is the advisor's screen: no activity log, no meetings, no prospects, no
+   ability to act. The contract enforces that by not offering advisorId on any of them.
+
+   The notice says all three things a person needs: what this is, what it is not, and that the
+   advisor knows. Not dashed — dashed means draft in this design system (styles.css), and this
+   is a record, not a draft. */
+function openBook(id, name) {
+  const first = name.split(' ')[0];
+  $('f-bookwrap').innerHTML = `
+    <div class="supervision" role="region" aria-label="Reading ${esc(name)}'s book">
+      <p><strong>You are reading ${esc(name)}&rsquo;s book.</strong> Read-only: nothing here acts
+      in ${esc(first)}&rsquo;s name. ${esc(first)} is told &mdash; this shows in their own activity
+      log, not an audit table they never see.</p>
+      <button class="btn quiet" id="closeBook">Close ${esc(first)}&rsquo;s book</button>
+    </div>
+    <div class="grid" style="margin-top:20px">${panel('f-advbook', 'wide')}</div>
+    <div class="grid" style="margin-top:20px">${panel('f-advpri')}${panel('f-advcomm')}</div>`;
+  $('closeBook').onclick = () => { closeBook(); $('f-score').scrollIntoView({ block: 'nearest' }); };
+
+  bookPanel({ scope: 'firm', advisorId: id, canShare: false, id: 'f-advbook',
+    title: first + '\u2019s households', size: 6 });
+
+  load($('f-advpri'), 'Needs ' + first,
+    () => api('GET', '/next-actions', { query: { scope: 'firm', advisorId: id, size: 6 } }),
+    (r) => head('Needs ' + first, r.totalItems > r.items.length ? `top ${r.items.length} of ${r.totalItems}` : '')
+      + (r.items.length ? `<ul class="rows">${r.items.map(a => `
+        <li><span class="sev ${esc(a.priority)}" title="${esc(a.priority)} priority"></span>
+        <div class="grow"><div class="title">${esc(a.title)}</div>
+        <div class="meta">${esc(a.reason)}</div>
+        <div class="source">${esc(a.householdName || 'Practice')}</div></div></li>`).join('')}</ul>
+        <p class="hint">Drafts, as they are for ${esc(first)}. Adding one to their follow-ups is
+        theirs to do, not yours.</p>`
+        : `<p class="empty serif">Nothing in ${esc(first)}&rsquo;s book needs answering today.</p>`));
+
+  load($('f-advcomm'), 'Waiting on ' + first,
+    () => api('GET', '/communications', { query: { scope: 'firm', advisorId: id, status: 'draft', size: 20 } }),
+    (r) => head('Waiting on ' + first, r.items.length ? 'unapproved drafts' : '')
+      + (r.items.length ? `<ul class="rows">${r.items.map(c => `
+          <li><div class="grow"><div class="title">${esc(c.subject)}</div>
+          <div class="meta">${esc(c.householdName || 'Practice')} · ${esc(daysAgo(c.createdAt).toLowerCase())}</div></div>
+          ${c.complianceReview ? '<span class="badge prep">flagged</span>' : ''}</li>`).join('')}</ul>
+          <p class="hint">Approving a message stays with the advisor who wrote it (X-03).</p>`
+        : `<p class="empty serif">Nothing of ${esc(first)}&rsquo;s is waiting.</p>`));
 }
 
 /* Compliance: the firm's obligations, and the queue of messages waiting for review. The queue

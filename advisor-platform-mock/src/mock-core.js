@@ -730,6 +730,43 @@ function createMock() {
     ]
   };
 
+  /* Narrowing firm scope to one advisor (PO-06, and the question left open in HANDOFF section 9:
+     "Can a principal open an advisor's dashboard read-only, and is that access logged?").
+
+     Two things this deliberately is not.
+
+     It is not a new permission. A principal already reads all of this with scope=firm; naming one
+     advisor filters records they can see in full anyway, so the 403 boundary does not move. That
+     is why it is refused without scope=firm, where it would read as "my own book, filtered by
+     somebody else", which is nothing.
+
+     It is not "view as". Supervision is reading the firm's records for an advisor's households.
+     Impersonation would be seeing their screen — their working history, their private drafts —
+     and no filter here reaches those: /activity, /meetings, /tasks, /prospects and the rest stay
+     bound to the advisor who owns them.
+
+     And the looking is told to the person looked at. The entry lands in that advisor's own
+     activity log, not a separate audit table they never read, because an access log nobody sees
+     is not transparency. Once per principal per advisor per day: a refresh is the same visit. */
+  const supervisionLogged = new Set();
+  function supervise(q) {
+    const id = q.advisorId ? String(q.advisorId) : null;
+    if (!id) return { id: null };
+    if (q.scope !== 'firm') return { err: fail(400, 'bad_request', 'advisorId narrows scope=firm. Send scope=firm with it.') };
+    if (!isRole('principal')) return { err: forbid() };
+    if (!ADVISORS.some(a => a.id === id)) return { err: notFound('Advisor') };
+    if (id !== user().advisorId) {
+      const key = user().id + '|' + id + '|' + dateOnly(0);
+      if (!supervisionLogged.has(key)) {
+        supervisionLogged.add(key);
+        logActivity(id, { actor: 'principal', actorName: user().name, subjectType: 'system',
+          summary: user().name + ' opened your book',
+          detail: 'A principal can read the firm\u2019s records for your households. They cannot act in your name, and this is the record of it.' });
+      }
+    }
+    return { id };
+  }
+
   /* ---- routes ---- */
   const routes = [
     ['GET', /^\/session$/, () => { const u = user(); return ok({ id: u.id, name: u.name, role: u.role, roles: u.roles, views: u.views, advisorId: u.advisorId || null, firm: FIRM }); }],
@@ -746,8 +783,10 @@ function createMock() {
 
     ['GET', /^\/households$/, (m, q) => {
       let list;
+      const sup = supervise(q); if (sup.err) return sup.err;
       if (q.scope === 'firm') { if (!isRole('principal')) return forbid(); list = HH; }
       else { if (!isRole('advisor')) return forbid(); list = myHH(); }
+      if (sup.id) list = list.filter(h => h.advisorId === sup.id);
       if (q.status) list = list.filter(h => h.status === q.status);
       return ok(paged(list.map(hhSummary), q, 'aum,desc'));
     }],
@@ -901,8 +940,10 @@ function createMock() {
        before anything leaves the firm (X-03), and approval is recorded. ---- */
     ['GET', /^\/communications$/, (m, q) => {
       let list;
+      const sup = supervise(q); if (sup.err) return sup.err;
       if (q.scope === 'firm') { if (!isRole('principal')) return forbid(); list = COMMS; }
       else { if (!isRole('advisor')) return forbid(); list = COMMS.filter(c => c.advisorId === user().advisorId); }
+      if (sup.id) list = list.filter(c => c.advisorId === sup.id);
       if (q.status) list = list.filter(c => c.status === q.status);
       if (q.complianceReview === 'true') list = list.filter(c => c.complianceReview);
       return ok(paged(list.map(commRow), q, 'createdAt,desc'));
@@ -1160,8 +1201,10 @@ function createMock() {
     }],
     ['GET', /^\/next-actions$/, (m, q) => {
       let ids;
+      const sup = supervise(q); if (sup.err) return sup.err;
       if (q.scope === 'firm') { if (!isRole('principal')) return forbid(); ids = ADVISORS.map(a => a.id); }
       else { if (!isRole('advisor')) return forbid(); ids = [user().advisorId]; }
+      if (sup.id) ids = [sup.id];
       const items = nextActions(ids);
       const size = +q.size || 20;
       return ok({ items: items.slice(0, size), totalItems: items.length, dataAsOf: NOW(),

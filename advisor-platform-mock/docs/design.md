@@ -27,6 +27,92 @@ Entries are newest first.
 
 ## Log
 
+### 29 September 2026 · Supervision, not impersonation — the read-only advisor book (PO-06)
+
+**Asked for.** Luke: "do the read-only advisor dashboard decision." It had sat open since the
+requirements doc, and `HANDOFF` section 9 still carried it word for word: *"Can a principal open
+an advisor's dashboard read-only, and is that access logged?"* The contract had quietly answered
+**yes** on its own — `GET /firm/advisors/{advisorId}` was described as *"Lets a principal open an
+advisor's dashboard in read-only mode"* — while actually returning a summary row. A promise in a
+description that no code keeps.
+
+**Decided. Yes, as supervision. Three things it is, and is not.**
+
+**1. It is not a new permission.** The framing in the last entry was half wrong. A principal
+already reads every household, alert, message and next action in the firm with `scope=firm`;
+naming one advisor *filters* records they can see in full anyway. So `advisorId` narrows firm
+scope rather than widening own scope, and **no 403 moves.** A test asserts exactly that: every
+record the filtered call returns was already in the unfiltered one. Sent without `scope=firm` it
+is a **400**, not a permissive default, because "my own book, filtered by somebody else" is
+nothing.
+
+Supporting precedent found in the code: `GET /households/{id}` has always let a principal read
+any household. The boundary being argued about had already been drawn.
+
+**2. It is not "view as".** Impersonation would be seeing the advisor's screen — their working
+history, their prospects, their calendar, their drafts to act on. Supervision is reading **the
+firm's records for their book**. The contract enforces the difference by simply not offering
+`advisorId` anywhere else: `/activity`, `/meetings`, `/tasks`, `/prospects`, `/onboarding` and
+`/portfolio-signals` stay bound to the advisor who owns them, and a principal who sends
+`advisorId` to any of them gets **their own** data back. A test walks all six. A principal also
+cannot act: `PATCH /communications/{id}` on Marcus's draft is a 404 for Dana.
+
+**3. The looking is told to the person looked at.** Not an audit table nobody reads — an entry in
+**that advisor's own activity log**, the one they already open. `Activity.actor` gains
+`principal`, with its own mark and its own line: *"Dana Whitfield, reading your book."* Once per
+principal per advisor per day, because a refresh is the same visit. Reading your own book is not
+a supervisory read and logs nothing.
+
+**Why yes at all.** The clients are the firm's clients, not the advisor's, and in a small RIA the
+principal is usually the person carrying the supervisory obligation. Refusing the access would
+not protect anyone; it would just mean the supervision happens over email with no record. The
+risk worth designing against is not access — it is *silent* access, and that is what part 3 is
+for.
+
+**Built.**
+
+| Where | What |
+| --- | --- |
+| `openapi.yaml` | `advisorFilter` parameter on `GET /households`, `/next-actions`, `/communications`. `Activity.actor` gains `principal`. `GET /firm/advisors/{advisorId}` now describes what it actually returns |
+| `src/mock-core.js` | `supervise(q)` — one place holding the rule, the 400/403/404s, and the deduplicated log entry |
+| Firm → Advisors | **"Open Marcus's book"**, a deliberate press. Then his households, what needs him, and his unapproved drafts, under a notice saying what this is, what it is not, and that he is told |
+| `dashboard/js/ui.js` | The activity log distinguishes three actors rather than two |
+
+**The press matters.** Selecting a name in the roster reads a row; opening a book is a separate
+act, so it takes a separate button. Loading the book automatically would have put *"Dana opened
+your book"* in four advisors' activity logs for one glance at the roster — the log would have
+stopped meaning anything within a week.
+
+**A design-system note.** The supervision notice is **not** dashed. `styles.css` already assigns
+dashed borders a meaning — draft, not yet real — and these are records. It uses the warning
+colour as a left rule instead, which already means *this wants your attention* everywhere else,
+and the thing wanting attention is that you are reading someone else's work.
+
+**Not built, deliberately.**
+
+- **`advisorId` on `/alerts`.** The priorities list is built from the alerts, so a per-advisor
+  alerts panel beside a per-advisor priorities panel would repeat itself — the same duplication
+  removed from the firm Overview earlier today.
+- **`advisorId` on `/reports/practice`.** `GET /firm/advisors/{id}/scorecard` already answers
+  "how is this advisor doing", and answers it better, because it carries the firm comparison. Two
+  ways to ask one question is the thing being removed from this product, not added to it.
+- **A consent model.** Considered and rejected: asking Marcus's permission to supervise Marcus
+  inverts who is responsible. Notification is the right instrument here, not consent. *(Client
+  consent is a different matter and is unchanged — it still gates disclosure and the AI.)*
+
+**Implications.**
+
+- **Contract 0.3.2-draft.** No new paths or operations; three parameters and one enum value.
+- **`HANDOFF` section 9's open question is closed** — both halves of it.
+- **Worth knowing for the real build:** the deduplication window is per calendar day and lives in
+  memory. A real implementation needs it to survive a restart, or an advisor learns about at most
+  one visit per deploy.
+- **Still open, and untouched by this:** AX-07 coaching. Who writes it, who reads it, and whether
+  a principal's view of it is supervision or performance management is a separate question with a
+  separate answer.
+
+---
+
 ### 29 September 2026 · Compliance leads with what is overdue — contract 0.3.1-draft
 
 **Asked for.** Luke, on reading the Firm pass entry below: "add the sort param so overdue leads."
@@ -125,11 +211,11 @@ matching.
 
 **Not built.**
 
-- **Opening an advisor's own dashboard read-only.** The old advisor dialog carried a line saying
-  this was "a decision still open in the requirements doc". It still is. The scorecard answers
-  *how is this advisor doing*; it does not answer *what is this advisor looking at*. That needs
-  either a contract decision about advisor-scoped reads by a principal or an explicit consent
-  model, and it is not a styling question.
+- **Opening an advisor's own dashboard read-only.** ~~Still an open decision.~~ **Luke called it
+  the same day — see the entry above.** The framing here turned out to be half wrong and is worth
+  keeping for that reason: the question is not *what is this advisor looking at* (that is
+  impersonation, and the answer is no) but *what does the firm hold for this advisor's book*,
+  which the principal could already read in full.
 - **Re-ordering the compliance list by state.** ~~Overdue items ought to lead.~~ **Luke said add
   it — built the same day, see the entry above.** The reason it could not be done in the browser
   stands and is worth keeping on the record: the response is paged, so sorting in the browser
@@ -141,9 +227,9 @@ matching.
 - `UX_IA.md` is now **v0.2**; §1 and §6 #3 updated. `UX_RULES.md` open decision 6 closed.
 - The view's page title changed from "Firm overview" to **"The firm"**, because "Overview" is now
   one of seven sections and the title was arguing with the nav.
-- **Needs a decision:** the read-only advisor dashboard, above. Everything else in this entry is
-  built and settled. *(The compliance ordering was the other open item; Luke called it the same
-  day and it is built — see the entry above.)*
+- **Both open items from this entry were called the same day and are built:** the compliance
+  ordering, and the read-only advisor book. See the two entries above. Nothing in this entry is
+  still waiting on you.
 
 ---
 

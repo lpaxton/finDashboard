@@ -4,7 +4,7 @@
  * GENERATED FROM openapi.yaml. Do not edit by hand: run `npm run types`.
  * `npm test` fails if this file and the contract disagree.
  *
- * Contract version 0.3.1-draft.
+ * Contract version 0.3.2-draft.
  */
 
 export interface Error {
@@ -1181,8 +1181,12 @@ export interface Activity {
   id: string;
   /** Format: date-time. */
   at: string;
-  /** Who did it. The platform prepares; the advisor decides. */
-  actor: 'platform' | 'advisor';
+  /**
+   * Who did it. The platform prepares; the advisor decides; a principal appears only for
+   * supervisory reads of this advisor's book, which the advisor is told about here rather than
+   * in an audit table they never see.
+   */
+  actor: 'platform' | 'advisor' | 'principal';
   actorName?: string | null;
   /** What happened, in the advisor's words. */
   summary: string;

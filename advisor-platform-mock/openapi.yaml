@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Advisor Platform API (dashboard domains)
-  version: 0.3.1-draft
+  version: 0.3.2-draft
   description: |
     Draft contract for the advisor dashboard. Not built yet: this spec is the design.
     The backend service aggregates Green Meadows (custodial data) and other sources
@@ -34,6 +34,13 @@ info:
     - `GET /firm/compliance` takes `sort`, and its default order is now `status,desc`: overdue,
       then open, then done, each by due date with the oldest first. It was `dueDate,asc`, which
       put a finished obligation above a late one.
+    - `GET /households`, `GET /next-actions` and `GET /communications` take `advisorId`, which
+      narrows `scope=firm` to one advisor's book for supervision. Principal only, and only with
+      `scope=firm`. It filters records the principal already reads in full, so no 403 moves.
+      Opening another advisor's book writes an entry to that advisor's `/activity`, so `Activity.
+      actor` gains `principal`. Supervision is not impersonation: `/activity`, `/meetings`,
+      `/tasks`, `/prospects`, `/onboarding` and `/portfolio-signals` stay bound to the advisor
+      who owns them, and none of them takes `advisorId`.
 servers:
   - url: https://api.example.com/v1
     description: Placeholder. Set when the backend is deployed.
@@ -88,6 +95,7 @@ paths:
       description: "Households with assets, 30-day change and last contact. Accounts and values from Green Meadows; last contact from the CRM. Requirement: PO-11, IP-09."
       parameters:
         - { $ref: '#/components/parameters/scope' }
+        - { $ref: '#/components/parameters/advisorFilter' }
         - { $ref: '#/components/parameters/page' }
         - { $ref: '#/components/parameters/size' }
         - name: sort
@@ -336,7 +344,11 @@ paths:
       tags: [Firm]
       operationId: getAdvisor
       summary: One advisor, for drill-down
-      description: "Lets a principal open an advisor's dashboard in read-only mode. Requirement: PO-06."
+      description: >
+        An advisor's current figures: households, assets, meetings this week, overdue follow-ups,
+        open alerts. It is a row, not a dashboard. To read the advisor's book itself, a principal
+        sends advisorId with scope=firm to /households, /next-actions and /communications; that
+        is supervision and is logged to the advisor. Requirement: PO-06.
       parameters:
         - { name: advisorId, in: path, required: true, schema: { type: string } }
       responses:
@@ -484,6 +496,7 @@ paths:
         Requirement: COMM-01, COMM-02, COMM-03.
       parameters:
         - { $ref: '#/components/parameters/scope' }
+        - { $ref: '#/components/parameters/advisorFilter' }
         - { name: status, in: query, schema: { $ref: '#/components/schemas/CommunicationStatus' } }
         - { name: complianceReview, in: query, schema: { type: boolean }, description: Only messages flagged for compliance review. }
         - { $ref: '#/components/parameters/page' }
@@ -828,6 +841,7 @@ paths:
         one. Nothing here is created (X-03). Requirement PL-02.
       parameters:
         - { $ref: '#/components/parameters/scope' }
+        - { $ref: '#/components/parameters/advisorFilter' }
         - { $ref: '#/components/parameters/size' }
       responses:
         '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/NextActionList' } } } }
@@ -1144,6 +1158,16 @@ components:
       in: query
       description: "field,direction. Direction is asc or desc; each operation documents its default."
       schema: { type: string, example: 'createdAt,desc' }
+    advisorFilter:
+      name: advisorId
+      in: query
+      description: >
+        Narrows scope=firm to one advisor's book, for supervision (PO-06). Principal role only,
+        and only with scope=firm: it filters records the principal can already read in full, so
+        it grants no access they did not have. Sent without scope=firm it is a 400, because
+        "my own book, filtered by someone else" is nothing. Opening another advisor's book is
+        recorded in that advisor's own activity log, once per principal per day — see /activity.
+      schema: { type: string }
 
   responses:
     Error:
@@ -2450,7 +2474,7 @@ components:
       properties:
         id: { type: string }
         at: { type: string, format: date-time }
-        actor: { type: string, enum: [platform, advisor], description: 'Who did it. The platform prepares; the advisor decides.' }
+        actor: { type: string, enum: [platform, advisor, principal], description: 'Who did it. The platform prepares; the advisor decides; a principal appears only for supervisory reads of this advisor''s book, which the advisor is told about here rather than in an audit table they never see.' }
         actorName: { type: string, nullable: true }
         summary: { type: string, description: 'What happened, in the advisor''s words.' }
         detail: { type: string, nullable: true }

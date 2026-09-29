@@ -187,10 +187,13 @@ export async function openHousehold(id, canShare) {
 }
 
 /* Book / households table: sorting and paging are done by the API. */
-export function bookPanel({ scope, canShare, id, title, size = 8 }) {
+/* `advisorId` narrows firm scope to one advisor's book (PO-06). It is only ever sent with
+   scope: 'firm', which is what the contract requires, and reaching it is a supervisory act the
+   advisor is told about — so nothing calls this with an advisorId except a deliberate press. */
+export function bookPanel({ scope, canShare, id, title, size = 8, advisorId = null }) {
   const el = $(id), st = { sort: 'aum,desc', page: 0 };
   const cols = [{ key: 'name', label: 'Household' }, { key: 'aum', label: 'Assets', num: true }, { key: 'change30d', label: '30-day change', num: true }, { key: 'lastContactAt', label: 'Last contact' }, { key: 'status', label: 'Status' }];
-  const run = () => load(el, title, () => api('GET', '/households', { query: { scope: scope === 'firm' ? 'firm' : undefined, sort: st.sort, page: st.page, size } }), (r) => {
+  const run = () => load(el, title, () => api('GET', '/households', { query: { scope: scope === 'firm' ? 'firm' : undefined, advisorId: advisorId || undefined, sort: st.sort, page: st.page, size } }), (r) => {
     const pages = Math.max(1, Math.ceil(r.totalItems / r.size));
     return head(title, r.totalItems + ' households') + sortTable(cols, st.sort, r.items.map(h => `<tr><td><button class="link" data-hh="${esc(h.id)}">${esc(h.name)}</button></td><td class="num">${money(h.aum)}</td><td class="num ${pctClass(h.change30d)}">${pct(h.change30d)}</td><td>${esc(daysAgo(h.lastContactAt))}</td><td>${statusBadge(h.status)}</td></tr>`).join(''))
       + `<div class="pager"><span>Page ${r.page + 1} of ${pages}</span><button class="btn" data-pg="-1" ${r.page === 0 ? 'disabled' : ''}>Previous</button><button class="btn" data-pg="1" ${r.page + 1 >= pages ? 'disabled' : ''}>Next</button></div>`;
@@ -448,16 +451,23 @@ let afterUndo = null;
 /** What to re-render once something is stepped back. Set by whichever screen is showing. */
 export const onUndo = (fn) => { afterUndo = fn; };
 
+/* Three actors, three marks. A principal appears only when they have read this advisor's book,
+   and must not be dressed as the advisor's own doing — the whole point of the entry is that
+   somebody else looked (PO-06). */
+const ACTOR_LABEL = (a) => a.actor === 'platform' ? 'The platform'
+  : a.actor === 'principal' ? (a.actorName || 'A principal') + ', reading your book'
+  : a.actorName || 'You';
+
 async function loadActivity() {
   const body = $('actBody');
   if (!body) return;
   try {
     const r = await api('GET', '/activity', { query: { size: 30 } });
     body.innerHTML = r.items.length ? `<ul class="rows activity">${r.items.map(a => `
-      <li><span class="actor ${a.actor === 'platform' ? 'ai' : ''}" aria-hidden="true"></span>
+      <li><span class="actor ${esc(a.actor)}" aria-hidden="true"></span>
         <div class="grow"><div class="title">${esc(a.summary)}</div>
           ${a.detail ? `<div class="meta">${esc(a.detail)}</div>` : ''}
-          <div class="source">${esc(a.actor === 'platform' ? 'The platform' : a.actorName || 'You')} \u00b7 ${esc(fmtTime(a.at))}</div></div>
+          <div class="source">${esc(ACTOR_LABEL(a))} \u00b7 ${esc(fmtTime(a.at))}</div></div>
         ${a.undoable && a.undoWith ? `<button class="btn quiet" data-undo="${esc(a.id)}">Undo</button>` : ''}</li>`).join('')}</ul>`
       : '<p class="empty">Nothing has happened yet today.</p>';
     body.querySelectorAll('[data-undo]').forEach(b => b.onclick = async () => {

@@ -33,7 +33,7 @@ advisor-platform-mock/
                           the reference; credentials.js, client.js, mappers.js and adapter.js
                           are the adapter; fake.js is a Green Meadows shaped like the real one.
                           Read its README first.
-  openapi.yaml            the API contract, v0.3.1-draft
+  openapi.yaml            the API contract, v0.3.2-draft
   dashboard/index.html    a 42-line shell: markup, stylesheet, one module script
   dashboard/styles.css    all styling; colour tokens defined once in :root
   dashboard/js/config.js  the only file to edit when connecting to a real backend
@@ -128,7 +128,7 @@ Where that query surface should live, what its contract needs from day one, and 
 
 Three clusters are untouched: advisor development (AX-05 to AX-09, five features), marketing and sales enablement (GP-04 to GP-10, seven), and everything downstream of reading a document (IP-05, RTI-02, AX-03). Five of the marketing ones are on the regulatory list in section 5, so that order starts with compliance, not code.
 
-## 6. The API contract (`openapi.yaml`, v0.3.1-draft)
+## 6. The API contract (`openapi.yaml`, v0.3.2-draft)
 
 One API, role-scoped: the caller's role decides what each endpoint returns. Firm-wide data uses `scope=firm` (principal only). Client-portal endpoints live under `/me`.
 
@@ -257,7 +257,7 @@ Open questions, from the requirements doc:
 - Which Green Meadows token lets an advisor see every client's accounts? Only a user-specific token and a robo advisor system token appear in the reference. If none exists, options are federating every client (needs each client's SSN and consent) or asking Green Meadows for another token type.
 - Does the API have a household concept? Are the margin admin endpoints available to this client? What are the token lifetime and rate limits? What is the sandbox to production timeline (mTLS onboarding)?
 - Which systems supply meetings, email, CRM notes and tasks? Which calendar and CRM providers first? **The system-of-record question is decided:** the platform is a working surface and the CRM stays canonical — `advisor-platform-mock/docs/system-of-record.md`. No provider is chosen, and the answer is a port with one adapter per CRM rather than a choice. Syncable records now carry `sync`, which reports `not_configured` while none is connected.
-- Are firm and advisor separate logins, or one person switching views? Can a principal open an advisor's dashboard read-only, and is that access logged?
+- Are firm and advisor separate logins, or one person switching views? ~~Can a principal open an advisor's dashboard read-only, and is that access logged?~~ **Both halves resolved, 29 Sept.** Yes, as *supervision* rather than impersonation: `advisorId` narrows `scope=firm` to one advisor's book on `/households`, `/next-actions` and `/communications`, which filters records the principal already reads in full, so no permission boundary moved. It is not "view as": `/activity`, `/meetings`, `/tasks`, `/prospects`, `/onboarding` and `/portfolio-signals` stay bound to their owner and ignore `advisorId`, and a principal cannot act in an advisor's name. And yes, logged — to the advisor, as an entry in their own activity log naming who looked, once per principal per day. Reasoning in `advisor-platform-mock/docs/design.md`.
 - Should the portal offer AI question answering? A recommendation is now written up in `advisor-platform-mock/docs/query-surface.md`: not in the first version, because the client-safe boundary is currently structural (a `/me` endpoint physically cannot return another household's data) and a free-text surface makes it probabilistic. Can clients trade in the portal, or only view?
 - ~~Are performance-tracking features (PO-06, AX-07, AX-08) visible to advisors, principals or both?~~ **Resolved for scorecards:** an advisor reads their own against the firm median; only a principal sees a rank or another advisor's card, because placing someone against named peers is a management decision rather than a reporting one. AX-07 coaching is still open.
 - Should signal counts be computed live or refreshed on a schedule? Live needs many Green Meadows calls per advisor (open tax lots need one call per account and sub-account).
@@ -326,7 +326,7 @@ buildable now.
 - **Dates in the mock are relative to the day it starts.** Restart or `POST /_mock/reset` to re-anchor. Weekly counts depend on the current weekday.
 - **Mock-only endpoints** live under `/_mock` and `/healthz`; they are not part of the contract.
 - **Injecting states for testing:** `x-mock-fail: 503`, `x-mock-delay: 1500`; in the dashboard's in-page mock, add `?fail=alerts` to the page URL.
-- **Placeholder actions:** some alert buttons still show a "not built yet" message; Open queue now goes to Communications. "Open advisor dashboard read-only" from the firm view is not built; Firm → Advisors shows an advisor's current figures and their scorecard against the firm, which is how they are doing, not what they are looking at. Logged in docs/design.md as needing a decision.
+- **Placeholder actions:** some alert buttons still show a "not built yet" message; Open queue now goes to Communications. Firm → Advisors can now open an advisor's book read-only ("Open Marcus's book"), which is the firm's records for their households rather than their screen; the advisor is told, in their own activity log.
 - **Views and sections.** The role switcher (Firm, Advisor, Client) is the top level, per X-15. Inside the advisor view a sub-nav holds Today, Next best action, Clients, Communications, Prospects, Onboarding, Calendar, Follow-ups, Playbooks and Reports; inside the firm view, Overview, Advisors, Compliance, Reports, Billing & fees, Ownership and Branding (the Firm pass, 29 Sept — UX_IA §6 #3). Sections were kept below the role switcher deliberately, so an advisor's own work never sits at the same level as the client-safe boundary.
 
 **Every AI output is a draft, and this is structural rather than a rule to remember.** Six surfaces produce them — suggested next steps, next best action, queries, meeting summaries, agendas and message redrafts — and all six return `accepted: false`, create nothing, and carry provenance saying what produced them and what they read. A draft becomes real only when an advisor acts: posting a task, approving a message. If a new AI feature does not follow that shape, it is the feature that is wrong.

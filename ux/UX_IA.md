@@ -26,6 +26,12 @@ Branding). It does **not** show Dana her own four role cards; she already has th
 Advisor view for her own book, and repeating them here would answer "how is my book going" twice
 and "how is the firm going" never. That settles `UX_RULES.md` open decision 6.
 
+**Supervision, added 29 Sept.** Firm → Advisors can open an advisor's book read-only: their
+households, what needs them, and their unapproved drafts. It is the firm's records for that
+advisor's book, not their screen, and it takes a deliberate press rather than arriving with the
+page — because the press is what the advisor is told about, in their own activity log. Reasoning
+in `advisor-platform-mock/docs/design.md`.
+
 **What the pass actually unlocked.** Four firm-scope capabilities had been served and documented
 for some time while no screen reached them, because the advisor view calls the same paths for one
 book and scope was the missing half: `GET /next-actions?scope=firm` (PL-02),

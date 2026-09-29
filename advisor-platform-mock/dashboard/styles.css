@@ -560,9 +560,20 @@ dialog.sheet { max-width: 460px; border: 1px solid var(--line); border-radius: v
   .side { width: 100vw; }
 }
 .activity .actor { width: 7px; height: 7px; border-radius: 50%; background: var(--muted); flex: none; margin-top: 7px; }
-.activity .actor.ai { background: var(--ai); }
+.activity .actor.platform { background: var(--ai); }
+/* Someone other than you, in the colour that means "this wants your attention". */
+.activity .actor.principal { background: var(--warn); box-shadow: 0 0 0 2px var(--warn-soft); }
 /* An empty role speaks in the serif: it is the platform's voice, not a label (FO-05, §3). */
 .empty.serif { font: 400 16px/1.5 var(--serif); color: var(--muted); }
+
+/* Supervision (PO-06). A principal reading an advisor's book.
+   Solid, not dashed: dashed means draft in this system and these are records. A rule down the
+   left in the warning colour, which already means "this needs your attention" everywhere else,
+   because the thing needing attention is that you are reading someone else's work. */
+.supervision { margin-top: 20px; padding: 14px 16px; border-radius: var(--radius-2);
+  background: var(--warn-soft); border-left: 3px solid var(--warn); }
+.supervision p { margin: 0 0 10px; font-size: 14px; line-height: 1.55; max-width: 68ch; }
+.supervision strong { font-weight: 600; }
 .hint.gap { color: var(--warn); }
 .meta.gap { color: var(--warn); }
 
