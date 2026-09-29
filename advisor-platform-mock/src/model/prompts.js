@@ -11,10 +11,23 @@
  *   - The output is a draft for an advisor to edit, not a message to a client (X-03).
  */
 
+/* The language the draft is written in (AX-12).
+   It is stated first, before anything else, because it governs the whole output; and it is
+   named in the target language as well as in English, which measurably steadies a model that
+   would otherwise drift back into the language the rest of the prompt is written in. The
+   register is set explicitly too: a French adviser writing to a client vouvoies them, and a
+   model left to choose will sometimes not. */
+const LANGUAGES = {
+  en: 'Write in British English.',
+  fr: 'Write in French (écrivez en français). Use vouvoiement throughout, never tutoiement. '
+    + 'Use French financial register: "foyer" for a household, "encours" for assets under '
+    + 'management, "conseiller" for the adviser. Do not leave English words in the draft.'
+};
+export const languageRule = (lang) => LANGUAGES[lang] || LANGUAGES.en;
+
 const HOUSE_RULES = `
-You are drafting for a financial adviser at a registered investment adviser firm, in British
-English. Everything you write is a draft the adviser will read, edit and approve. It is never
-sent to anyone by you.
+You are drafting for a financial adviser at a registered investment adviser firm. Everything you
+write is a draft the adviser will read, edit and approve. It is never sent to anyone by you.
 
 Rules that are not negotiable:
 - Use only the facts in the CONTEXT block. If something needed is missing, say plainly that it
@@ -27,9 +40,11 @@ Rules that are not negotiable:
 
 export const PROMPTS = {
   meeting_summary: {
-    version: 'meeting_summary/v1',
+    version: 'meeting_summary/v2',
     effort: 'medium',
-    system: `${HOUSE_RULES}
+    system: (lang) => `${languageRule(lang)}
+
+${HOUSE_RULES}
 
 Summarise a meeting from its record. Structure: two or three sentences of what the meeting was
 about and what was decided, then a short list of points raised, then a short list of anything
@@ -46,9 +61,11 @@ ${c.content || '(nothing was captured)'}`
   },
 
   meeting_agenda: {
-    version: 'meeting_agenda/v1',
+    version: 'meeting_agenda/v2',
     effort: 'medium',
-    system: `${HOUSE_RULES}
+    system: (lang) => `${languageRule(lang)}
+
+${HOUSE_RULES}
 
 Write an agenda for an upcoming meeting. Between four and seven numbered items, each one line,
 ordered so the most consequential comes first. Ground every item in the context: the prep brief,
@@ -66,9 +83,11 @@ Open follow-ups: ${(c.tasks || []).join('; ') || 'none'}`
   },
 
   email_draft: {
-    version: 'email_draft/v2',
+    version: 'email_draft/v3',
     effort: 'medium',
-    system: `${HOUSE_RULES}
+    system: (lang) => `${languageRule(lang)}
+
+${HOUSE_RULES}
 
 Draft the body of an email from the adviser to the client. The subject line is a separate field
 and is not yours to write: do not open with "Subject:" or repeat it. Keep it under 200 words. Say the one thing the email is for, give the client what they

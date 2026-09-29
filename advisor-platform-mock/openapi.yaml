@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Advisor Platform API (dashboard domains)
-  version: 0.3.2-draft
+  version: 0.4.0-draft
   description: |
     Draft contract for the advisor dashboard. Not built yet: this spec is the design.
     The backend service aggregates Green Meadows (custodial data) and other sources
@@ -29,6 +29,12 @@ info:
     - `sort` is `field,direction`. A field may have an order of its own rather than an
       alphabetical one, in which case the operation says so and lists the order; ascending always
       means the least urgent first, so `,desc` leads with what needs attention.
+
+    Changes in 0.4.0-draft
+    - `GET /settings` and `PATCH /settings`, holding the reader's `language` (AX-12). Per person
+      rather than per firm, and available to every signed-in role: the client portal is localised
+      by the same setting. The language also reaches the model layer, so a draft for a
+      French-reading adviser is written in French.
 
     Changes since 0.3.0-draft
     - `GET /firm/compliance` takes `sort`, and its default order is now `status,desc`: overdue,
@@ -321,6 +327,32 @@ paths:
       responses:
         '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/FirmSummary' } } } }
         '403': { $ref: '#/components/responses/Error' }
+
+  /settings:
+    get:
+      tags: [Session]
+      operationId: getSettings
+      summary: What this person has chosen
+      description: >
+        Per-person, not per-firm: language is a property of the reader. Available to every signed-in
+        role including a client, because the client portal is localised by the same setting.
+        Requirement: AX-12.
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Settings' } } } }
+    patch:
+      tags: [Session]
+      operationId: updateSettings
+      summary: Change a setting
+      description: >
+        Changes only the fields sent. The language also reaches the model layer: a draft written
+        for a French-reading adviser is written in French, because a French screen that produces
+        English drafts has only been half translated. Requirement: AX-12, TM-01.
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/SettingsUpdate' } } }
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Settings' } } } }
+        '400': { $ref: '#/components/responses/Error' }
 
   /firm/advisors:
     get:
@@ -1610,6 +1642,26 @@ components:
       properties:
         items: { type: array, items: { $ref: '#/components/schemas/Fee' } }
         dataAsOf: { type: string, format: date-time }
+
+    Settings:
+      type: object
+      required: [language, availableLanguages]
+      properties:
+        language: { type: string, enum: [en, fr], description: 'BCP 47 primary subtag. Drives the interface, number, date and currency formatting, and the language a draft is written in.' }
+        availableLanguages:
+          type: array
+          description: 'What this build can actually render. Sent by the server so the settings screen offers what exists rather than a list it hopes is true.'
+          items:
+            type: object
+            required: [code, label]
+            properties:
+              code: { type: string }
+              label: { type: string, description: 'The language named in itself: Français, not French.' }
+
+    SettingsUpdate:
+      type: object
+      properties:
+        language: { type: string, enum: [en, fr] }
 
     Preferences:
       type: object

@@ -4,7 +4,7 @@
  * GENERATED FROM openapi.yaml. Do not edit by hand: run `npm run types`.
  * `npm test` fails if this file and the contract disagree.
  *
- * Contract version 0.3.2-draft.
+ * Contract version 0.4.0-draft.
  */
 
 export interface Error {
@@ -381,6 +381,27 @@ export interface FeeList {
   items: Fee[];
   /** Format: date-time. */
   dataAsOf: string;
+}
+
+export interface Settings {
+  /**
+   * BCP 47 primary subtag. Drives the interface, number, date and currency formatting, and the
+   * language a draft is written in.
+   */
+  language: 'en' | 'fr';
+  /**
+   * What this build can actually render. Sent by the server so the settings screen offers what
+   * exists rather than a list it hopes is true.
+   */
+  availableLanguages: Array<{
+    code: string;
+    /** The language named in itself: Français, not French. */
+    label: string;
+  }>;
+}
+
+export interface SettingsUpdate {
+  language?: 'en' | 'fr';
 }
 
 /**
@@ -1362,6 +1383,18 @@ export interface Operations {
     path: '/firm/summary';
     request: never;
     response: FirmSummary;
+  };
+  getSettings: {
+    method: 'GET';
+    path: '/settings';
+    request: never;
+    response: Settings;
+  };
+  updateSettings: {
+    method: 'PATCH';
+    path: '/settings';
+    request: SettingsUpdate;
+    response: Settings;
   };
   listAdvisors: {
     method: 'GET';

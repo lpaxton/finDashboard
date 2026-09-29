@@ -11,8 +11,12 @@ import { PROMPTS } from './prompts.js';
 async function run(capability, context) {
   const p = PROMPTS[capability];
   if (!p) throw new Error('No prompt for capability: ' + capability);
+  /* The system prompt is a function of the language rather than a fixed string: the language
+     rule has to sit inside the instructions the model is given, not be appended to the user
+     turn, or it competes with the house rules instead of governing them. */
+  const language = context.language || 'en';
   const out = await generate({
-    capability, system: p.system, prompt: p.user(context),
+    capability, system: p.system(language), prompt: p.user(context),
     effort: p.effort, fallbackContext: context
   });
   return {
@@ -26,6 +30,7 @@ async function run(capability, context) {
       model: out.model,
       live: out.live,
       promptVersion: p.version,
+      language,
       generatedAt: out.generatedAt,
       readFrom: context.readFrom || []
     }

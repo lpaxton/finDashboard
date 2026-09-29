@@ -178,6 +178,21 @@ test('failure injection and bad bodies', async () => {
   assert.equal(res.status, 400);
 });
 
+/* The dashboard runs the mock in the browser, so every module mock-core imports has to be
+   reachable over HTTP too. This broke once: src/i18n.js was added on the server, worked in
+   every test, and 404'd in the browser — which took the whole dashboard down, because a module
+   that fails to link takes its importers with it. Tests that only run in Node cannot see it. */
+test('every module the browser-side mock imports is actually served', async () => {
+  const core = fs.readFileSync(path.join(__dirname, '..', 'src', 'mock-core.js'), 'utf8');
+  const imports = [...core.matchAll(/from '\.\/([\w./-]+)'/g)].map(m => m[1]);
+  assert.ok(imports.length, 'expected mock-core to import something');
+  for (const rel of imports) {
+    const r = await fetch(base + '/src/' + rel);
+    assert.equal(r.status, 200, '/src/' + rel + ' is imported by mock-core but is not served');
+    assert.match(r.headers.get('content-type') || '', /javascript/);
+  }
+});
+
 test('every operation in openapi.yaml is served', async () => {
   const spec = fs.readFileSync(path.join(__dirname, '..', 'openapi.yaml'), 'utf8').split('\n');
   const start = spec.findIndex(l => l === 'paths:'), end = spec.findIndex(l => l === 'components:');
@@ -186,7 +201,7 @@ test('every operation in openapi.yaml is served', async () => {
     const p = l.match(/^  (\/[^\s:]+):\s*$/); if (p) { cur = p[1]; continue; }
     const m = l.match(/^    (get|post|patch|put|delete):\s*$/); if (m && cur) ops.push([m[1].toUpperCase(), cur]);
   }
-  assert.equal(ops.length, 75, 'spec should list 75 operations');
+  assert.equal(ops.length, 77, 'spec should list 77 operations');
   const params = { householdId: 'h3', meetingId: 'm1', taskId: 't1', alertId: 'a1', signalId: 'sig_idle_cash', advisorId: 'adv2', documentId: 'd1',
     communicationId: 'cm1', prospectId: 'p1', onboardingId: 'ob1', stepId: 'intake_form', invoiceId: 'inv1', queryId: 'q1', teamShareId: 'ts1', playbookId: 'pb1' };
   const missing = [];

@@ -27,6 +27,103 @@ Entries are newest first.
 
 ## Log
 
+### 29 September 2026 · French, and the machinery for any other language (AX-12)
+
+**Asked for.** Luke: "we also need an option in the settings to change the language to French."
+
+**Built.** A working language setting, and the product in French behind it. **Settings** now
+exists — beside Ask and Activity, reachable from every view including the client portal, because
+language belongs to the person reading rather than to the view they are in.
+
+**What "in French" turned out to mean.** Four layers, and doing only the first would have been
+visible within a minute of use.
+
+| Layer | What it covers |
+| --- | --- |
+| The interface | ~560 strings across every screen. `dashboard/js/i18n.js` |
+| The formatting | Dates, numbers, currency, weekday names. `83,9 M $US`, `mardi 29 septembre`, `+0,2 %` |
+| The server's own prose | Role-card reasons, the activity log, metric labels, the drafts note. `src/i18n.js` |
+| What the model writes | A French screen that produces English drafts is half a translation |
+
+**Three decisions inside that.**
+
+**1. The English string is the key.** With ~560 of them, inventing an identifier for each would
+have meant touching every call site twice and naming "Nothing across the firm needs you today."
+A missing translation therefore renders the *English*, not a key and not a blank — a
+half-translated screen is legible; `advisor.today.empty` is not. `untranslated()` lists what is
+missing, which is the review list.
+
+**2. Translate at the chokepoints, not at every call site.** `head()`, `load()`, `toast()`,
+`sortTable()`, `spine()`, `subnav()` and `roleTabs()` translate what they are handed, so every
+panel title, column heading, section name and confirmation in the product was localised by
+editing seven functions. Titles that are really data — a person's name, a household's — go
+through `raw()`, which says so explicitly rather than letting the translator guess.
+
+**3. Records are never translated, and that is the point.** A household's name, a person's name,
+an alert or a compliance item as it arrives from the custodian or the CRM stays exactly as it is
+recorded. A platform that rewrites a record has changed the record. **Where you will see this:**
+one practice-level alert reads *"3 client emails waiting for compliance review for over 2 days"*
+in English on an otherwise French screen. In this mock that string is a fixture standing in for
+what a rules engine would emit; in a real build the rule that raises the alert composes its
+title through `src/i18n.js`, exactly as `nextActions()` now does. It is a fixture boundary, not
+a design one — but it is worth seeing rather than papering over.
+
+**The model writes in the reader's language.** The language rule leads the system prompt, before
+the house rules, because it governs them; it names French *in* French, which measurably steadies
+a model that would otherwise drift back into the language the rest of the prompt is written in;
+and it sets vouvoiement explicitly, because a model left to choose will sometimes not. All three
+prompt versions are bumped, per this project's own rule that editing a prompt bumps its version.
+The offline generator writes French too — otherwise an adviser cannot tell a disconnected model
+from a broken translation.
+
+**Register, for whoever reviews this.** Vouvoiement throughout: this is a professional tool and
+the adviser is being addressed by their firm's software. *Conseiller* for advisor, *dirigeant*
+for principal, *foyer* for household (*ménage* reads domestic rather than financial), *encours
+sous gestion* for AUM, *brouillon* for draft, *suivi* for follow-up.
+
+> **NEEDS A NATIVE AND COMPLIANCE REVIEW BEFORE THIS SHIPS.** The machinery is finished and
+> tested; the wording is mine. Regulated phrasing in particular — *"Ce sont des brouillons. Rien
+> n'a été créé"*, *"Ceci a quitté le cabinet et ne peut pas être rappelé"* — carries the same
+> weight in French as the English it came from, and a translator working from the English alone
+> will not know which phrases are load-bearing. `ux/UX_RULES.md` names them; they should be
+> reviewed against it.
+
+**What the tests hold.** Six front-end and five server-side, each verified to fail by injecting
+the matching fault:
+
+- A translation that drops a `{placeholder}` renders "Échéance" with no date and reads as
+  finished. Compared as sets, because French often needs a name twice where English needs it once.
+- A key the code asks for and the dictionary does not have. This is the one that rots: a call
+  site is edited, the dictionary is not, and the screen quietly falls back to English.
+- `format.js` hard-coding a locale — half a translation, and the half nobody notices.
+- Language is **per person**: Dana in English and Marcus in French at the same time, neither
+  changed by the other having read anything.
+- A language this build cannot render is refused with a message saying what it does have, and
+  the refusal does not take effect.
+- A client can set it too: the portal is not an English-only afterthought.
+
+**One bug worth recording, because no test could have caught it and one now does.** Adding
+`src/i18n.js` worked in every Node test and **404'd in the browser** — the dashboard runs the
+mock in-browser, so a module `mock-core.js` imports has to be served over HTTP as well as exist
+on disk, and a module that fails to link takes its importers down with it. The whole dashboard
+went white. There is now a test that fetches every module `mock-core.js` imports.
+
+**Implications.**
+
+- **Contract 0.4.0-draft.** `GET /settings` and `PATCH /settings`; `Provenance` gains `language`.
+  A minor bump rather than a patch: the model's output language is now part of the audit trail.
+- **Adding a language is one file and one array.** `src/mock-core.js` `LANGUAGES` declares what
+  the build can render — the settings screen offers what the *server* says exists rather than
+  what the front end hopes is there — and a dictionary in `dashboard/js/i18n.js` plus one in
+  `src/i18n.js`.
+- **Not built:** right-to-left layout. Nothing here assumes direction, but nothing has been
+  tested against it either, and Arabic or Hebrew would need a CSS pass, not a dictionary.
+- **Not built:** translated fixture data, per the boundary above.
+- **Worth knowing:** `Intl` does all the formatting, so a new language gets correct dates,
+  numbers and currency for free. The words are the only work.
+
+---
+
 ### 29 September 2026 · Supervision, not impersonation — the read-only advisor book (PO-06)
 
 **Asked for.** Luke: "do the read-only advisor dashboard decision." It had sat open since the

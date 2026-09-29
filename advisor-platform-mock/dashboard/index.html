@@ -13,7 +13,7 @@
 <div class="wrap">
   <div class="demo" id="demo" hidden>
     <span id="demoText"></span>
-    <span>Sign in as</span>
+    <span id="demoSignIn">Sign in as</span>
     <div class="tabs" id="personas" role="group" aria-label="Sign in as">
       <button data-persona="dana" aria-pressed="true">Dana, principal and advisor</button>
       <button data-persona="marcus" aria-pressed="false">Marcus, advisor</button>
@@ -30,6 +30,7 @@
     </div>
     <div class="who">
       <button class="btn" id="actBtn" aria-expanded="false" aria-controls="actPanel" hidden>Activity</button>
+      <button class="btn quiet" id="setBtn" aria-expanded="false" aria-controls="setPanel">Settings</button>
       <div class="tabs" id="tabs" role="tablist" aria-label="View" hidden></div>
       <div class="avatar" id="avatar" aria-hidden="true"></div>
     </div>
@@ -44,6 +45,9 @@
 <button class="btn ask askfab" id="askBtn" aria-expanded="false" aria-controls="askPanel" hidden>Ask</button>
 <aside class="side" id="askPanel" aria-labelledby="askTitle" hidden></aside>
 <aside class="side" id="actPanel" aria-labelledby="actTitle" hidden></aside>
+<!-- Settings sits beside the page like Ask and Activity, and in every view: language belongs to
+     the person reading, and a client reads the portal in their own language too. -->
+<aside class="side" id="setPanel" aria-labelledby="setTitle" hidden></aside>
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 </body>
 </html>

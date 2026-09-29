@@ -146,6 +146,25 @@ preferences, and a meeting request form.
 About 29 of a planned 75 features are built. The gaps are known and deliberate, and most of
 what is missing is waiting on a data source or a compliance review rather than on design.
 
+### The product speaks French
+
+There is a language setting (**Settings**, top right, in every view). Switching it to Français
+changes the interface, the dates, the numbers and the currency — and the drafts the platform
+writes. Two things to know before you design against it:
+
+- **French runs about 15–25% longer than English.** "Overdue follow-ups" becomes "Suivis en
+  retard"; "Assets under management" becomes "Encours sous gestion". Anything you design to a
+  fixed width — a badge, a tab, a table header, a button — needs to survive that. Switch to
+  French and look at the widest thing on the screen.
+- **Names are never translated.** Households, clients, advisors, document titles and alerts as
+  they arrive from the custodian keep their recorded wording, so a French screen will always
+  have some English proper nouns on it. That is correct, not a gap: translating a record changes
+  the record.
+
+The French wording still needs a native and compliance review — the machinery is finished, the
+copy is a first pass. If you spot phrasing that reads wrong, say so and it will be logged in
+`design.md` with everything else.
+
 ### Components you can build with
 
 Already styled and in use: panels, hairline tables with sortable headers, stat strips,

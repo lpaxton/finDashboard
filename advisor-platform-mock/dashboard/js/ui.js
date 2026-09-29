@@ -3,6 +3,13 @@
 import { api } from './api.js';
 import { $, esc, money, moneyFull, pct, pctClass, daysAgo, fmtTime, statusBadge, SHARE_TYPES, sourceLine, sourceKind } from './format.js';
 import { isSnoozed, snoozedUntil } from './viewstate.js';
+/* head(), load() and toast() translate what they are given, which is how every panel heading,
+   hint and confirmation in the dashboard is localised without touching each call site. A title
+   that is really data — a person's name, a household's — is passed through raw(). */
+import { t, raw, locale, setLang } from './i18n.js';
+/* SHARE_TYPES reads through t(), so Object.entries on it would translate the keys too. The
+   keys are contract values and must stay as they are. */
+const SHARE_TYPE_KEYS = { plan: 1, tax_explanation: 1, report: 1, proposal: 1, message: 1, document: 1 };
 import { isOpen, setOpen } from './viewstate.js';
 
 let toastTimer;
@@ -10,18 +17,18 @@ let toastTimer;
    the advisor cannot reach in time is not an undo, so a toast with an action waits longer and
    accepts a click. */
 export function toast(msg, action) {
-  const t = $('toast');
-  t.textContent = msg;
-  t.classList.toggle('actionable', !!action);
+  const el = $('toast');
+  el.textContent = t(msg);
+  el.classList.toggle('actionable', !!action);
   if (action) {
     const b = document.createElement('button');
-    b.type = 'button'; b.className = 'toast-action'; b.textContent = action.label;
-    b.onclick = () => { t.classList.remove('show'); clearTimeout(toastTimer); action.run(); };
-    t.append(b);
+    b.type = 'button'; b.className = 'toast-action'; b.textContent = t(action.label);
+    b.onclick = () => { el.classList.remove('show'); clearTimeout(toastTimer); action.run(); };
+    el.append(b);
   }
-  t.classList.add('show');
+  el.classList.add('show');
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => t.classList.remove('show'), action ? 9000 : 2600);
+  toastTimer = setTimeout(() => el.classList.remove('show'), action ? 9000 : 2600);
 }
 
 /* Draws nothing rather than a misleading line when the backend sends no history. */
@@ -30,23 +37,23 @@ export function spark(trend, label) {
   const v = trend.map(p => p.value), w = 180, h = 34, min = Math.min(...v), max = Math.max(...v);
   const pts = v.map((x, i) => [(i / (v.length - 1)) * w, h - 3 - ((x - min) / (max - min || 1)) * (h - 6)]);
   const d = pts.map((p, i) => (i ? 'L' : 'M') + p[0].toFixed(1) + ' ' + p[1].toFixed(1)).join(' '), last = pts[pts.length - 1];
-  return `<svg class="spark" viewBox="0 0 ${w} ${h}" role="img" aria-label="${esc(label)}"><path d="${d}" fill="none" stroke="var(--brand)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="${last[0]}" cy="${last[1]}" r="3" fill="var(--brand)"/></svg>`;
+  return `<svg class="spark" viewBox="0 0 ${w} ${h}" role="img" aria-label="${esc(t(label))}"><path d="${d}" fill="none" stroke="var(--brand)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="${last[0]}" cy="${last[1]}" r="3" fill="var(--brand)"/></svg>`;
 }
 
 /* Loads a panel with loading, error and retry states. */
 export async function load(el, title, loader, render, after) {
-  el.innerHTML = `<div class="panel-head"><h2>${esc(title)}</h2></div><div class="skel"></div><div class="skel m"></div><div class="skel s"></div>`;
+  el.innerHTML = `<div class="panel-head"><h2>${esc(t(title))}</h2></div><div class="skel"></div><div class="skel m"></div><div class="skel s"></div>`;
   try {
     const d = await loader();
     el.innerHTML = render(d);
     if (after) after(el, d);
   } catch (e) {
-    const msg = e.status === 403 ? "You don't have access to this section." : (e.message || "Couldn't load this section.");
-    el.innerHTML = `<div class="panel-head"><h2>${esc(title)}</h2></div><div class="err"><span>${esc(msg)}</span>${e.status === 403 ? '' : '<button class="btn" data-retry>Try again</button>'}</div>`;
+    const msg = e.status === 403 ? t("You don't have access to this section.") : (e.message || t("Couldn't load this section."));
+    el.innerHTML = `<div class="panel-head"><h2>${esc(t(title))}</h2></div><div class="err"><span>${esc(msg)}</span>${e.status === 403 ? '' : `<button class="btn" data-retry>${esc(t('Try again'))}</button>`}</div>`;
     const r = el.querySelector('[data-retry]'); if (r) r.onclick = () => load(el, title, loader, render, after);
   }
 }
-export const head = (title, hint = '') => `<div class="panel-head"><h2>${esc(title)}</h2>${hint ? `<span class="hint">${esc(hint)}</span>` : ''}</div>`;
+export const head = (title, hint = '') => `<div class="panel-head"><h2>${esc(t(title))}</h2>${hint ? `<span class="hint">${esc(t(hint))}</span>` : ''}</div>`;
 export const panel = (id, extra = '') => `<section class="panel ${extra}" id="${id}"></section>`;
 
 /* Opening and closing, with somewhere to put the motion.
@@ -85,7 +92,7 @@ export function wireDisclosures(el, onOpen) {
 
 export function sortTable(cols, sort, rowsHtml) {
   const [sk, sd] = sort.split(',');
-  return `<div class="tablewrap"><table><thead><tr>${cols.map(c => `<th class="${c.num ? 'num' : ''}" scope="col">${c.key && !c.nosort ? `<button data-sort="${c.key}" aria-sort="${sk === c.key ? (sd === 'asc' ? 'ascending' : 'descending') : 'none'}">${esc(c.label)}</button>` : esc(c.label)}</th>`).join('')}</tr></thead><tbody>${rowsHtml}</tbody></table></div>`;
+  return `<div class="tablewrap"><table><thead><tr>${cols.map(c => `<th class="${c.num ? 'num' : ''}" scope="col">${c.key && !c.nosort ? `<button data-sort="${c.key}" aria-sort="${sk === c.key ? (sd === 'asc' ? 'ascending' : 'descending') : 'none'}">${esc(t(c.label))}</button>` : esc(t(c.label))}</th>`).join('')}</tr></thead><tbody>${rowsHtml}</tbody></table></div>`;
 }
 export const nextSort = (cur, key, textFirst) => { const [k, d] = cur.split(','); return k === key ? key + ',' + (d === 'asc' ? 'desc' : 'asc') : key + ',' + (textFirst ? 'asc' : 'desc'); };
 
@@ -111,11 +118,11 @@ export const SNOOZE_CHOICES = [
 const untilWords = (iso) => {
   const d = new Date(iso), now = new Date();
   const sameDay = d.toDateString() === now.toDateString();
-  const time = d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
-  if (sameDay) return 'until ' + time;
-  const t = new Date(now); t.setDate(t.getDate() + 1);
-  if (d.toDateString() === t.toDateString()) return 'until tomorrow';
-  return 'until ' + d.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' });
+  const time = d.toLocaleTimeString(locale(), { hour: 'numeric', minute: '2-digit' });
+  if (sameDay) return t('until {when}', { when: time });
+  const tm = new Date(now); tm.setDate(tm.getDate() + 1);
+  if (d.toDateString() === tm.toDateString()) return t('until tomorrow');
+  return t('until {when}', { when: d.toLocaleDateString(locale(), { weekday: 'long', month: 'short', day: 'numeric' }) });
 };
 
 export function alertsList(list, { dismiss, showAdvisor } = {}) {
@@ -123,51 +130,51 @@ export function alertsList(list, { dismiss, showAdvisor } = {}) {
   const shown = dismiss ? list.filter(a => !isSnoozed(a.id)) : list;
   const setAside = hidden.length
     ? `<p class="hint set-aside">${hidden.length === 1
-        ? 'One alert is set aside ' + untilWords(snoozedUntil(hidden[0].id)) + '. <button class="link" data-unsnooze-all>Bring it back</button>'
-        : hidden.length + ' alerts are set aside. <button class="link" data-unsnooze-all>Bring them back</button>'}</p>`
+        ? esc(t('One alert is set aside {until}.', { until: untilWords(snoozedUntil(hidden[0].id)) })) + ` <button class="link" data-unsnooze-all>${esc(t('Bring it back'))}</button>`
+        : esc(t('{n} alerts are set aside.', { n: hidden.length })) + ` <button class="link" data-unsnooze-all>${esc(t('Bring them back'))}</button>`}</p>`
     : '';
-  if (!shown.length) return '<p class="empty">Nothing needs your attention right now.</p>' + setAside;
+  if (!shown.length) return `<p class="empty">${esc(t('Nothing needs your attention right now.'))}</p>` + setAside;
   return `<ul class="rows">${shown.map(a => {
     const label = ALERT_ACTIONS[a.action && a.action.type];
     return `<li data-alert="${esc(a.id)}"><span class="sev ${esc(a.severity)}" title="${esc(a.severity)} priority"></span>
     <div class="grow"><div class="title">${esc(a.title)}</div>
-      <div class="meta">${esc(a.householdName || 'Practice')}${showAdvisor && a.advisorName ? ' \u2022 ' + esc(a.advisorName) : ''}</div>
+      <div class="meta">${esc(a.householdName || t('Practice'))}${showAdvisor && a.advisorName ? ' \u2022 ' + esc(a.advisorName) : ''}</div>
       <div class="source">${esc(sourceLine(a.source, a.createdAt))}</div></div>
     ${dismiss ? `<div class="actions">
-      ${label ? `<button class="btn" data-alert-action="${esc(a.action.type)}" data-target="${esc(a.action.targetId || '')}">${esc(label)}</button>` : ''}
-      <button class="btn quiet" data-notnow="${esc(a.id)}" aria-label="Not now: ${esc(a.title)}">Not now</button>
-      <button class="btn quiet" data-dismiss="${esc(a.id)}" aria-label="Dismiss: ${esc(a.title)}">Dismiss</button></div>` : ''}</li>`;
+      ${label ? `<button class="btn" data-alert-action="${esc(a.action.type)}" data-target="${esc(a.action.targetId || '')}">${esc(t(label))}</button>` : ''}
+      <button class="btn quiet" data-notnow="${esc(a.id)}" aria-label="${esc(t('Not now: {what}', { what: a.title }))}">${esc(t('Not now'))}</button>
+      <button class="btn quiet" data-dismiss="${esc(a.id)}" aria-label="${esc(t('Dismiss: {what}', { what: a.title }))}">${esc(t('Dismiss'))}</button></div>` : ''}</li>`;
   }).join('')}</ul>` + setAside;
 }
 
 /* The three times, offered in place of the row's actions so the choice stays where it was made. */
-export const snoozeChoices = (id) => `<div class="actions notnow" role="group" aria-label="Bring this back">
-  <span class="meta">Bring back</span>
-  ${SNOOZE_CHOICES.map(([k, label]) => `<button class="btn" data-snooze="${esc(id)}" data-when="${k}">${esc(label)}</button>`).join('')}
-  <button class="btn quiet" data-snooze-cancel>Keep it here</button></div>`;
+export const snoozeChoices = (id) => `<div class="actions notnow" role="group" aria-label="${esc(t('Bring this back'))}">
+  <span class="meta">${esc(t('Bring back'))}</span>
+  ${SNOOZE_CHOICES.map(([k, label]) => `<button class="btn" data-snooze="${esc(id)}" data-when="${k}">${esc(t(label))}</button>`).join('')}
+  <button class="btn quiet" data-snooze-cancel>${esc(t('Keep it here'))}</button></div>`;
 
 export async function openHousehold(id, canShare) {
   const dlg = $('dlg');
-  dlg.innerHTML = '<p class="empty">Loading\u2026</p>'; dlg.showModal();
+  dlg.innerHTML = `<p class="empty">${esc(t('Loading\u2026'))}</p>`; dlg.showModal();
   try {
     const h = await api('GET', '/households/' + encodeURIComponent(id));
-    dlg.innerHTML = `<button class="btn quiet close" data-close>Close</button><h2 id="dlgTitle">${esc(h.name)}</h2>
+    dlg.innerHTML = `<button class="btn quiet close" data-close>${esc(t('Close'))}</button><h2 id="dlgTitle">${esc(h.name)}</h2>
       <div>${statusBadge(h.status)}</div>
-      <dl class="defs"><dt>Assets</dt><dd>${moneyFull(h.aum)}</dd><dt>30-day change</dt><dd class="${pctClass(h.change30d)}">${pct(h.change30d)}</dd><dt>Last contact</dt><dd>${esc(daysAgo(h.lastContactAt))}</dd></dl>
-      <div class="actions" style="margin:2px 0 14px"><button class="btn" id="hhAsk">Ask about this household</button>
-        ${canShare ? '<button class="btn" id="hhTeam">Share with a colleague</button><button class="btn" id="hhFee">Change fee</button><button class="btn" id="hhModel">Compare models</button>' : ''}</div>
+      <dl class="defs"><dt>${esc(t('Assets'))}</dt><dd>${moneyFull(h.aum)}</dd><dt>${esc(t('30-day change'))}</dt><dd class="${pctClass(h.change30d)}">${pct(h.change30d)}</dd><dt>${esc(t('Last contact'))}</dt><dd>${esc(daysAgo(h.lastContactAt))}</dd></dl>
+      <div class="actions" style="margin:2px 0 14px"><button class="btn" id="hhAsk">${esc(t('Ask about this household'))}</button>
+        ${canShare ? `<button class="btn" id="hhTeam">${esc(t('Share with a colleague'))}</button><button class="btn" id="hhFee">${esc(t('Change fee'))}</button><button class="btn" id="hhModel">${esc(t('Compare models'))}</button>` : ''}</div>
       <div id="hhPanel"></div>
-      <h3>Allocation</h3>
+      <h3>${esc(t('Allocation'))}</h3>
       <div id="hhAlloc"><div class="skel"></div></div>
-      <h3>Accounts</h3>
-      <div class="tablewrap"><table><thead><tr><th>Account</th><th>Type</th><th class="num">Balance</th><th class="num">Today</th><th>Opening</th></tr></thead><tbody>
+      <h3>${esc(t('Accounts'))}</h3>
+      <div class="tablewrap"><table><thead><tr><th>${esc(t('Account'))}</th><th>${esc(t('Type'))}</th><th class="num">${esc(t('Balance'))}</th><th class="num">${esc(t('Today'))}</th><th>${esc(t('Opening'))}</th></tr></thead><tbody>
       ${h.accounts.map(a => `<tr><td>${esc(a.maskedNumber)}</td><td>${esc(a.type)}</td><td class="num">${moneyFull(a.balance)}</td><td class="num ${pctClass(a.todayGainLoss)}">${moneyFull(a.todayGainLoss)}</td><td>${esc((a.openingStatus || '').toUpperCase())}</td></tr>`).join('')}</tbody></table></div>
-      ${canShare ? `<h3>Share with client</h3>
-      <p class="hint" style="margin:0 0 10px">Clients see only what an advisor approves here. Briefs, alerts, notes and tasks are never shared.</p>
-      <div class="field"><label for="shType">Type</label><select id="shType">${Object.entries(SHARE_TYPES).map(([k, v]) => `<option value="${k}">${v}</option>`).join('')}</select></div>
-      <div class="field"><label for="shTitle">Title shown to the client</label><input type="text" id="shTitle" placeholder="For example, Your retirement plan summary"></div>
-      <div class="field"><label for="shMsg">Message (optional)</label><textarea id="shMsg"></textarea></div>
-      <button class="btn primary" id="shGo">Approve and share</button>` : ''}`;
+      ${canShare ? `<h3>${esc(t('Share with client'))}</h3>
+      <p class="hint" style="margin:0 0 10px">${esc(t('Clients see only what an advisor approves here. Briefs, alerts, notes and tasks are never shared.'))}</p>
+      <div class="field"><label for="shType">${esc(t('Type'))}</label><select id="shType">${Object.keys(SHARE_TYPE_KEYS).map(k => `<option value="${k}">${esc(SHARE_TYPES[k])}</option>`).join('')}</select></div>
+      <div class="field"><label for="shTitle">${esc(t('Title shown to the client'))}</label><input type="text" id="shTitle" placeholder="${esc(t('For example, Your retirement plan summary'))}"></div>
+      <div class="field"><label for="shMsg">${esc(t('Message (optional)'))}</label><textarea id="shMsg"></textarea></div>
+      <button class="btn primary" id="shGo">${esc(t('Approve and share'))}</button>` : ''}`;
     loadAllocation(id);
     setAskContext('household', id, h.name);
     const ask = $('hhAsk');
@@ -183,7 +190,7 @@ export async function openHousehold(id, canShare) {
       try { await api('POST', '/households/' + encodeURIComponent(id) + '/shares', { body: { type: $('shType').value, sourceId: 'draft-' + Date.now(), title, message: $('shMsg').value.trim() || undefined } }); toast('Shared with the client.'); dlg.close(); }
       catch (e) { toast(e.message); go.disabled = false; }
     };
-  } catch (e) { dlg.innerHTML = `<button class="btn quiet close" data-close>Close</button><p class="err">${esc(e.message)}</p>`; }
+  } catch (e) { dlg.innerHTML = `<button class="btn quiet close" data-close>${esc(t('Close'))}</button><p class="err">${esc(e.message)}</p>`; }
 }
 
 /* Book / households table: sorting and paging are done by the API. */
@@ -195,8 +202,8 @@ export function bookPanel({ scope, canShare, id, title, size = 8, advisorId = nu
   const cols = [{ key: 'name', label: 'Household' }, { key: 'aum', label: 'Assets', num: true }, { key: 'change30d', label: '30-day change', num: true }, { key: 'lastContactAt', label: 'Last contact' }, { key: 'status', label: 'Status' }];
   const run = () => load(el, title, () => api('GET', '/households', { query: { scope: scope === 'firm' ? 'firm' : undefined, advisorId: advisorId || undefined, sort: st.sort, page: st.page, size } }), (r) => {
     const pages = Math.max(1, Math.ceil(r.totalItems / r.size));
-    return head(title, r.totalItems + ' households') + sortTable(cols, st.sort, r.items.map(h => `<tr><td><button class="link" data-hh="${esc(h.id)}">${esc(h.name)}</button></td><td class="num">${money(h.aum)}</td><td class="num ${pctClass(h.change30d)}">${pct(h.change30d)}</td><td>${esc(daysAgo(h.lastContactAt))}</td><td>${statusBadge(h.status)}</td></tr>`).join(''))
-      + `<div class="pager"><span>Page ${r.page + 1} of ${pages}</span><button class="btn" data-pg="-1" ${r.page === 0 ? 'disabled' : ''}>Previous</button><button class="btn" data-pg="1" ${r.page + 1 >= pages ? 'disabled' : ''}>Next</button></div>`;
+    return head(title, raw(t('{n} households', { n: r.totalItems }))) + sortTable(cols, st.sort, r.items.map(h => `<tr><td><button class="link" data-hh="${esc(h.id)}">${esc(h.name)}</button></td><td class="num">${money(h.aum)}</td><td class="num ${pctClass(h.change30d)}">${pct(h.change30d)}</td><td>${esc(daysAgo(h.lastContactAt))}</td><td>${statusBadge(h.status)}</td></tr>`).join(''))
+      + `<div class="pager"><span>${esc(t('Page {n} of {total}', { n: r.page + 1, total: pages }))}</span><button class="btn" data-pg="-1" ${r.page === 0 ? 'disabled' : ''}>${esc(t('Previous'))}</button><button class="btn" data-pg="1" ${r.page + 1 >= pages ? 'disabled' : ''}>${esc(t('Next'))}</button></div>`;
   }, (e) => {
     e.querySelectorAll('[data-sort]').forEach(b => b.onclick = () => { st.sort = nextSort(st.sort, b.dataset.sort, b.dataset.sort === 'name'); st.page = 0; run(); });
     e.querySelectorAll('[data-pg]').forEach(b => b.onclick = () => { st.page += +b.dataset.pg; run(); });
@@ -240,16 +247,16 @@ export function spine(el, groups, active, go) {
   document.querySelectorAll('.subnav').forEach(n => { if (n !== el) n.remove(); });
   const listId = el.id + '-list';
   const flat = groups.flatMap(g => g.items);
-  const current = (flat.find(([k]) => k === active) || [])[1] || 'Sections';
+  const current = t((flat.find(([k]) => k === active) || [])[1] || 'Sections');
   el.innerHTML = `
     <button class="subnav-toggle" aria-expanded="false" aria-controls="${esc(listId)}">
       <span class="bars" aria-hidden="true"></span><span class="subnav-current">${esc(current)}</span>
     </button>
     <div class="subnav-list spine-list" id="${esc(listId)}">
-      ${groups.map(g => `${g.label ? `<h2 class="spine-group">${esc(g.label)}</h2>` : ''}
-        <div role="tablist" aria-orientation="vertical"${g.label ? ` aria-label="${esc(g.label)}"` : ''}>
+      ${groups.map(g => `${g.label ? `<h2 class="spine-group">${esc(t(g.label))}</h2>` : ''}
+        <div role="tablist" aria-orientation="vertical"${g.label ? ` aria-label="${esc(t(g.label))}"` : ''}>
         ${g.items.map(([k, text, mark]) => `<button role="tab" data-sec="${esc(k)}" aria-selected="${k === active}">
-          ${mark ? roleMark(mark, k.replace(/^role:/, '')) : ''}<span>${esc(text)}</span></button>`).join('')}
+          ${mark ? roleMark(mark, k.replace(/^role:/, '')) : ''}<span>${esc(t(text))}</span></button>`).join('')}
         </div>`).join('')}
     </div>`;
   placeNav(el);
@@ -267,7 +274,7 @@ export const roleMark = (mark, role) => `<span class="rolemark role-${esc(role)}
 /* Tabs inside a role home. One level below the spine and no deeper (FO-07). */
 export function roleTabs(el, tabs, active, go) {
   el.innerHTML = `<div class="tabrow" role="tablist">${tabs.map(([k, label]) =>
-    `<button role="tab" data-tab="${esc(k)}" aria-selected="${k === active}">${esc(label)}</button>`).join('')}</div>`;
+    `<button role="tab" data-tab="${esc(k)}" aria-selected="${k === active}">${esc(t(label))}</button>`).join('')}</div>`;
   el.querySelectorAll('[data-tab]').forEach(b => b.onclick = () => go(b.dataset.tab));
 }
 
@@ -277,13 +284,13 @@ export function subnav(el, items, active, go) {
   document.querySelectorAll('.subnav').forEach(n => { if (n !== el) n.remove(); });
 
   const listId = el.id + '-list';
-  const current = (items.find(([k]) => k === active) || [])[1] || 'Sections';
+  const current = t((items.find(([k]) => k === active) || [])[1] || 'Sections');
   el.innerHTML = `
     <button class="subnav-toggle" aria-expanded="false" aria-controls="${esc(listId)}">
       <span class="bars" aria-hidden="true"></span><span class="subnav-current">${esc(current)}</span>
     </button>
     <div class="subnav-list" id="${esc(listId)}" role="tablist" aria-orientation="vertical">
-      ${items.map(([k, label]) => `<button role="tab" data-sec="${esc(k)}" aria-selected="${k === active}">${esc(label)}</button>`).join('')}
+      ${items.map(([k, label]) => `<button role="tab" data-sec="${esc(k)}" aria-selected="${k === active}">${esc(t(label))}</button>`).join('')}
     </div>`;
 
   placeNav(el);
@@ -322,33 +329,33 @@ async function loadAllocation(id) {
   try {
     const a = await api('GET', '/households/' + encodeURIComponent(id) + '/allocation');
     if (a.priced === false) {
-      el.innerHTML = `<p class="hint">${esc(a.unavailableReason || 'Allocation is unavailable.')}</p>`;
+      el.innerHTML = `<p class="hint">${esc(a.unavailableReason || t('Allocation is unavailable.'))}</p>`;
       return;
     }
     if (!a.model) {
-      el.innerHTML = '<p class="hint">No model portfolio on file for this household, so there is no target to compare against.</p>';
+      el.innerHTML = `<p class="hint">${esc(t('No model portfolio on file for this household, so there is no target to compare against.'))}</p>`;
       return;
     }
     const limit = a.driftThresholdPoints ?? null;
     const over = limit !== null && a.maxDriftPoints > limit;
     el.innerHTML = `
-      <div class="meta" style="margin-bottom:10px">${esc(a.model.name)} \u2022 largest drift
-        <strong class="${over ? 'due-hot' : ''}">${a.maxDriftPoints} points</strong>${limit !== null ? ` against a ${limit}-point limit` : ''}</div>
+      <div class="meta" style="margin-bottom:10px">${esc(a.model.name)} \u2022 ${esc(t('largest drift'))}
+        <strong class="${over ? 'due-hot' : ''}">${esc(t('{n} points', { n: a.maxDriftPoints }))}</strong>${limit !== null ? ' ' + esc(t('against a {n}-point limit', { n: limit })) : ''}</div>
       <ul class="alloc">${a.lines.map(l => {
         const scale = Math.max(...a.lines.map(x => Math.max(x.targetPct, x.currentPct)));
         return `<li>
           <span class="alloc-label">${esc(l.assetClass)}</span>
-          <span class="alloc-bars" role="img" aria-label="${esc(l.assetClass)}: target ${l.targetPct}%, current ${l.currentPct}%">
+          <span class="alloc-bars" role="img" aria-label="${esc(t('{class}: target {target}%, current {current}%', { class: l.assetClass, target: l.targetPct, current: l.currentPct }))}">
             <span class="alloc-target" style="width:${(l.targetPct / scale) * 100}%"></span>
             <span class="alloc-current ${Math.abs(l.driftPct) >= (limit ?? Infinity) ? 'hot' : ''}" style="width:${(l.currentPct / scale) * 100}%"></span>
           </span>
-          <span class="alloc-nums">${l.currentPct}% <span class="meta">of ${l.targetPct}%</span></span>
+          <span class="alloc-nums">${l.currentPct}% <span class="meta">${esc(t('of {n}%', { n: l.targetPct }))}</span></span>
           <span class="alloc-drift ${l.driftPct > 0 ? 'up' : l.driftPct < 0 ? 'neg' : ''}">${l.driftPct > 0 ? '+' : ''}${l.driftPct}</span>
         </li>`;
       }).join('')}</ul>
-      ${a.unclassifiedPct ? `<p class="hint">${a.unclassifiedPct}% of holdings are not in the model and could not be classified.</p>` : ''}`;
+      ${a.unclassifiedPct ? `<p class="hint">${esc(t('{n}% of holdings are not in the model and could not be classified.', { n: a.unclassifiedPct }))}</p>` : ''}`;
   } catch (e) {
-    el.innerHTML = `<p class="hint">${esc(e.status === 404 ? 'No allocation for this household.' : e.message)}</p>`;
+    el.innerHTML = `<p class="hint">${esc(e.status === 404 ? t('No allocation for this household.') : e.message)}</p>`;
   }
 }
 
@@ -369,14 +376,14 @@ export function setAskContext(scope, householdId, label) {
 export function openAsk(canFirm) {
   const p = $('askPanel');
   if (p.classList.contains('open')) { closeAsk(); return; }
-  p.innerHTML = `<div class="side-head"><h2 id="askTitle">Ask</h2>
-      <button class="btn quiet" id="askClose" aria-label="Close Ask">Close</button></div>
+  p.innerHTML = `<div class="side-head"><h2 id="askTitle">${esc(t('Ask'))}</h2>
+      <button class="btn quiet" id="askClose" aria-label="${esc(t('Close Ask'))}">${esc(t('Close'))}</button></div>
     <div class="side-body">
-      <p class="meta">Answering across ${esc(askScope.label)}</p>
-      <div class="field"><label for="askQ">What do you want to know?</label>
-        <input type="text" id="askQ" placeholder="For example, which clients are holding cash above target?" autocomplete="off"></div>
-      ${canFirm && askScope.scope !== 'household' ? `<label class="hint"><input type="checkbox" id="askFirm"> Ask across the whole firm</label>` : ''}
-      <div class="actions" style="margin-top:10px"><button class="btn primary" id="askGo">Ask</button></div>
+      <p class="meta">${esc(t('Answering across {scope}', { scope: askScope.label }))}</p>
+      <div class="field"><label for="askQ">${esc(t('What do you want to know?'))}</label>
+        <input type="text" id="askQ" placeholder="${esc(t('For example, which clients are holding cash above target?'))}" autocomplete="off"></div>
+      ${canFirm && askScope.scope !== 'household' ? `<label class="hint"><input type="checkbox" id="askFirm"> ${esc(t('Ask across the whole firm'))}</label>` : ''}
+      <div class="actions" style="margin-top:10px"><button class="btn primary" id="askGo">${esc(t('Ask'))}</button></div>
       <div id="askOut">${askLast || ''}</div>
       <div id="askPast"></div>
     </div>`;
@@ -427,8 +434,8 @@ export function closeAsk() {
 export async function openActivity() {
   const p = $('actPanel');
   if (p.classList.contains('open')) { closeActivity(); return; }
-  p.innerHTML = `<div class="side-head"><h2 id="actTitle">Activity</h2>
-      <button class="btn quiet" id="actClose" aria-label="Close activity">Close</button></div>
+  p.innerHTML = `<div class="side-head"><h2 id="actTitle">${esc(t('Activity'))}</h2>
+      <button class="btn quiet" id="actClose" aria-label="${esc(t('Close activity'))}">${esc(t('Close'))}</button></div>
     <div class="side-body" id="actBody"><div class="skel"></div><div class="skel m"></div><div class="skel s"></div></div>`;
   p.hidden = false;
   requestAnimationFrame(() => p.classList.add('open'));
@@ -454,9 +461,9 @@ export const onUndo = (fn) => { afterUndo = fn; };
 /* Three actors, three marks. A principal appears only when they have read this advisor's book,
    and must not be dressed as the advisor's own doing — the whole point of the entry is that
    somebody else looked (PO-06). */
-const ACTOR_LABEL = (a) => a.actor === 'platform' ? 'The platform'
-  : a.actor === 'principal' ? (a.actorName || 'A principal') + ', reading your book'
-  : a.actorName || 'You';
+const ACTOR_LABEL = (a) => a.actor === 'platform' ? t('The platform')
+  : a.actor === 'principal' ? t('{name}, reading your book', { name: a.actorName || t('A principal') })
+  : a.actorName || t('You');
 
 async function loadActivity() {
   const body = $('actBody');
@@ -468,8 +475,8 @@ async function loadActivity() {
         <div class="grow"><div class="title">${esc(a.summary)}</div>
           ${a.detail ? `<div class="meta">${esc(a.detail)}</div>` : ''}
           <div class="source">${esc(ACTOR_LABEL(a))} \u00b7 ${esc(fmtTime(a.at))}</div></div>
-        ${a.undoable && a.undoWith ? `<button class="btn quiet" data-undo="${esc(a.id)}">Undo</button>` : ''}</li>`).join('')}</ul>`
-      : '<p class="empty">Nothing has happened yet today.</p>';
+        ${a.undoable && a.undoWith ? `<button class="btn quiet" data-undo="${esc(a.id)}">${esc(t('Undo'))}</button>` : ''}</li>`).join('')}</ul>`
+      : `<p class="empty">${esc(t('Nothing has happened yet today.'))}</p>`;
     body.querySelectorAll('[data-undo]').forEach(b => b.onclick = async () => {
       const a = r.items.find(x => x.id === b.dataset.undo);
       b.disabled = true;
@@ -487,21 +494,72 @@ async function loadActivity() {
 export { loadActivity };
 
 
+/* Settings (AX-12). Beside the page like Ask and Activity, and reachable from every view,
+   because language belongs to the person reading rather than to the view they are in.
+
+   Changing it re-renders rather than reloads: the advisor keeps their place, and a reload would
+   also lose an unsent draft. The server is asked first and the interface follows, so a failed
+   write leaves the two agreeing rather than a French screen and an English preference. */
+export async function openSettings(onChanged) {
+  const p = $('setPanel');
+  if (p.classList.contains('open')) { closeSettings(); return; }
+  p.innerHTML = `<div class="side-head"><h2 id="setTitle">${esc(t('Settings'))}</h2>
+      <button class="btn quiet" id="setClose" aria-label="${esc(t('Close settings'))}">${esc(t('Close'))}</button></div>
+    <div class="side-body" id="setBody"><div class="skel"></div><div class="skel s"></div></div>`;
+  p.hidden = false;
+  requestAnimationFrame(() => p.classList.add('open'));
+  document.body.classList.add('side-open');
+  $('setBtn').setAttribute('aria-expanded', 'true');
+  $('setClose').onclick = closeSettings;
+
+  const body = $('setBody');
+  try {
+    const cfg = await api('GET', '/settings');
+    /* The list comes from the server, not from the dictionary: the settings screen should offer
+       what this build can render rather than what the front end hopes is there. */
+    body.innerHTML = `<div class="field"><label for="setLang">${esc(t('Language'))}</label>
+        <select id="setLang">${cfg.availableLanguages.map(l =>
+          `<option value="${esc(l.code)}" ${l.code === cfg.language ? 'selected' : ''}>${esc(l.label)}</option>`).join('')}</select></div>
+      <p class="hint">${esc(t('Changes the interface, and the dates, numbers and amounts with it. Drafts the platform writes for you are written in the same language.'))}</p>
+      <p class="hint">${esc(t('Client and household names stay as they are recorded. They are data, not wording.'))}</p>`;
+    $('setLang').onchange = async (e) => {
+      const code = e.target.value, was = cfg.language;
+      e.target.disabled = true;
+      try {
+        await api('PATCH', '/settings', { body: { language: code } });
+        cfg.language = code;
+        setLang(code);
+        if (onChanged) onChanged(code);
+        toast('Language changed.');
+      } catch (err) { e.target.value = was; toast(err.message); }
+      finally { e.target.disabled = false; }
+    };
+  } catch (e) { body.innerHTML = `<p class="err">${esc(e.message)}</p>`; }
+}
+export function closeSettings() {
+  const p = $('setPanel');
+  if (!p || !p.classList.contains('open')) { if (p) p.hidden = true; return; }
+  p.classList.remove('open');
+  document.body.classList.remove('side-open');
+  $('setBtn').setAttribute('aria-expanded', 'false');
+  setTimeout(() => { if (!p.classList.contains('open')) p.hidden = true; }, 240);
+}
+
 /* An answer is never shown without what it was drawn from, and never without naming the
    sources it could not reach. Both are contract fields, not decoration. */
 function renderAnswer(r) {
   return `<div class="answer">
     <p class="answer-text">${esc(r.answer)}</p>
     ${r.unanswerable.length ? `<div class="answer-gap">
-      <strong>Not covered by this answer</strong>
+      <strong>${esc(t('Not covered by this answer'))}</strong>
       <ul>${r.unanswerable.map(u => `<li>${esc(u.reason)}</li>`).join('')}</ul>
     </div>` : ''}
     ${r.citations.length ? `<div class="answer-cites">
-      <strong>Drawn from</strong>
+      <strong>${esc(t('Drawn from'))}</strong>
       <ul>${r.citations.map(c => `<li><span class="tag">${esc(sourceKind(c.source))}</span> ${esc(c.label || c.id)}
-        <span class="meta">as of ${esc(fmtTime(c.dataAsOf))}</span></li>`).join('')}</ul>
-    </div>` : '<p class="hint">No sources were used for this answer.</p>'}
-    <p class="hint">Answered by ${esc(r.model)}. A question only reads: nothing here has changed anything.</p>
+        <span class="meta">${esc(t('as of {time}', { time: fmtTime(c.dataAsOf) }))}</span></li>`).join('')}</ul>
+    </div>` : `<p class="hint">${esc(t('No sources were used for this answer.'))}</p>`}
+    <p class="hint">${esc(t('Answered by {model}. A question only reads: nothing here has changed anything.', { model: r.model }))}</p>
   </div>`;
 }
 
@@ -511,7 +569,7 @@ async function loadAskHistory() {
   if (!el) return;
   try {
     const r = await api('GET', '/queries', { query: { size: 5 } });
-    el.innerHTML = r.items.length ? `<div class="answer-cites"><strong>Earlier questions</strong>
+    el.innerHTML = r.items.length ? `<div class="answer-cites"><strong>${esc(t('Earlier questions'))}</strong>
       <ul>${r.items.map(q => `<li><button class="link" data-q="${esc(q.id)}">${esc(q.question)}</button></li>`).join('')}</ul></div>` : '';
     el.querySelectorAll('[data-q]').forEach(b => b.onclick = async () => {
       try { $('askOut').innerHTML = renderAnswer(await api('GET', '/queries/' + encodeURIComponent(b.dataset.q))); }
@@ -530,18 +588,18 @@ async function teamSharePanel(el, h) {
       api('GET', '/firm/advisors').catch(() => ({ items: [] })),
       api('GET', '/team-shares')
     ]);
-    const mine = shares.items.filter(t => t.householdId === h.id && !t.revokedAt);
-    el.innerHTML = `<h3>Share with a colleague</h3>
-      <p class="hint">Gives read access to this household. You stay the owner, it is recorded, and either of you can end it.</p>
-      ${advisors.items.length ? `<div class="field"><label for="tsWho">Colleague</label>
+    const mine = shares.items.filter(x => x.householdId === h.id && !x.revokedAt);
+    el.innerHTML = `<h3>${esc(t('Share with a colleague'))}</h3>
+      <p class="hint">${esc(t('Gives read access to this household. You stay the owner, it is recorded, and either of you can end it.'))}</p>
+      ${advisors.items.length ? `<div class="field"><label for="tsWho">${esc(t('Colleague'))}</label>
         <select id="tsWho">${advisors.items.map(a => `<option value="${esc(a.id)}">${esc(a.name)}</option>`).join('')}</select></div>
-        <div class="field"><label for="tsWhy">Reason (optional)</label><input type="text" id="tsWhy" placeholder="For example, cover while I am away"></div>
-        <button class="btn primary" id="tsGo">Share</button>`
-      : '<p class="hint">The advisor list is not available to you, so sharing cannot be set up here.</p>'}
-      ${mine.length ? `<h3>Currently shared with</h3><ul class="rows">${mine.map(t => `
-        <li><div class="grow"><div class="title">${esc(t.sharedWithName)}</div>
-        <div class="meta">${esc(t.reason || 'No reason given')} • ${esc(daysAgo(t.sharedAt).toLowerCase())}</div></div>
-        <button class="btn quiet" data-revoke="${esc(t.id)}">End</button></li>`).join('')}</ul>` : ''}`;
+        <div class="field"><label for="tsWhy">${esc(t('Reason (optional)'))}</label><input type="text" id="tsWhy" placeholder="${esc(t('For example, cover while I am away'))}"></div>
+        <button class="btn primary" id="tsGo">${esc(t('Share'))}</button>`
+      : `<p class="hint">${esc(t('The advisor list is not available to you, so sharing cannot be set up here.'))}</p>`}
+      ${mine.length ? `<h3>${esc(t('Currently shared with'))}</h3><ul class="rows">${mine.map(x => `
+        <li><div class="grow"><div class="title">${esc(x.sharedWithName)}</div>
+        <div class="meta">${esc(x.reason || t('No reason given'))} • ${esc(daysAgo(x.sharedAt).toLowerCase())}</div></div>
+        <button class="btn quiet" data-revoke="${esc(x.id)}">${esc(t('End'))}</button></li>`).join('')}</ul>` : ''}`;
     const go = $('tsGo');
     if (go) go.onclick = async () => {
       go.disabled = true;
@@ -563,12 +621,12 @@ async function feePanel(el, h) {
   try {
     const plan = await api('GET', '/billing/fee-plan');
     const current = plan.overrides.find(o => o.householdId === h.id);
-    el.innerHTML = `<h3>Fee for this household</h3>
-      <p class="hint">The schedule charges ${esc(String(scheduleRateFor(plan, h.aum)))}% at these assets. An override replaces that for this household only.</p>
-      <div class="field"><label for="feeRate">Annual rate</label><input type="number" id="feeRate" step="0.05" min="0" max="5" value="${current ? current.annualRatePct : scheduleRateFor(plan, h.aum)}"> <span class="meta">%</span></div>
-      <div class="field"><label for="feeWhy">Reason</label><input type="text" id="feeWhy" value="${esc(current ? current.reason : '')}" placeholder="Required: this changes what the client is billed"></div>
-      <div class="actions"><button class="btn primary" id="feeGo">Save rate</button>
-        ${current ? '<button class="btn quiet" id="feeClear">Remove override</button>' : ''}</div>`;
+    el.innerHTML = `<h3>${esc(t('Fee for this household'))}</h3>
+      <p class="hint">${esc(t('The schedule charges {rate}% at these assets. An override replaces that for this household only.', { rate: scheduleRateFor(plan, h.aum) }))}</p>
+      <div class="field"><label for="feeRate">${esc(t('Annual rate'))}</label><input type="number" id="feeRate" step="0.05" min="0" max="5" value="${current ? current.annualRatePct : scheduleRateFor(plan, h.aum)}"> <span class="meta">%</span></div>
+      <div class="field"><label for="feeWhy">${esc(t('Reason'))}</label><input type="text" id="feeWhy" value="${esc(current ? current.reason : '')}" placeholder="${esc(t('Required: this changes what the client is billed'))}"></div>
+      <div class="actions"><button class="btn primary" id="feeGo">${esc(t('Save rate'))}</button>
+        ${current ? `<button class="btn quiet" id="feeClear">${esc(t('Remove override'))}</button>` : ''}</div>`;
     $('feeGo').onclick = async () => {
       const b = $('feeGo'); b.disabled = true;
       try { await api('PATCH', '/billing/fees/' + encodeURIComponent(h.id), { body: { annualRatePct: Number($('feeRate').value), reason: $('feeWhy').value.trim() } });
@@ -583,8 +641,8 @@ async function feePanel(el, h) {
   } catch (e) { el.innerHTML = `<p class="err">${esc(e.message)}</p>`; }
 }
 const scheduleRateFor = (plan, aum) => {
-  const t = plan.schedule.find(x => aum >= x.minAssets && (x.maxAssets === null || aum < x.maxAssets));
-  return t ? t.annualRatePct : 0;
+  const band = plan.schedule.find(x => aum >= x.minAssets && (x.maxAssets === null || aum < x.maxAssets));
+  return band ? band.annualRatePct : 0;
 };
 
 /* Model comparison (PM-03). A comparison, never an instruction: no trade leaves this screen. */
@@ -592,17 +650,17 @@ async function modelPanel(el, h) {
   el.innerHTML = '<div class="skel"></div>';
   try {
     const models = await api('GET', '/models');
-    el.innerHTML = `<h3>Compare models</h3>
-      <div class="field"><label for="mdlPick">Move to</label>
+    el.innerHTML = `<h3>${esc(t('Compare models'))}</h3>
+      <div class="field"><label for="mdlPick">${esc(t('Move to'))}</label>
         <select id="mdlPick">${models.items.map(m => `<option value="${esc(m.id)}">${esc(m.name)} (${esc(m.riskLevel)})</option>`).join('')}</select></div>
-      <button class="btn primary" id="mdlGo">Compare</button>
+      <button class="btn primary" id="mdlGo">${esc(t('Compare'))}</button>
       <div id="mdlOut"></div>`;
     $('mdlGo').onclick = async () => {
       const b = $('mdlGo'); b.disabled = true;
       try {
         const c = await api('POST', '/households/' + encodeURIComponent(h.id) + '/model-comparison', { body: { modelId: $('mdlPick').value } });
-        $('mdlOut').innerHTML = `<p class="hint">${esc(c.fromModel ? c.fromModel.name : 'No model')} to ${esc(c.toModel.name)} • turnover ${c.turnoverPct}%</p>
-          <div class="tablewrap"><table><thead><tr><th>Asset class</th><th class="num">Now</th><th class="num">Proposed</th><th class="num">Change</th><th class="num">Value</th></tr></thead><tbody>
+        $('mdlOut').innerHTML = `<p class="hint">${esc(t('{from} to {to} • turnover {n}%', { from: c.fromModel ? c.fromModel.name : t('No model'), to: c.toModel.name, n: c.turnoverPct }))}</p>
+          <div class="tablewrap"><table><thead><tr><th>${esc(t('Asset class'))}</th><th class="num">${esc(t('Now'))}</th><th class="num">${esc(t('Proposed'))}</th><th class="num">${esc(t('Change'))}</th><th class="num">${esc(t('Value'))}</th></tr></thead><tbody>
           ${c.lines.map(l => `<tr><td>${esc(l.assetClass)}</td><td class="num">${l.currentPct}%</td><td class="num">${l.targetPct}%</td>
             <td class="num ${l.changePct > 0 ? 'up' : l.changePct < 0 ? 'neg' : ''}">${l.changePct > 0 ? '+' : ''}${l.changePct}</td>
             <td class="num">${moneyFull(l.changeValue)}</td></tr>`).join('')}</tbody></table></div>

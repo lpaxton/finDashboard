@@ -1,3 +1,6 @@
+/* The platform's own prose, in the reader's language (AX-12). Records are never translated;
+   see src/i18n.js for where that line is drawn and why. */
+import { translator } from './i18n.js';
 /*
  * Mock core for the Advisor Platform API v0.3 (see ../openapi.yaml).
  * One consistent dataset behind every operation, with role checks.
@@ -10,6 +13,15 @@
 function createMock() {
   const T0 = new Date(); T0.setHours(0, 0, 0, 0);
   const dayISO = (off, h = 0, m = 0) => { const d = new Date(T0); d.setDate(d.getDate() + off); d.setHours(h, m, 0, 0); return d.toISOString(); };
+  /* Language first (AX-12), because the dataset below is built at start-up and parts of it are
+     already prose: the platform's own labels have to be able to reach the translator. */
+  const LANGUAGES = [{ code: 'en', label: 'English' }, { code: 'fr', label: 'Fran\u00e7ais' }];
+  const SETTINGS = {};
+  const langOf = () => SETTINGS[persona] || 'en';
+  /* Read at call time, never cached: three personas share this module and need not share a
+     language, and anything captured at start-up would be whoever booted the server. */
+  const T = (key, vars) => translator(langOf())(key, vars);
+
   const dateOnly = (off) => { const d = new Date(T0); d.setDate(d.getDate() + off); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); };
   const hash = (s) => { let x = 0; for (const c of s) x = (x * 31 + c.charCodeAt(0)) >>> 0; return x; };
   const NOW = () => new Date().toISOString();
@@ -147,10 +159,10 @@ function createMock() {
     ['adv2', 'tax_loss_harvesting', 'h11', 8200], ['adv2', 'tax_loss_harvesting', 'h14', 6300], ['adv2', 'allocation_drift', 'h12', 5.9]
   ].map(([advisorId, kind, householdId, value], i) => ({ id: 'si' + i, advisorId, kind, householdId, value }));
   const SIGNAL_META = {
-    tax_loss_harvesting: { label: 'Tax-loss harvesting opportunities', detail: (v) => 'About $' + Math.round(v.reduce((a, b) => a + b, 0)).toLocaleString('en-US') + ' in unrealized losses' },
-    concentration:       { label: 'Households over concentration limit', detail: (v) => 'Largest: ' + Math.max(...v) + '% in one holding' },
-    allocation_drift:    { label: 'Households outside target allocation', detail: () => 'Drift beyond 5 points' },
-    idle_cash:           { label: 'Households with idle cash above 10%', detail: (v) => 'About $' + (v.reduce((a, b) => a + b, 0) / 1e6).toFixed(1) + 'M total' }
+    tax_loss_harvesting: { label: 'Tax-loss harvesting opportunities', detail: (v) => T('About {amount} in unrealized losses', { amount: usd(Math.round(v.reduce((a, b) => a + b, 0))) }) },
+    concentration:       { label: 'Households over concentration limit', detail: (v) => T('Largest: {n}% in one holding', { n: Math.max(...v) }) },
+    allocation_drift:    { label: 'Households outside target allocation', detail: () => T('Drift beyond 5 points') },
+    idle_cash:           { label: 'Households with idle cash above 10%', detail: (v) => T('About {amount} total', { amount: usd(v.reduce((a, b) => a + b, 0)) }) }
   };
   const itemDetail = (s) => s.kind === 'tax_loss_harvesting' ? 'Unrealized loss of $' + s.value.toLocaleString('en-US')
     : s.kind === 'concentration' ? s.value + '% of equities in one holding'
@@ -398,6 +410,8 @@ function createMock() {
     plan: 'Advisor Desk, firm plan', seats: { purchased: 6, used: ADVISORS.length },
     renewalDate: dateOnly(64), billingContact: 'Dana Whitfield',
     meters: [
+      /* Stored in English and translated on the way out, not here: this object is built once at
+         start-up and read by whoever asks, who need not be whoever booted the server. */
       { id: 'ai_drafts', label: 'AI drafts generated', used: 1840, included: 3000, unit: 'drafts' },
       { id: 'transcription', label: 'Meeting transcription', used: 41, included: 60, unit: 'hours' },
       { id: 'documents', label: 'Documents processed', used: 312, included: 500, unit: 'documents' }
@@ -515,7 +529,7 @@ function createMock() {
     return {
       from, to, previousFrom: prevFrom, previousTo: prevTo, dataAsOf: NOW(),
       metrics: Object.keys(METRIC_LABELS).map(id => ({
-        id, label: METRIC_LABELS[id][0], unit: METRIC_LABELS[id][1],
+        id, label: T(METRIC_LABELS[id][0]), unit: METRIC_LABELS[id][1],
         value: now[id], previousValue: was[id], change: now[id] - was[id],
         lowerIsBetter: LOWER_IS_BETTER.has(id)
       })),
@@ -546,7 +560,7 @@ function createMock() {
         const values = all.map(a => a.m[id]);
         const lower = LOWER_IS_BETTER.has(id);
         const sorted = [...all].sort((a, b) => lower ? a.m[id] - b.m[id] : b.m[id] - a.m[id]);
-        return { id, label: METRIC_LABELS[id][0], unit: METRIC_LABELS[id][1],
+        return { id, label: T(METRIC_LABELS[id][0]), unit: METRIC_LABELS[id][1],
           value: mine[id], firmMedian: median(values), lowerIsBetter: lower,
           ...(withRank ? { rank: sorted.findIndex(a => a.id === advisorId) + 1, outOf: all.length } : {}) };
       })
@@ -564,34 +578,34 @@ function createMock() {
     });
 
     for (const a of ALERTS.filter(x => advisorIds.includes(x.advisorId) && x.status === 'open' && x.severity === 'high')) {
-      push('high', 'alert', a.title, 'Flagged as high severity ' + sinceWords(a.createdAt) + '.', a.householdId,
+      push('high', 'alert', a.title, T('Flagged as high severity {when}.', { when: sinceWords(a.createdAt) }), a.householdId,
         [{ source: a.source, id: a.id, label: a.title, dataAsOf: NOW() }], 1);
     }
     for (const h of HH.filter(x => advisorIds.includes(x.advisorId) && x.lastContactAt && (Date.now() - new Date(x.lastContactAt)) / 864e5 > 45)) {
-      push('high', 'contact', 'Reconnect with ' + h.name,
-        'No contact in ' + Math.floor((Date.now() - new Date(h.lastContactAt)) / 864e5) + ' days.', h.id,
+      push('high', 'contact', T('Reconnect with {name}', { name: h.name }),
+        T('No contact in {n} days.', { n: Math.floor((Date.now() - new Date(h.lastContactAt)) / 864e5) }), h.id,
         [{ source: 'crm', id: h.id, label: h.name + ' last contact', dataAsOf: NOW() }], 3);
     }
     for (const c of COMMS.filter(x => advisorIds.includes(x.advisorId) && x.status === 'draft' && x.complianceReview)) {
-      push('medium', 'approval', 'Review the draft to ' + (hhName(c.householdId) || 'the practice'),
-        'Flagged for compliance review ' + sinceWords(c.createdAt) + '.', c.householdId,
+      push('medium', 'approval', T('Review the draft to {name}', { name: hhName(c.householdId) || T('the practice') }),
+        T('Flagged for compliance review {when}.', { when: sinceWords(c.createdAt) }), c.householdId,
         [{ source: 'platform', id: c.id, label: c.subject, dataAsOf: NOW() }], 1);
     }
     for (const r of SIGNAL_ROWS.filter(x => advisorIds.includes(x.advisorId) && x.kind === 'tax_loss_harvesting' && x.value >= 10000)) {
-      push('medium', 'tax', 'Review harvesting for ' + hhName(r.householdId),
-        'About $' + r.value.toLocaleString('en-US') + ' of unrealised losses.', r.householdId,
+      push('medium', 'tax', T('Review harvesting for {name}', { name: hhName(r.householdId) }),
+        T('About {amount} of unrealised losses.', { amount: usd(r.value) }), r.householdId,
         [{ source: 'greenmeadows', id: r.householdId, label: 'Open tax lots', dataAsOf: NOW() }], 7);
     }
     for (const m of MEETINGS.filter(x => advisorIds.includes(x.advisorId) && x.prepStatus === 'needs_prep'
         && new Date(x.startsAt) >= new Date(dayISO(0)))) {
-      push('medium', 'prep', 'Prepare for ' + (hhName(m.householdId) || prospectName(m.id) || m.type),
-        m.type + ' on ' + dayWords(m.startsAt) + ' has no prep.', m.householdId,
+      push('medium', 'prep', T('Prepare for {name}', { name: hhName(m.householdId) || prospectName(m.id) || m.type }),
+        T('{type} on {when} has no prep.', { type: m.type, when: dayWords(m.startsAt) }), m.householdId,
         [{ source: 'calendar', id: m.id, label: m.type, dataAsOf: NOW() }], 1);
     }
     for (const o of ONBOARDING.filter(x => advisorIds.includes(x.advisorId) && !x.convertedAt)) {
       const open = o.steps.filter(st => st.status !== 'done');
-      if (open.length) push('low', 'onboarding', 'Move ' + o.name + ' forward',
-        open.length + ' of ' + o.steps.length + ' steps outstanding: ' + open.map(st => st.label).join(', ') + '.', null,
+      if (open.length) push('low', 'onboarding', T('Move {name} forward', { name: o.name }),
+        T('{open} of {total} steps outstanding: {steps}.', { open: open.length, total: o.steps.length, steps: open.map(st => st.label).join(', ') }), null,
         [{ source: 'platform', id: o.id, label: o.name, dataAsOf: NOW() }], 5);
     }
     const order = { high: 0, medium: 1, low: 2 };
@@ -600,8 +614,12 @@ function createMock() {
   const daysSince = (iso) => Math.floor((Date.now() - new Date(iso)) / 864e5);
   /* Reasons are read by an advisor, not by a developer, so "0 days ago" is never a thing to
      say (UX_REQUESTS UX-004). */
-  const sinceWords = (iso) => { const d = daysSince(iso); return d <= 0 ? 'today' : d === 1 ? 'yesterday' : d + ' days ago'; };
-  const dayWords = (iso) => new Date(iso).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
+  const sinceWords = (iso) => { const d = daysSince(iso); return d <= 0 ? T('today') : d === 1 ? T('yesterday') : T('{n} days ago', { n: d }); };
+  const dayWords = (iso) => new Date(iso).toLocaleDateString(intlLocale(), { weekday: 'long', month: 'long', day: 'numeric' });
+  /* Amounts inside server prose follow the reader too: a French sentence with 1,250,000 in it
+     is a sentence in two languages. */
+  const intlLocale = () => (langOf() === 'fr' ? 'fr-FR' : 'en-US');
+  const usd = (n) => new Intl.NumberFormat(intlLocale(), { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(n);
 
   /* ---- helpers ---- */
   /* The CRM is the system of record; this platform is a working surface (docs/system-of-record.md).
@@ -625,15 +643,17 @@ function createMock() {
   const ACTIVITY = [];
   const logActivity = (advisorId, e) => {
     ACTIVITY.unshift({ id: 'ac' + (++seq), at: NOW(), advisorId, actorName: e.actor === 'advisor' ? user().name : null,
-      detail: null, subjectType: null, subjectId: null, undoable: false, undoWith: null, ...e });
+      detail: null, subjectType: null, subjectId: null, undoable: false, undoWith: null, vars: null, ...e });
   };
   const seedActivity = (advisorId, minsAgo, e) => ACTIVITY.push({
     id: 'ac_seed' + ACTIVITY.length, at: new Date(Date.now() - minsAgo * 6e4).toISOString(), advisorId,
-    actorName: null, detail: null, subjectType: null, subjectId: null, undoable: false, undoWith: null, ...e });
+    actorName: null, detail: null, subjectType: null, subjectId: null, undoable: false, undoWith: null, vars: null, ...e });
 
   /* This morning's work, before the advisor arrived. Everything here is the platform's own
      doing: preparing, ranking, flagging. Nothing left the firm. */
   for (const advisorId of ['adv1', 'adv2', 'adv3', 'adv4']) {
+    /* Seeded in English and translated on the way out, not at seed time: the dataset is built
+       once at start-up and read by three people who may not share a language. */
     seedActivity(advisorId, 18, { actor: 'platform', summary: 'Ranked today by role', detail: 'Clients first today: the day has two reviews and a market move.' });
     seedActivity(advisorId, 74, { actor: 'platform', summary: 'Prepared the briefs for today\u2019s meetings', detail: 'From custodian records, your CRM and your calendar.', subjectType: 'meeting' });
     seedActivity(advisorId, 96, { actor: 'platform', summary: 'Checked every household against its policy limits', detail: 'One breach found and flagged.', subjectType: 'household' });
@@ -760,7 +780,7 @@ function createMock() {
       if (!supervisionLogged.has(key)) {
         supervisionLogged.add(key);
         logActivity(id, { actor: 'principal', actorName: user().name, subjectType: 'system',
-          summary: user().name + ' opened your book',
+          summary: '{name} opened your book', vars: { name: user().name },
           detail: 'A principal can read the firm\u2019s records for your households. They cannot act in your name, and this is the record of it.' });
       }
     }
@@ -769,6 +789,20 @@ function createMock() {
 
   /* ---- routes ---- */
   const routes = [
+    /* Language (AX-12). Per person, not per firm — a firm can have a French-reading adviser and
+       an English-reading one, and the client portal is localised by the client's own choice.
+       Kept beside the persona here because this mock has no user store; a real one puts it on
+       the user record. */
+    ['GET', /^\/settings$/, () => ok({ language: SETTINGS[persona] || 'en', availableLanguages: LANGUAGES })],
+    ['PATCH', /^\/settings$/, (m, q, b) => {
+      if (!b || b.language === undefined) return fail(400, 'bad_request', 'Nothing to change.');
+      if (!LANGUAGES.some(l => l.code === b.language)) {
+        return fail(400, 'bad_request', 'Unknown language. This build renders ' + LANGUAGES.map(l => l.code).join(' and ') + '.');
+      }
+      SETTINGS[persona] = b.language;
+      return ok({ language: b.language, availableLanguages: LANGUAGES });
+    }],
+
     ['GET', /^\/session$/, () => { const u = user(); return ok({ id: u.id, name: u.name, role: u.role, roles: u.roles, views: u.views, advisorId: u.advisorId || null, firm: FIRM }); }],
 
     ['GET', /^\/summary$/, () => {
@@ -803,7 +837,7 @@ function createMock() {
       const s = { id: 'sh' + (++seq), householdId: h.id, type: b.type, title: b.title, message: b.message || null, sharedAt: NOW(), sharedBy: user().name, contentUrl: null };
       SHARED.unshift(s);
       logActivity(user().advisorId, { actor: 'advisor', subjectType: 'household', subjectId: h.id,
-        summary: 'Shared "' + s.title + '" with ' + h.name,
+        summary: 'Shared "{title}" with {name}', vars: { title: s.title, name: h.name },
         detail: 'The client can see this. Sharing cannot be taken back from here.', undoable: false });
       const { householdId, ...out } = s; return created(out);
     }],
@@ -837,7 +871,7 @@ function createMock() {
       const t = { id: 't' + (++seq), advisorId: user().advisorId, title: b.title, householdId: b.householdId || null, dueDate: b.dueDate || null, origin: b.origin || 'manual', originMeetingId: b.originMeetingId || null, status: 'open', createdAt: NOW() };
       TASKS.push(t);
       logActivity(user().advisorId, { actor: 'advisor', subjectType: 'task', subjectId: t.id,
-        summary: 'Added to your follow-ups: ' + t.title,
+        summary: 'Added to your follow-ups: {title}', vars: { title: t.title },
         detail: b.origin === 'meeting' ? 'From a meeting the platform drafted next steps for.' : null });
       return created(publicTask(t));
     }],
@@ -847,7 +881,7 @@ function createMock() {
       const wasStatus = t.status;
       Object.assign(t, ['title', 'dueDate', 'status'].reduce((o, k) => (b && k in b ? { ...o, [k]: b[k] } : o), {}));
       if (b && b.status && b.status !== wasStatus) logActivity(user().advisorId, { actor: 'advisor', subjectType: 'task', subjectId: t.id,
-        summary: (b.status === 'done' ? 'Completed: ' : 'Reopened: ') + t.title,
+        summary: b.status === 'done' ? 'Completed: {title}' : 'Reopened: {title}', vars: { title: t.title },
         undoable: true, undoWith: { method: 'PATCH', path: '/tasks/' + t.id, body: { status: wasStatus } } });
       return ok(publicTask(t));
     }],
@@ -860,7 +894,12 @@ function createMock() {
         .slice()
         .sort((a, b) => b.at.localeCompare(a.at));
       const size = +q.size || 25;
-      return ok({ items: list.slice(0, size).map(({ advisorId, ...a }) => a), totalItems: list.length });
+      /* Entries are stored in English and translated as they are read, so the same entry reads
+         correctly to whoever opens it — including a principal and an advisor who do not share
+         a language. Interpolated parts are stored separately in `vars` for exactly that
+         reason: a sentence already glued together cannot be translated afterwards. */
+      const say = (a) => ({ ...a, summary: T(a.summary, a.vars), detail: a.detail ? T(a.detail, a.vars) : null });
+      return ok({ items: list.slice(0, size).map(({ advisorId, vars, ...a }) => say({ ...a, vars })).map(({ vars, ...a }) => a), totalItems: list.length });
     }],
 
     ['GET', /^\/systems$/, () => {
@@ -881,7 +920,7 @@ function createMock() {
       if (b.status === 'connected') { sysm.connectedBy = user().name; sysm.connectedAt = NOW(); sysm.lastSyncAt = NOW(); sysm.cannotSee = null; }
       else { sysm.lastSyncAt = null; sysm.cannotSee = sysm.name + ' is not connected, so what it holds is outside what the platform can see.'; }
       if (was !== b.status) logActivity(user().advisorId, { actor: 'advisor', subjectType: 'system', subjectId: sysm.id,
-        summary: (b.status === 'connected' ? 'Connected ' : 'Disconnected ') + sysm.name,
+        summary: b.status === 'connected' ? 'Connected {name}' : 'Disconnected {name}', vars: { name: sysm.name },
         undoable: true, undoWith: { method: 'PATCH', path: '/systems/' + sysm.id, body: { status: was } } });
       return ok({ ...sysm });
     }],
@@ -907,10 +946,11 @@ function createMock() {
       const was = a.status;
       a.status = b.status;
       a.snoozedUntil = b.status === 'snoozed' ? new Date(b.snoozedUntil).toISOString() : null;
-      const said = { dismissed: 'Dismissed', resolved: 'Resolved', snoozed: 'Set aside', open: 'Brought back' }[b.status];
+      const said = { dismissed: 'Put away the alert: {title}', resolved: 'Resolved the alert: {title}',
+        snoozed: 'Set aside the alert: {title}', open: 'Reopened the alert: {title}' }[b.status];
       logActivity(user().advisorId, { actor: 'advisor', subjectType: 'alert', subjectId: a.id,
-        summary: said + ' the alert: ' + a.title,
-        detail: b.status === 'snoozed' ? 'Comes back ' + new Date(a.snoozedUntil).toLocaleString('en-US', { weekday: 'long', hour: 'numeric', minute: '2-digit' }) : null,
+        summary: said, vars: { title: a.title, when: b.status === 'snoozed' ? new Date(a.snoozedUntil).toLocaleString(intlLocale(), { weekday: 'long', hour: 'numeric', minute: '2-digit' }) : '' },
+        detail: b.status === 'snoozed' ? 'Comes back {when}' : null,
         undoable: true, undoWith: { method: 'PATCH', path: '/alerts/' + a.id, body: { status: was } } });
       return ok(alertOut(a));
     }],
@@ -920,7 +960,7 @@ function createMock() {
       const mine = SIGNAL_ROWS.filter(s => s.advisorId === user().advisorId);
       const items = Object.keys(SIGNAL_META).map(kind => {
         const rows = mine.filter(s => s.kind === kind); if (!rows.length) return null;
-        return { id: 'sig_' + kind, kind, count: rows.length, label: SIGNAL_META[kind].label,
+        return { id: 'sig_' + kind, kind, count: rows.length, label: T(SIGNAL_META[kind].label),
           detail: SIGNAL_META[kind].detail(rows.map(r => r.value)), source: 'greenmeadows', dataAsOf: NOW() };
       }).filter(Boolean);
       return ok({ items });
@@ -974,7 +1014,7 @@ function createMock() {
         /* An edited AI draft is the advisor's words now, not the platform's. */
         c.draftedBy = 'advisor';
         logActivity(user().advisorId, { actor: 'advisor', subjectType: 'communication', subjectId: c.id,
-          summary: 'Edited the message to ' + (hhName(c.householdId) || 'the practice'),
+          summary: 'Edited the message to {name}', vars: { name: hhName(c.householdId) || T('the practice') },
           detail: edits.includes('body') ? 'The text changed.' : 'The subject changed.',
           undoable: true, undoWith: { method: 'PATCH', path: '/communications/' + c.id, body: before } });
       }
@@ -985,9 +1025,10 @@ function createMock() {
       else { c.approvedBy = user().name; c.approvedAt = c.approvedAt || NOW(); if (b.status === 'sent') c.sentAt = NOW(); }
       const to = hhName(c.householdId) || 'the practice';
       logActivity(user().advisorId, { actor: 'advisor', subjectType: 'communication', subjectId: c.id,
-        summary: b.status === 'sent' ? 'Sent the message to ' + to
-          : b.status === 'approved' ? 'Approved the message to ' + to + ', ready to send'
-          : 'Returned the message to ' + to + ' to draft',
+        summary: b.status === 'sent' ? 'Sent the message to {name}'
+          : b.status === 'approved' ? 'Approved the message to {name}'
+          : 'Returned the message to {name} to draft',
+        vars: { name: to },
         detail: b.status === 'sent' ? 'This left the firm and cannot be taken back.' : null,
         /* Anything that has left the firm is recorded and is not undoable (TR-03). */
         undoable: b.status !== 'sent',
@@ -1208,7 +1249,7 @@ function createMock() {
       const items = nextActions(ids);
       const size = +q.size || 20;
       return ok({ items: items.slice(0, size), totalItems: items.length, dataAsOf: NOW(),
-        note: 'These are drafts. Nothing has been created, and nothing will be until you add one to your follow-ups.' });
+        note: T('These are drafts. Nothing has been created, and nothing will be until you add one to your follow-ups.') });
     }],
 
     /* ---- firm ownership (PO-12) ---- */
@@ -1396,7 +1437,7 @@ function createMock() {
       const h = x.householdId ? hhById(x.householdId) : null;
       const sigs = h ? Object.keys(SIGNAL_META)
         .filter(k => SIGNAL_ROWS.some(sr => sr.kind === k && sr.householdId === h.id))
-        .map(k => ({ label: SIGNAL_META[k].label, detail: itemDetail(SIGNAL_ROWS.find(sr => sr.kind === k && sr.householdId === h.id)) })) : [];
+        .map(k => ({ label: T(SIGNAL_META[k].label), detail: itemDetail(SIGNAL_ROWS.find(sr => sr.kind === k && sr.householdId === h.id)) })) : [];
       return { status: 202, async: 'draftAgenda', context: {
         householdName: h ? h.name : prospectName(x.id), type: x.type, startsAt: x.startsAt,
         aum: h ? h.aum : null, brief: x.brief, signals: sigs,
@@ -1444,7 +1485,7 @@ function createMock() {
     ['GET', /^\/firm\/billing\/subscription$/, () => {
       if (!isRole('principal')) return forbid();
       const current = INVOICES[0];
-      return ok({ ...SUBSCRIPTION, currentInvoice: { id: current.id, number: current.number, amount: current.amount, dueDate: current.dueDate, status: current.status }, dataAsOf: NOW() });
+      return ok({ ...SUBSCRIPTION, meters: SUBSCRIPTION.meters.map(x => ({ ...x, label: T(x.label), unit: T(x.unit) })), currentInvoice: { id: current.id, number: current.number, amount: current.amount, dueDate: current.dueDate, status: current.status }, dataAsOf: NOW() });
     }],
     ['GET', /^\/firm\/billing\/invoices$/, (m, q) => {
       if (!isRole('principal')) return forbid();
@@ -1528,7 +1569,13 @@ function createMock() {
     for (const [m, re, fn] of routes) {
       if (m !== method) continue;
       const match = path.match(re);
-      if (match) return fn(match, query || {}, body);
+      if (!match) continue;
+      const r = fn(match, query || {}, body);
+      /* The reader's language travels with every model request (AX-12, TM-01). Injected here
+         rather than in each of the three drafting routes, so a fourth cannot forget it: a French
+         screen that produces English drafts has only been half translated. */
+      if (r && r.async && r.context) r.context.language = langOf();
+      return r;
     }
     return fail(404, 'not_found', 'No such operation: ' + method + ' ' + path);
   }

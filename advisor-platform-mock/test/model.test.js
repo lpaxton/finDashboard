@@ -6,6 +6,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { __injectClient, MODEL } from '../src/model/client.js';
 import { summariseMeeting, draftAgenda, draftEmail, modelStatus } from '../src/model/service.js';
+import { fakeGenerate } from '../src/model/fake.js';
 import { PROMPTS } from '../src/model/prompts.js';
 
 const withStub = async (reply, fn) => {
@@ -68,13 +69,40 @@ test('a refusal is reported, not passed off as a draft', async () => {
 });
 
 test('the prompts forbid inventing facts, and the tone reaches the model', async () => {
+  // system is now a function of the language (AX-12); the house rules must hold in every one.
   for (const [name, p] of Object.entries(PROMPTS)) {
-    assert.match(p.system, /Use only the facts in the CONTEXT block/, name + ' must forbid invention');
-    assert.match(p.system, /draft/i, name + ' must say the output is a draft');
+    for (const lang of ['en', 'fr']) {
+      const sys = p.system(lang);
+      assert.match(sys, /Use only the facts in the CONTEXT block/, name + '/' + lang + ' must forbid invention');
+      assert.match(sys, /draft/i, name + '/' + lang + ' must say the output is a draft');
+    }
     assert.ok(p.version.includes('/v'), name + ' must be versioned for the audit trail');
   }
   const { sent } = await withStub(ok, () => draftEmail({ householdName: 'x', tone: 'Formal', subject: 'y' }));
   assert.match(sent[0].messages[0].content, /Tone: Formal/);
+});
+
+/* A French interface that produces English drafts has only been half translated (AX-12). The
+   language has to reach the model as an instruction, not as a hope. */
+test('the reader\'s language reaches the model, and governs the draft', async () => {
+  const fr = await withStub(ok, () => draftEmail({ householdName: 'x', tone: 'Brief', subject: 'y', language: 'fr' }));
+  assert.match(fr.sent[0].system, /French/, 'the French rule must be in the system prompt');
+  assert.match(fr.sent[0].system, /vouvoiement/, 'and must set the register, which a model will otherwise pick for itself');
+  assert.equal(fr.result.provenance.language, 'fr', 'the audit trail must record which language was asked for');
+
+  const en = await withStub(ok, () => draftEmail({ householdName: 'x', tone: 'Brief', subject: 'y' }));
+  assert.match(en.sent[0].system, /British English/, 'no language means English, not nothing');
+  assert.equal(en.result.provenance.language, 'en');
+
+  // The language rule leads, because it governs everything after it.
+  assert.ok(fr.sent[0].system.indexOf('French') < fr.sent[0].system.indexOf('CONTEXT'),
+    'the language rule must come before the house rules it governs');
+
+  // And offline, where there is no model at all, the scaffolding is in the right language too —
+  // otherwise an adviser cannot tell a broken translation from a disconnected model.
+  const offline = fakeGenerate('email_draft', { householdName: 'Foyer Dupont', language: 'fr' });
+  assert.match(offline, /Bonjour/);
+  assert.doesNotMatch(offline, /Kind regards/);
 });
 
 test('no credential can reach a caller', async () => {

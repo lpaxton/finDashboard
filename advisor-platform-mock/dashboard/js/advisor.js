@@ -5,6 +5,21 @@ import { toast, spark, head, panel, load, alertsList, openHousehold, bookPanel, 
 import { snooze, unsnooze, unsnoozeAll, dropExpiredSnoozes, get as vsGet, set as vsSet, isSnoozed } from './viewstate.js';
 import { ROLES, ROLE, collectRoleWork, rankRoles } from './roles.js';
 import { state } from './state.js';
+/* head(), load(), toast(), sortTable() and the nav helpers translate what they are given, so
+   panel titles, column headings and confirmations here need no wrapping. What is wrapped below
+   is the prose written directly into the markup. */
+import { t as tr, raw, locale } from './i18n.js';
+/* `t` is also the name this file has long used for a task in two map callbacks, so the
+   translator is imported as tr and re-exported locally as t for the rest of the module. */
+const t = tr;
+
+/* The week's day names come from the locale rather than a hard-coded list, and start on Monday
+   because the grid does. Intl gives them in the reader's language and their own abbreviation. */
+const weekdayNames = () => {
+  const f = new Intl.DateTimeFormat(locale(), { weekday: 'short' });
+  // 2024-01-01 was a Monday.
+  return Array.from({ length: 7 }, (_, i) => f.format(new Date(Date.UTC(2024, 0, 1 + i))));
+};
 
 /* The spine (UX_IA §2). Today, Inbox and Calendar are used every day by every role, so they sit
    at the top. The four roles are part of the frame, in a fixed order that never changes
@@ -29,10 +44,10 @@ export function advLoadStrip(el) {
   if (!target) return Promise.resolve();
   return api('GET', '/summary').then(s => {
     target.innerHTML = `
-      <div class="stat"><dt>Assets under management</dt><dd><div class="figure">${money(s.aum.value)}</div><div class="sub"><span class="${pctClass(s.aum.changeMtd)}">${pct(s.aum.changeMtd)}</span> this month</div>${spark(s.aum.trend, 'Assets under management, last 12 months')}</dd></div>
-      <div class="stat"><dt>Households</dt><dd><div class="figure">${s.households}</div></dd></div>
-      <div class="stat"><dt>Meetings this week</dt><dd><div class="figure">${s.meetingsThisWeek}</div></dd></div>
-      <div class="stat"><dt>Open tasks</dt><dd><div class="figure">${s.tasksOpen}</div><div class="sub">${s.tasksDueToday} due today</div></dd></div>`;
+      <div class="stat"><dt>${esc(t('Assets under management'))}</dt><dd><div class="figure">${money(s.aum.value)}</div><div class="sub"><span class="${pctClass(s.aum.changeMtd)}">${pct(s.aum.changeMtd)}</span> this month</div>${spark(s.aum.trend, 'Assets under management, last 12 months')}</dd></div>
+      <div class="stat"><dt>${esc(t('Households'))}</dt><dd><div class="figure">${s.households}</div></dd></div>
+      <div class="stat"><dt>${esc(t('Meetings this week'))}</dt><dd><div class="figure">${s.meetingsThisWeek}</div></dd></div>
+      <div class="stat"><dt>${esc(t('Open tasks'))}</dt><dd><div class="figure">${s.tasksOpen}</div><div class="sub">${s.tasksDueToday} due today</div></dd></div>`;
   }).catch(e => { target.innerHTML = `<div class="err" style="padding:16px 0">${esc(e.message)}</div>`; });
 }
 
@@ -47,7 +62,7 @@ export function togglePin(key, label) {
 
 export function advisorView() {
   $('view').innerHTML = `<div class="viewbody">
-      <div id="navrail"><nav class="subnav" id="advnav" aria-label="Advisor navigation"></nav></div>
+      <div id="navrail"><nav class="subnav" id="advnav" aria-label="${esc(t('Advisor navigation'))}"></nav></div>
       <div id="section"></div>
     </div>`;
   const go = (k) => {
@@ -62,7 +77,9 @@ function drawSpine(go) {
   const p = pins();
   spine($('advnav'), [
     { items: [['today', 'Today'], ['inbox', 'Inbox'], ['calendar', 'Calendar']] },
-    { label: 'Your roles', items: ROLES.map(r => ['role:' + r.key, r.name, r.mark]) },
+    /* ROLES.name is already in the reader's language, so it is passed as data rather than as
+       a key: translating a translation loses it and fills the missing-key list with French. */
+    { label: 'Your roles', items: ROLES.map(r => ['role:' + r.key, raw(r.name), r.mark]) },
     ...(p.length ? [{ label: 'Pinned', items: p.map(x => [x.key, x.label]) }] : []),
     { items: [['glance', 'Book at a glance'], ['systems', 'Systems']] }
   ], advSection, go);
@@ -108,8 +125,8 @@ async function drawRoleCards() {
   const { order, byRole, lead, reason } = rankRoles(work, pinnedOrder);
 
   $('todayHead').innerHTML = `<div class="todayline">
-    ${reason ? `<button class="orderpill" id="whyOrder" aria-expanded="false"><span class="dot" aria-hidden="true"></span>Why today's order changed</button>` : ''}
-    <button class="btn quiet" id="pinOrder" aria-pressed="${pinnedOrder}">${pinnedOrder ? 'Unpin this order' : 'Pin this order'}</button>
+    ${reason ? `<button class="orderpill" id="whyOrder" aria-expanded="false"><span class="dot" aria-hidden="true"></span>${esc(t('Why today\'s order changed'))}</button>` : ''}
+    <button class="btn quiet" id="pinOrder" aria-pressed="${pinnedOrder}">${esc(t(pinnedOrder ? 'Unpin this order' : 'Pin this order'))}</button>
   </div><p class="orderwhy" id="orderWhy" hidden>${esc(reason || '')}</p>`;
   const why = $('whyOrder');
   if (why) why.onclick = () => {
@@ -128,28 +145,28 @@ function roleCard(key, items, isLead) {
   const rest = items.slice(1, 3);
   const body = !top
     /* An empty role says so in one sentence, and never invents a task (FO-05). */
-    ? `<p class="empty serif">Nothing pressing in ${esc(r.name.toLowerCase())} today.</p>`
+    ? `<p class="empty serif">${esc(t('Nothing pressing in {role} today.', { role: r.name.toLowerCase() }))}</p>`
     : `<p class="card-meaning">${esc(top.meaning)}</p>
        <div class="well">
-         <span class="well-label">Suggested</span>
+         <span class="well-label">${esc(t('Suggested'))}</span>
          <div class="well-actions">
-           <button class="btn primary" data-do="${esc(itemKey(top))}">${esc(top.action.label)}</button>
-           <button class="btn" data-later="${esc(itemKey(top))}">Not now</button>
-           <button class="btn quiet" data-notthis="${esc(itemKey(top))}">Not this</button>
+           <button class="btn primary" data-do="${esc(itemKey(top))}">${esc(t(top.action.label))}</button>
+           <button class="btn" data-later="${esc(itemKey(top))}">${esc(t('Not now'))}</button>
+           <button class="btn quiet" data-notthis="${esc(itemKey(top))}">${esc(t('Not this'))}</button>
          </div>
        </div>
        <p class="source">${esc(sourceLine(top.source.kinds, top.source.at))}</p>
-       ${rest.length ? disclosure('role:' + key, `Show the next ${rest.length === 1 ? 'one' : rest.length}`,
-         { openLabel: 'Hide the next ' + (rest.length === 1 ? 'one' : rest.length),
+       ${rest.length ? disclosure('role:' + key, rest.length === 1 ? t('Show the next one') : t('Show the next {n}', { n: rest.length }),
+         { openLabel: rest.length === 1 ? t('Hide the next one') : t('Hide the next {n}', { n: rest.length }),
            body: `<ul class="rows">${rest.map(w => `<li><div class="grow"><div class="title">${esc(w.meaning)}</div>
              <div class="source">${esc(sourceLine(w.source.kinds, w.source.at))}</div></div>
-             <button class="btn" data-do="${esc(itemKey(w))}">${esc(w.action.label)}</button></li>`).join('')}</ul>` }) : ''}`;
+             <button class="btn" data-do="${esc(itemKey(w))}">${esc(t(w.action.label))}</button></li>`).join('')}</ul>` }) : ''}`;
   return `<article class="rolecard${isLead ? ' lead' : ''} role-${esc(key)}" data-role="${esc(key)}">
     <div class="band">${roleMark(r.mark, key)}<span class="band-name">${esc(r.name)}</span>
-      ${isLead ? '<span class="chip">Leading today</span>' : ''}
-      <button class="pin" data-pinrole="${esc(key)}" aria-pressed="${isPinned('role:' + key)}" aria-label="${isPinned('role:' + key) ? 'Unpin' : 'Pin'} ${esc(r.name)}">${isPinned('role:' + key) ? '★' : '☆'}</button></div>
+      ${isLead ? `<span class="chip">${esc(t('Leading today'))}</span>` : ''}
+      <button class="pin" data-pinrole="${esc(key)}" aria-pressed="${isPinned('role:' + key)}" aria-label="${esc(t(isPinned('role:' + key) ? 'Unpin {what}' : 'Pin {what}', { what: r.name }))}">${isPinned('role:' + key) ? '★' : '☆'}</button></div>
     <div class="cardbody">${body}</div>
-    <button class="link cardlink" data-open-role="${esc(key)}">Open ${esc(r.name.toLowerCase())}</button>
+    <button class="link cardlink" data-open-role="${esc(key)}">${esc(t('Open {what}', { what: r.name.toLowerCase() }))}</button>
   </article>`;
 }
 
@@ -175,7 +192,7 @@ function wireRoleCards(host, byRole) {
     group.querySelector('[data-snooze-cancel]').onclick = () => { group.outerHTML = `<div class="well-actions">${keep}</div>`; drawRoleCards(); };
     group.querySelectorAll('[data-snooze]').forEach(c => c.onclick = async () => {
       const until = SNOOZE_CHOICES.find(([k]) => k === c.dataset.when)[2]();
-      const said = 'Set aside. It comes back ' + c.textContent.toLowerCase() + '.';
+      const said = t('Set aside. It comes back {when}.', { when: c.textContent.toLowerCase() });
       if (w && w.alertId) {
         try {
           await api('PATCH', '/alerts/' + encodeURIComponent(w.alertId), { body: { status: 'snoozed', snoozedUntil: until.toISOString() } });
@@ -237,34 +254,31 @@ async function runItemAction(w, btn) {
 function drawMeetings() {
   load($('w-meetings'), "Today's meetings", () => api('GET', '/meetings'), (r) => {
     const list = r.items, nextIdx = list.findIndex(m => new Date(m.startsAt) > new Date());
-    return head("Today's meetings", list.length + ' scheduled') + (list.length ? `<ol class="timeline">${list.map((m, i) => `
-      <li class="meet${i === nextIdx ? ' next' : ''}"><div class="meet-row"><span class="time">${esc(fmtTime(m.startsAt))}</span><span class="client">${esc(m.householdName || m.prospectName || 'No client attached')}</span><span class="type">${esc(m.type)}</span>
-      ${i === nextIdx ? '<span class="badge next">Next up</span>' : ''}<span class="badge ${m.prepStatus === 'ready' ? 'ready' : 'prep'}">${m.prepStatus === 'ready' ? 'Prep ready' : 'Needs prep'}</span></div>
-      ${disclosure('brief:' + m.id, 'Show the prep brief', { openLabel: 'Hide the prep brief', cls: 'brief' })}</li>`).join('')}</ol>` : '<p class="empty">No meetings today.</p>');
+    return head("Today's meetings", raw(t('{n} scheduled', { n: list.length }))) + (list.length ? `<ol class="timeline">${list.map((m, i) => `
+      <li class="meet${i === nextIdx ? ' next' : ''}"><div class="meet-row"><span class="time">${esc(fmtTime(m.startsAt))}</span><span class="client">${esc(m.householdName || m.prospectName || t('No client attached'))}</span><span class="type">${esc(m.type)}</span>
+      ${i === nextIdx ? `<span class="badge next">${esc(t('Next up'))}</span>` : ''}<span class="badge ${m.prepStatus === 'ready' ? 'ready' : 'prep'}">${esc(t(m.prepStatus === 'ready' ? 'Prep ready' : 'Needs prep'))}</span></div>
+      ${disclosure('brief:' + m.id, t('Show the prep brief'), { openLabel: t('Hide the prep brief'), cls: 'brief' })}</li>`).join('')}</ol>` : `<p class="empty">${esc(t('No meetings today.'))}</p>`);
   }, (el) => wireDisclosures(el, async (key, inner) => {
-    inner.innerHTML = '<p class="meta">Loading…</p>';
+    inner.innerHTML = `<p class="meta">${esc(t('Loading\u2026'))}</p>`;
     try {
       const m = await api('GET', '/meetings/' + encodeURIComponent(key.slice('brief:'.length)));
       /* The receipt: what the platform did, from what, and when (TR-04, UX-007). */
-      inner.innerHTML = `<p class="meta">${esc(m.brief || 'No brief yet.')}</p>`
-        + (m.preparedAt ? `<p class="receipt"><span class="dot" aria-hidden="true"></span>Prepared by the platform at ${esc(fmtTime(m.preparedAt))} from ${esc(sourceLine(m.briefSources).replace(/^From /, ''))}.</p>`
+      inner.innerHTML = `<p class="meta">${esc(m.brief || t('No brief yet.'))}</p>`
+        + (m.preparedAt ? `<p class="receipt"><span class="dot" aria-hidden="true"></span>${esc(t('Prepared by the platform at {time} from {sources}.', { time: fmtTime(m.preparedAt), sources: sourceLine(m.briefSources).replace(/^\S+\s/, '') }))}</p>`
           : m.briefSources ? `<p class="source">${esc(sourceLine(m.briefSources))}</p>` : '');
-    } catch { inner.innerHTML = '<p class="meta">The brief could not be loaded. Close this and open it again to retry.</p>'; }
+    } catch { inner.innerHTML = `<p class="meta">${esc(t('The brief could not be loaded. Close this and open it again to retry.'))}</p>`; }
   }));
 }
 
 /* Every signal leads with what it means and one suggested action (FO-09, CS-03, UX-011). */
+/* One whole sentence per case, singular and plural both written out. English needs the count
+   only for the verb; French agrees the noun as well, and neither can be reached by gluing a
+   number to a fragment. */
 const SIGNAL_MEANING = {
-  tax_loss_harvesting: (s) => `${s.count} ${s.count === 1 ? 'household has' : 'households have'} losses worth harvesting. ${s.detail}.`,
-  concentration: (s) => `${s.count} ${s.count === 1 ? 'household is' : 'households are'} over the concentration limit. ${s.detail}.`,
-  allocation_drift: (s) => `${s.count} ${s.count === 1 ? 'household has' : 'households have'} drifted from target. ${s.detail}.`,
-  idle_cash: (s) => `${s.count} ${s.count === 1 ? 'household is' : 'households are'} holding more cash than the target. ${s.detail}.`
-};
-const SIGNAL_ACTION = {
-  tax_loss_harvesting: 'Show which households',
-  concentration: 'Show which households',
-  allocation_drift: 'Show which households',
-  idle_cash: 'Show which households'
+  tax_loss_harvesting: (s) => t(s.count === 1 ? '{n} household has losses worth harvesting. {detail}.' : '{n} households have losses worth harvesting. {detail}.', { n: s.count, detail: s.detail }),
+  concentration: (s) => t(s.count === 1 ? '{n} household is over the concentration limit. {detail}.' : '{n} households are over the concentration limit. {detail}.', { n: s.count, detail: s.detail }),
+  allocation_drift: (s) => t(s.count === 1 ? '{n} household has drifted from target. {detail}.' : '{n} households have drifted from target. {detail}.', { n: s.count, detail: s.detail }),
+  idle_cash: (s) => t(s.count === 1 ? '{n} household is holding more cash than the target. {detail}.' : '{n} households are holding more cash than the target. {detail}.', { n: s.count, detail: s.detail })
 };
 
 function drawSignals() {
@@ -273,15 +287,15 @@ function drawSignals() {
       <li data-sig="${esc(s.id)}"><div class="grow">
         <div class="title">${esc((SIGNAL_MEANING[s.kind] || (() => s.label))(s))}</div>
         <div class="source">${esc(sourceLine(s.source, s.dataAsOf))}</div>
-        ${disclosure('signal:' + s.id, SIGNAL_ACTION[s.kind] || 'Show which households', { openLabel: 'Hide the households' })}
-      </div></li>`).join('')}</ul>` : '<p class="empty">No signals right now.</p>'),
+        ${disclosure('signal:' + s.id, t('Show which households'), { openLabel: t('Hide the households') })}
+      </div></li>`).join('')}</ul>` : `<p class="empty">${esc(t('No signals right now.'))}</p>`),
   (el) => wireDisclosures(el, async (key, inner) => {
-    inner.innerHTML = '<p class="meta">Loading…</p>';
+    inner.innerHTML = `<p class="meta">${esc(t('Loading\u2026'))}</p>`;
     try {
       const r = await api('GET', '/portfolio-signals/' + encodeURIComponent(key.slice('signal:'.length)) + '/items', { query: { size: 8 } });
       inner.innerHTML = `<ul class="subrows">${r.items.map(i => `<li><span><button class="link" data-hh="${esc(i.householdId)}">${esc(i.householdName)}</button> <span class="meta">${esc(i.maskedAccountNumber)}</span></span><span>${esc(i.detail)}</span></li>`).join('')}</ul>`;
       inner.querySelectorAll('[data-hh]').forEach(x => x.onclick = () => openHousehold(x.dataset.hh, true));
-    } catch { inner.innerHTML = '<p class="meta">These households could not be loaded. Close this and open it again to retry.</p>'; }
+    } catch { inner.innerHTML = `<p class="meta">${esc(t('These households could not be loaded. Close this and open it again to retry.'))}</p>`; }
   }));
 }
 
@@ -290,8 +304,8 @@ function drawSignals() {
  * a home rather than losing one.
  */
 export function advGlance() {
-  $('section').innerHTML = `<h2 class="pagehead">Book at a glance</h2><dl class="strip" id="strip"></dl>
-    <p class="hint">A standing picture of the book. Nothing here needs an answer today — what does is on Today.</p>`;
+  $('section').innerHTML = `<h2 class="pagehead">${esc(t('Book at a glance'))}</h2><dl class="strip" id="strip"></dl>
+    <p class="hint">${esc(t('A standing picture of the book. Nothing here needs an answer today — what does is on Today.'))}</p>`;
   advLoadStrip($('strip'));
 }
 
@@ -305,10 +319,10 @@ export function advClients(host) {
 /* ---- Follow-ups: a tab of the Inbox, because a follow-up is something waiting on someone ---- */
 export function followupsPanel(host) {
   host.innerHTML = `<div class="grid">${panel('w-tasks', 'wide')}</div>`;
-  const run = () => load($('w-tasks'), 'Follow-ups', () => api('GET', '/tasks'), (r) => head('Follow-ups', r.openCount + ' open') + (r.items.length ? `<ul class="rows">${r.items.map(t => { const d = dueLabel(t.dueDate); return `
+  const run = () => load($('w-tasks'), 'Follow-ups', () => api('GET', '/tasks'), (r) => head('Follow-ups', raw(t('{n} open', { n: r.openCount }))) + (r.items.length ? `<ul class="rows">${r.items.map(t => { const d = dueLabel(t.dueDate); return `
     <li class="task${t.status === 'done' ? ' done' : ''}"><label><input type="checkbox" data-task="${esc(t.id)}" ${t.status === 'done' ? 'checked' : ''}>
-    <span class="grow"><span class="title">${esc(t.title)}</span>${t.origin === 'meeting' ? '<span class="tag">From meeting</span>' : ''}${syncBadge(t.sync)}
-    <span class="meta" style="display:block">${esc(t.householdName || 'Practice')} • <span class="${d.hot && t.status === 'open' ? 'due-hot' : ''}">${esc(d.text)}</span></span></span></label></li>`; }).join('')}</ul>` + syncNotice(r.items) : '<p class="empty">No follow-ups yet.</p>'),
+    <span class="grow"><span class="title">${esc(t.title)}</span>${t.origin === 'meeting' ? `<span class="tag">${esc(t('From meeting'))}</span>` : ''}${syncBadge(t.sync)}
+    <span class="meta" style="display:block">${esc(t.householdName || tr('Practice'))} • <span class="${d.hot && t.status === 'open' ? 'due-hot' : ''}">${esc(d.text)}</span></span></span></label></li>`; }).join('')}</ul>` + syncNotice(r.items) : `<p class="empty">${esc(t('No follow-ups yet.'))}</p>`),
   (el) => el.querySelectorAll('[data-task]').forEach(c => c.addEventListener('change', async () => {
     const li = c.closest('.task'); li.classList.toggle('done', c.checked);
     try { await api('PATCH', '/tasks/' + encodeURIComponent(c.dataset.task), { body: { status: c.checked ? 'done' : 'open' } }); toast(c.checked ? 'Done.' : 'Reopened.'); advLoadStrip(); }
@@ -326,14 +340,14 @@ export function commsPanel(host, initialStatus = '') {
     host.innerHTML = `<div class="grid">${panel('w-comms', 'wide')}</div>`;
     load($('w-comms'), 'Messages',
       () => api('GET', '/communications', { query: { status, size: 20 } }),
-      (r) => `<div class="panel-head"><h2>Messages</h2><label class="hint">Show <select id="cmfilter" aria-label="Filter messages by status"><option value="">All</option><option value="draft">Awaiting approval</option><option value="approved">Approved</option><option value="sent">Sent</option></select></label></div>`
+      (r) => `<div class="panel-head"><h2>${esc(t('Messages'))}</h2><label class="hint">${esc(t('Show'))} <select id="cmfilter" aria-label="${esc(t('Filter messages by status'))}"><option value="">${esc(t('All'))}</option><option value="draft">${esc(t('Awaiting approval'))}</option><option value="approved">${esc(t('Approved'))}</option><option value="sent">${esc(t('Sent'))}</option></select></label></div>`
         + (r.items.length ? `<ul class="rows">${r.items.map(c => { const [cls, label] = COMM_BADGE[c.status]; return `
           <li><div class="grow"><div class="title">${esc(c.subject)}</div>
-          <div class="meta">${esc(c.householdName || 'Practice')} \u2022 ${esc(c.channel)} \u2022 ${esc(daysAgo(c.createdAt))}${c.complianceReview ? ' \u2022 <span class="due-hot">compliance review</span>' : ''}</div>
-          ${c.approvedBy ? `<div class="meta">Approved by ${esc(c.approvedBy)}</div>` : ''}</div>
-          <span class="badge ${cls}">${esc(label)}</span>${syncBadge(c.sync)}
-          <button class="btn" data-open="${esc(c.id)}">${c.status === 'draft' ? 'Read and approve' : 'Open'}</button></li>`; }).join('')}</ul>` + syncNotice(r.items)
-          : '<p class="empty serif">No messages match.</p>'),
+          <div class="meta">${esc(c.householdName || t('Practice'))} \u2022 ${esc(CHANNEL[c.channel] || c.channel)} \u2022 ${esc(daysAgo(c.createdAt))}${c.complianceReview ? ` \u2022 <span class="due-hot">${esc(t('compliance review'))}</span>` : ''}</div>
+          ${c.approvedBy ? `<div class="meta">${esc(t('Approved by {who}', { who: c.approvedBy }))}</div>` : ''}</div>
+          <span class="badge ${cls}">${esc(t(label))}</span>${syncBadge(c.sync)}
+          <button class="btn" data-open="${esc(c.id)}">${esc(t(c.status === 'draft' ? 'Read and approve' : 'Open'))}</button></li>`; }).join('')}</ul>` + syncNotice(r.items)
+          : `<p class="empty serif">${esc(t('No messages match.'))}</p>`),
       (el) => {
         const f = el.querySelector('#cmfilter'); f.value = status; f.onchange = () => { status = f.value; drawList(); };
         el.querySelectorAll('[data-open]').forEach(b => b.onclick = () => openComm(b.dataset.open, drawList, host));
@@ -359,7 +373,11 @@ export function commsPanel(host, initialStatus = '') {
 /* What the recipient is told, in the order the advisor needs to check it. Channel and household
  * are all the contract models: there is no named person and no address on a household, which is
  * why "To" is a household and not an inbox. Raised in docs/design.md. */
-const CHANNEL_WORD = { email: 'by email', letter: 'by post', portal: 'in their client portal' };
+const CHANNEL_WORD_EN = { email: 'by email', letter: 'by post', portal: 'in their client portal' };
+const CHANNEL_WORD = new Proxy(CHANNEL_WORD_EN, { get: (o, k) => (k in o ? t(o[k]) : undefined) });
+/* The channel as a noun, for a list row. Contract enum, so mapped rather than printed. */
+const CHANNEL_EN = { email: 'email', letter: 'letter', portal: 'portal' };
+const CHANNEL = new Proxy(CHANNEL_EN, { get: (o, k) => (k in o ? t(o[k]) : undefined) });
 
 function messageFrom() {
   const s = state.session;
@@ -381,12 +399,12 @@ function drawComm(el, c, done) {
   const sent = c.status === 'sent';
   const [cls, statusLabel] = COMM_BADGE[c.status];
   /* Dashed while it is still ours; solid once it has gone. Nothing sent is ever dashed. */
-  const frameLabel = sent ? 'Sent ' + daysAgo(c.sentAt || c.createdAt).toLowerCase()
-    : c.status === 'approved' ? 'Approved \u00b7 not sent yet' : 'Draft \u00b7 not sent';
+  const frameLabel = sent ? t('Sent {when}', { when: daysAgo(c.sentAt || c.createdAt).toLowerCase() })
+    : c.status === 'approved' ? t('Approved \u00b7 not sent yet') : t('Draft \u00b7 not sent');
 
   el.innerHTML = `<section class="panel wide msg-panel">
     <div class="panel-head">
-      <button class="link back" id="cmBack">\u2190 All messages</button>
+      <button class="link back" id="cmBack">\u2190 ${esc(t('All messages'))}</button>
       <span class="badge ${cls}">${esc(statusLabel)}</span>
     </div>
 
@@ -395,24 +413,24 @@ function drawComm(el, c, done) {
       <div class="msg-frame">
         <dl class="msg-head">
           <div><dt>To</dt><dd>${esc(c.householdName || 'The practice')} <span class="meta">${esc(CHANNEL_WORD[c.channel] || c.channel)}</span></dd></div>
-          <div><dt>From</dt><dd>${esc(messageFrom())}</dd></div>
+          <div><dt>${esc(t('From'))}</dt><dd>${esc(messageFrom())}</dd></div>
         </dl>
-        <label class="vh" for="cmSubject">Subject</label>
+        <label class="vh" for="cmSubject">${esc(t('Subject'))}</label>
         <input class="msg-subject" id="cmSubject" value="${esc(c.subject)}" ${sent ? 'readonly' : ''}>
-        <label class="vh" for="cmBody">Message</label>
+        <label class="vh" for="cmBody">${esc(t('Message'))}</label>
         <textarea class="msg-body" id="cmBody" rows="1" ${sent ? 'readonly' : ''}>${esc(c.body)}</textarea>
       </div>
       <p class="source" id="cmReceipt">${esc(commReceipt(c))}</p>
     </article>
 
-    ${c.complianceReview && !sent ? '<p class="hint warnline">Flagged for compliance review. It should not go out until that is done.</p>' : ''}
+    ${c.complianceReview && !sent ? `<p class="hint warnline">${esc(t('Flagged for compliance review. It should not go out until that is done.'))}</p>` : ''}
 
     <div class="actions msg-actions">
       ${sent ? ''
         : c.status === 'draft'
-          ? '<button class="btn primary" id="cmApprove">Approve</button><button class="btn" id="cmRedraft">Rewrite it for me</button>'
-          : '<button class="btn primary" id="cmSend">Send</button><button class="btn" id="cmReturn">Back to draft</button><button class="btn" id="cmRedraft">Rewrite it for me</button>'}
-      ${sent ? '' : '<select id="cmTone" aria-label="Tone for a rewrite"><option>Warm and direct</option><option>Formal</option><option>Brief</option></select>'}
+          ? `<button class="btn primary" id="cmApprove">${esc(t('Approve'))}</button><button class="btn" id="cmRedraft">${esc(t('Rewrite it for me'))}</button>`
+          : `<button class="btn primary" id="cmSend">${esc(t('Send'))}</button><button class="btn" id="cmReturn">${esc(t('Back to draft'))}</button><button class="btn" id="cmRedraft">${esc(t('Rewrite it for me'))}</button>`}
+      ${sent ? '' : `<select id="cmTone" aria-label="${esc(t('Tone for a rewrite'))}"><option>${esc(t('Warm and direct'))}</option><option>${esc(t('Formal'))}</option><option>${esc(t('Brief'))}</option></select>`}
     </div>
     <div id="cmDraft"></div>
   </section>`;
@@ -475,9 +493,9 @@ function drawComm(el, c, done) {
 
 /* The one-line receipt: what the platform did, or what the advisor did to it (TR-04). */
 function commReceipt(c) {
-  if (c.editedBy) return 'Drafted by the platform, edited by ' + c.editedBy + ' \u00b7 ' + daysAgo(c.editedAt).toLowerCase();
-  if (c.draftedBy === 'ai') return 'Drafted by the platform ' + daysAgo(c.createdAt).toLowerCase() + ' \u00b7 in a ' + (c.tone || 'plain').toLowerCase() + ' tone';
-  return 'Written by ' + (c.advisorName || 'an advisor') + ' \u00b7 ' + daysAgo(c.createdAt).toLowerCase();
+  if (c.editedBy) return t('Drafted by the platform, edited by {who} \u00b7 {when}', { who: c.editedBy, when: daysAgo(c.editedAt).toLowerCase() });
+  if (c.draftedBy === 'ai') return t('Drafted by the platform {when} \u00b7 in a {tone} tone', { when: daysAgo(c.createdAt).toLowerCase(), tone: t(c.tone || 'plain').toLowerCase() });
+  return t('Written by {who} \u00b7 {when}', { who: c.advisorName || t('an advisor'), when: daysAgo(c.createdAt).toLowerCase() });
 }
 
 const autoGrow = (t) => { t.style.height = 'auto'; t.style.height = t.scrollHeight + 'px'; };
@@ -489,18 +507,18 @@ const autoGrow = (t) => { t.style.height = 'auto'; t.style.height = t.scrollHeig
 export function confirmSend(c, send) {
   const dlg = $('dlg');
   dlg.className = 'sheet';
-  dlg.innerHTML = `<h2 id="dlgTitle" class="sheet-title">This leaves the firm</h2>
+  dlg.innerHTML = `<h2 id="dlgTitle" class="sheet-title">${esc(t('This leaves the firm'))}</h2>
     <dl class="defs sheet-defs">
       <dt>To</dt><dd>${esc(c.householdName || 'The practice')} <span class="meta">${esc(CHANNEL_WORD[c.channel] || c.channel)}</span></dd>
-      <dt>From</dt><dd>${esc(messageFrom())}</dd>
-      <dt>Subject</dt><dd>${esc(c.subject)}</dd>
-      <dt>Attached</dt><dd>Nothing</dd>
+      <dt>${esc(t('From'))}</dt><dd>${esc(messageFrom())}</dd>
+      <dt>${esc(t('Subject'))}</dt><dd>${esc(c.subject)}</dd>
+      <dt>${esc(t('Attached'))}</dt><dd>${esc(t('Nothing'))}</dd>
     </dl>
-    ${c.complianceReview ? '<p class="hint warnline">This message is flagged for compliance review.</p>' : ''}
-    <p class="sheet-warn">Once it goes it cannot be recalled.</p>
+    ${c.complianceReview ? `<p class="hint warnline">${esc(t('This message is flagged for compliance review.'))}</p>` : ''}
+    <p class="sheet-warn">${esc(t('Once it goes it cannot be recalled.'))}</p>
     <div class="actions sheet-actions">
-      <button class="btn primary" id="sendGo">Send it</button>
-      <button class="btn" id="sendNo">Not yet</button>
+      <button class="btn primary" id="sendGo">${esc(t('Send it'))}</button>
+      <button class="btn" id="sendNo">${esc(t('Not yet'))}</button>
     </div>`;
   dlg.showModal();
   $('sendNo').focus();
@@ -512,19 +530,22 @@ export function confirmSend(c, send) {
 
 /* ---- Prospects ---- */
 /* Where the lead came from. Not a data source: this is the prospect's own origin. */
-export const LEAD_SOURCE = { referral: 'A referral', website: 'The website', event: 'An event', other: 'Somewhere else' };
-export const STAGE_LABEL = { lead: 'Lead', contacted: 'Contacted', meeting_scheduled: 'Meeting scheduled', proposal: 'Proposal', onboarding: 'Onboarding', converted: 'Converted' };
+/* Contract enums given advisor-facing words, read through t() at call time. */
+const lookup = (o) => new Proxy(o, { get: (x, k) => (k in x ? t(x[k]) : undefined) });
+const COMPLIANCE_STATUS = lookup({ open: 'open', overdue: 'overdue', done: 'done' });
+export const LEAD_SOURCE = lookup({ referral: 'A referral', website: 'The website', event: 'An event', other: 'Somewhere else' });
+export const STAGE_LABEL = lookup({ lead: 'Lead', contacted: 'Contacted', meeting_scheduled: 'Meeting scheduled', proposal: 'Proposal', onboarding: 'Onboarding', converted: 'Converted' });
 export function advProspects(host) {
   (host || $('section')).innerHTML = `<div class="grid">${panel('w-pros', 'wide')}</div>`;
   const run = () => load($('w-pros'), 'Prospects', () => api('GET', '/prospects', { query: { size: 100 } }), (r) => {
     const total = r.items.reduce((a, p) => a + (p.estimatedAssets || 0), 0);
-    return head('Prospects', r.totalItems + ' in the pipeline, about ' + money(total)) + `<div class="kanban">${r.stages.map(st => {
+    return head('Prospects', raw(t('{n} in the pipeline, about {value}', { n: r.totalItems, value: money(total) }))) + `<div class="kanban">${r.stages.map(st => {
       const col = r.items.filter(p => p.stage === st);
       return `<div class="kcol"><h3>${esc(STAGE_LABEL[st])} <span class="count">${col.length}</span></h3>
-        ${col.length ? col.map(p => `<article class="kcard" data-pros="${esc(p.id)}" tabindex="0" role="button" aria-label="Open ${esc(p.name)}">
+        ${col.length ? col.map(p => `<article class="kcard" data-pros="${esc(p.id)}" tabindex="0" role="button" aria-label="${esc(t('Open {name}', { name: p.name }))}">
           <div class="title">${esc(p.name)}</div>
-          <div class="meta">${p.estimatedAssets ? esc(money(p.estimatedAssets)) : 'Assets unknown'} • ${esc(LEAD_SOURCE[p.source] || p.source)}</div>
-          ${p.meetingId ? '<div class="meta">Meeting booked</div>' : ''}</article>`).join('') : '<p class="empty">Empty</p>'}</div>`;
+          <div class="meta">${p.estimatedAssets ? esc(money(p.estimatedAssets)) : esc(t('Assets unknown'))} • ${esc(LEAD_SOURCE[p.source] || p.source)}</div>
+          ${p.meetingId ? `<div class="meta">${esc(t('Meeting booked'))}</div>` : ''}</article>`).join('') : `<p class="empty">${esc(t('Empty'))}</p>`}</div>`;
     }).join('')}</div>` + syncNotice(r.items);
   }, (el) => el.querySelectorAll('[data-pros]').forEach(c => {
     const open = () => openProspect(c.dataset.pros, run);
@@ -536,23 +557,23 @@ export function advProspects(host) {
 
 export async function openProspect(id, done) {
   const dlg = $('dlg');
-  dlg.innerHTML = '<p class="empty">Loading…</p>'; dlg.showModal();
+  dlg.innerHTML = `<p class="empty">${esc(t('Loading\u2026'))}</p>`; dlg.showModal();
   try {
     const p = await api('GET', '/prospects/' + encodeURIComponent(id));
     const stages = Object.keys(STAGE_LABEL), i = stages.indexOf(p.stage), next = stages[i + 1];
-    dlg.innerHTML = `<button class="btn quiet close" data-close>Close</button><h2 id="dlgTitle">${esc(p.name)}</h2>
+    dlg.innerHTML = `<button class="btn quiet close" data-close>${esc(t('Close'))}</button><h2 id="dlgTitle">${esc(p.name)}</h2>
       <div><span class="badge plain">${esc(STAGE_LABEL[p.stage])}</span></div>
-      <dl class="defs"><dt>Estimated assets</dt><dd>${p.estimatedAssets ? moneyFull(p.estimatedAssets) : 'Unknown'}</dd><dt>Came from</dt><dd>${esc(LEAD_SOURCE[p.source] || p.source)}</dd><dt>First seen</dt><dd>${esc(daysAgo(p.createdAt))}</dd></dl>
-      <h3>Intake notes</h3><p class="draft">${esc(p.intakeNotes || 'No notes yet.')}</p>
-      ${next ? `<div class="actions"><button class="btn primary" id="prAdv">Move to ${esc(STAGE_LABEL[next])}</button>` : '<p class="hint">This prospect has converted.</p><div class="actions">'}
-        <button class="btn" id="prMatch">Which advisor fits?</button></div>
+      <dl class="defs"><dt>${esc(t('Estimated assets'))}</dt><dd>${p.estimatedAssets ? moneyFull(p.estimatedAssets) : esc(t('Unknown'))}</dd><dt>${esc(t('Came from'))}</dt><dd>${esc(LEAD_SOURCE[p.source] || p.source)}</dd><dt>${esc(t('First seen'))}</dt><dd>${esc(daysAgo(p.createdAt))}</dd></dl>
+      <h3>${esc(t('Intake notes'))}</h3><p class="draft">${esc(p.intakeNotes || t('No notes yet.'))}</p>
+      ${next ? `<div class="actions"><button class="btn primary" id="prAdv">${esc(t('Move to {stage}', { stage: STAGE_LABEL[next] }))}</button>` : `<p class="hint">${esc(t('This prospect has converted.'))}</p><div class="actions">`}
+        <button class="btn" id="prMatch">${esc(t('Which advisor fits?'))}</button></div>
       <div id="prOut"></div>`;
     $('prMatch').onclick = async () => {
       const b = $('prMatch'); b.disabled = true;
       try {
         const r = await api('GET', '/prospects/' + encodeURIComponent(id) + '/matches');
-        $('prOut').innerHTML = `<h3>Suggested fit</h3><ul class="rows">${r.items.map((mt, i) => `
-          <li><span class="count">${i + 1}</span><div class="grow"><div class="title">${esc(mt.advisorName)}${mt.advisorId === r.currentAdvisorId ? ' <span class="tag">current</span>' : ''}</div>
+        $('prOut').innerHTML = `<h3>${esc(t('Suggested fit'))}</h3><ul class="rows">${r.items.map((mt, i) => `
+          <li><span class="count">${i + 1}</span><div class="grow"><div class="title">${esc(mt.advisorName)}${mt.advisorId === r.currentAdvisorId ? ` <span class="tag">${esc(t('current'))}</span>` : ''}</div>
           ${mt.reasons.map(x => `<div class="meta">${esc(x)}</div>`).join('')}</div></li>`).join('')}</ul>
           <p class="hint">${esc(r.note)}</p>`;
       } catch (e) { toast(e.message); } finally { b.disabled = false; }
@@ -560,24 +581,24 @@ export async function openProspect(id, done) {
     const adv = $('prAdv');
     if (adv) adv.onclick = async () => {
       adv.disabled = true;
-      try { await api('PATCH', '/prospects/' + encodeURIComponent(id), { body: { stage: next } }); toast('Moved to ' + STAGE_LABEL[next] + '.'); dlg.close(); done(); }
+      try { await api('PATCH', '/prospects/' + encodeURIComponent(id), { body: { stage: next } }); toast(t('Moved to {stage}.', { stage: STAGE_LABEL[next] })); dlg.close(); done(); }
       catch (e) { toast(e.message); adv.disabled = false; }
     };
-  } catch (e) { dlg.innerHTML = `<button class="btn quiet close" data-close>Close</button><p class="err">${esc(e.message)}</p>`; }
+  } catch (e) { dlg.innerHTML = `<button class="btn quiet close" data-close>${esc(t('Close'))}</button><p class="err">${esc(e.message)}</p>`; }
 }
 
 /* ---- Onboarding, and importing a book ---- */
 export function advOnboarding(host) {
   (host || $('section')).innerHTML = `<div class="grid"><div class="col">${panel('w-onb')}</div><div class="col">${panel('w-mig')}</div></div>`;
   const run = () => load($('w-onb'), 'New clients', () => api('GET', '/onboarding'), (r) =>
-    head('New clients', r.items.length + ' in progress') + (r.items.length ? r.items.map(o => `
+    head('New clients', raw(t('{n} in progress', { n: r.items.length }))) + (r.items.length ? r.items.map(o => `
       <article class="onb" data-onb="${esc(o.id)}"><div class="onb-head"><div><div class="title">${esc(o.name)}</div>
-      <div class="meta">Started ${esc(daysAgo(o.startedAt).toLowerCase())} • ${o.stepsComplete} of ${o.stepsTotal} steps</div></div>
-      <button class="btn primary" data-convert="${esc(o.id)}" ${o.readyToConvert ? '' : 'disabled'}>Convert to client</button></div>
+      <div class="meta">${esc(t('Started {when} \u2022 {done} of {total} steps', { when: daysAgo(o.startedAt).toLowerCase(), done: o.stepsComplete, total: o.stepsTotal }))}</div></div>
+      <button class="btn primary" data-convert="${esc(o.id)}" ${o.readyToConvert ? '' : 'disabled'}>${esc(t('Convert to client'))}</button></div>
       <ul class="steps">${o.steps.map(s => `<li class="step ${esc(s.status)}">
         <label><input type="checkbox" data-step="${esc(o.id)}:${esc(s.id)}" ${s.status === 'done' ? 'checked' : ''}>
         <span class="grow"><button class="link" data-detail="${esc(o.id)}:${esc(s.id)}">${esc(s.label)}</button></span></label></li>`).join('')}</ul></article>`).join('')
-      : '<p class="empty">Nobody is onboarding right now.</p>'),
+      : `<p class="empty">${esc(t('Nobody is onboarding right now.'))}</p>`),
   (el) => {
     el.querySelectorAll('[data-step]').forEach(c => c.addEventListener('change', async () => {
       const [oid, sid] = c.dataset.step.split(':');
@@ -586,19 +607,19 @@ export function advOnboarding(host) {
     }));
     el.querySelectorAll('[data-detail]').forEach(b => b.onclick = async () => {
       const [oid, sid] = b.dataset.detail.split(':');
-      const dlg = $('dlg'); dlg.innerHTML = '<p class="empty">Loading…</p>'; dlg.showModal();
+      const dlg = $('dlg'); dlg.innerHTML = `<p class="empty">${esc(t('Loading\u2026'))}</p>`; dlg.showModal();
       try {
         const o = await api('GET', '/onboarding/' + encodeURIComponent(oid));
         const s = o.steps.find(x => x.id === sid);
-        dlg.innerHTML = `<button class="btn quiet close" data-close>Close</button><h2 id="dlgTitle">${esc(s.label)}</h2>
+        dlg.innerHTML = `<button class="btn quiet close" data-close>${esc(t('Close'))}</button><h2 id="dlgTitle">${esc(s.label)}</h2>
           <div class="meta">${esc(o.name)}</div>
-          <p class="draft">${esc(s.detail || 'Not started yet. Nothing has been captured for this step.')}</p>
-          ${s.completedAt ? `<p class="hint">Completed ${esc(fmtDate(localDate(new Date(s.completedAt))))}.</p>` : ''}`;
-      } catch (e) { dlg.innerHTML = `<button class="btn quiet close" data-close>Close</button><p class="err">${esc(e.message)}</p>`; }
+          <p class="draft">${esc(s.detail || t('Not started yet. Nothing has been captured for this step.'))}</p>
+          ${s.completedAt ? `<p class="hint">${esc(t('Completed {date}.', { date: fmtDate(localDate(new Date(s.completedAt))) }))}</p>` : ''}`;
+      } catch (e) { dlg.innerHTML = `<button class="btn quiet close" data-close>${esc(t('Close'))}</button><p class="err">${esc(e.message)}</p>`; }
     });
     el.querySelectorAll('[data-convert]').forEach(b => b.onclick = async () => {
       b.disabled = true;
-      try { const r = await api('POST', `/onboarding/${encodeURIComponent(b.dataset.convert)}/convert`); toast(r.name + ' is now in your book.'); run(); advLoadStrip(); }
+      try { const r = await api('POST', `/onboarding/${encodeURIComponent(b.dataset.convert)}/convert`); toast(t('{name} is now in your book.', { name: r.name })); run(); advLoadStrip(); }
       catch (e) { toast(e.message); b.disabled = false; }
     });
   });
@@ -606,17 +627,17 @@ export function advOnboarding(host) {
 
   load($('w-mig'), 'Import a book', () => api('GET', '/migrations'), (past) =>
     head('Import a book', 'Migrate from another system') + `
-    <p class="hint">Paste one household per line as <code>Name, assets</code>. Rows that fail validation are reported and skipped; the rest are imported and flagged for review.</p>
-    <div class="field"><label for="migSrc">Where is it coming from?</label><input type="text" id="migSrc" value="Redtail export"></div>
-    <div class="field"><label for="migRows">Households</label><textarea id="migRows" rows="6">Okonkwo household, 3200000
+    <p class="hint">${esc(t('Paste one household per line as'))} <code>${esc(t('Name, assets'))}</code>. ${esc(t('Rows that fail validation are reported and skipped; the rest are imported and flagged for review.'))}</p>
+    <div class="field"><label for="migSrc">${esc(t('Where is it coming from?'))}</label><input type="text" id="migSrc" value="Redtail export"></div>
+    <div class="field"><label for="migRows">${esc(t('Households'))}</label><textarea id="migRows" rows="6">Okonkwo household, 3200000
 Vance Trust, 1400000
 , 50
 Bad Assets, -3</textarea></div>
-    <button class="btn primary" id="migGo">Validate and import</button>
+    <button class="btn primary" id="migGo">${esc(t('Validate and import'))}</button>
     <div id="migOut"></div>
-    ${past && past.items.length ? `<h3>Past imports</h3><ul class="rows">${past.items.map(m => `
+    ${past && past.items.length ? `<h3>${esc(t('Past imports'))}</h3><ul class="rows">${past.items.map(m => `
       <li><div class="grow"><div class="title">${esc(m.source)}</div>
-      <div class="meta">${esc(daysAgo(m.createdAt))} \u2022 ${m.counts.imported} imported, ${m.counts.invalid} rejected</div></div></li>`).join('')}</ul>` : ''}`,
+      <div class="meta">${esc(daysAgo(m.createdAt))} \u2022 ${esc(t('{imported} imported, {rejected} rejected', { imported: m.counts.imported, rejected: m.counts.invalid }))}</div></div></li>`).join('')}</ul>` : ''}`,
   () => {
     $('migGo').onclick = async () => {
       const rows = $('migRows').value.split('\n').map(l => l.trim()).filter(Boolean).map(l => {
@@ -627,9 +648,9 @@ Bad Assets, -3</textarea></div>
       const b = $('migGo'); b.disabled = true;
       try {
         const r = await api('POST', '/migrations', { body: { source: $('migSrc').value.trim() || 'Unknown', rows } });
-        $('migOut').innerHTML = `<dl class="defs"><dt>Read</dt><dd>${r.counts.read}</dd><dt>Imported</dt><dd>${r.counts.imported}</dd><dt>Rejected</dt><dd>${r.counts.invalid}</dd></dl>`
-          + (r.invalidRows.length ? `<ul class="rows">${r.invalidRows.map(x => `<li><div class="grow"><div class="title">Row ${x.row + 1}</div><div class="meta">${esc(x.problems.join('; '))}</div></div></li>`).join('')}</ul>` : '');
-        toast(r.counts.imported + ' imported, flagged for review.');
+        $('migOut').innerHTML = `<dl class="defs"><dt>${esc(t('Read'))}</dt><dd>${r.counts.read}</dd><dt>${esc(t('Imported'))}</dt><dd>${r.counts.imported}</dd><dt>${esc(t('Rejected'))}</dt><dd>${r.counts.invalid}</dd></dl>`
+          + (r.invalidRows.length ? `<ul class="rows">${r.invalidRows.map(x => `<li><div class="grow"><div class="title">${esc(t('Row {n}', { n: x.row + 1 }))}</div><div class="meta">${esc(x.problems.join('; '))}</div></div></li>`).join('')}</ul>` : '');
+        toast(t('{n} imported, flagged for review.', { n: r.counts.imported }));
         advLoadStrip();
       } catch (e) { toast(e.message); } finally { b.disabled = false; }
     };
@@ -655,12 +676,12 @@ export function advCalendar() {
         const list = byDay[key] || [], today = key === localDate(now);
         cells.push(`<div class="cday${today ? ' today' : ''}"><div class="dnum">${d}</div>
           ${list.map(m => `<button class="cmeet" data-meet="${esc(m.id)}" title="${esc(m.type)}">${esc(fmtTime(m.startsAt))} ${esc(m.householdName || m.prospectName || m.type)}</button>`).join('')}
-          <button class="cadd" data-add="${esc(key)}" aria-label="Add a meeting on ${esc(fmtDate(key))}">+</button></div>`);
+          <button class="cadd" data-add="${esc(key)}" aria-label="${esc(t('Add a meeting on {date}', { date: fmtDate(key) }))}">+</button></div>`);
       }
-      return `<div class="panel-head"><h2>${esc(calMonth.toLocaleDateString('en-US', { month: 'long', year: 'numeric' }))}</h2>
-        <span class="actions"><button class="btn" data-mv="-1">Previous</button><button class="btn" data-mv="1">Next</button></span></div>
-        <div class="calgrid">${['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map(d => `<div class="cdow">${d}</div>`).join('')}${cells.join('')}</div>
-        <p class="hint">Past meetings hold notes or a transcript. Select one to read it and draft follow-ups.</p>`;
+      return `<div class="panel-head"><h2>${esc(calMonth.toLocaleDateString(locale(), { month: 'long', year: 'numeric' }))}</h2>
+        <span class="actions"><button class="btn" data-mv="-1">${esc(t('Previous'))}</button><button class="btn" data-mv="1">${esc(t('Next'))}</button></span></div>
+        <div class="calgrid">${weekdayNames().map(d => `<div class="cdow">${esc(d)}</div>`).join('')}${cells.join('')}</div>
+        <p class="hint">${esc(t('Past meetings hold notes or a transcript. Select one to read it and draft follow-ups.'))}</p>`;
     }, (el) => {
       el.querySelectorAll('[data-mv]').forEach(b => b.onclick = () => { calMonth = new Date(calMonth.getFullYear(), calMonth.getMonth() + (+b.dataset.mv), 1); run(); });
       el.querySelectorAll('[data-meet]').forEach(b => b.onclick = () => openMeeting(b.dataset.meet, run));
@@ -672,15 +693,15 @@ export function advCalendar() {
 
 export async function addMeeting(date, done) {
   const dlg = $('dlg');
-  dlg.innerHTML = '<p class="empty">Loading…</p>'; dlg.showModal();
+  dlg.innerHTML = `<p class="empty">${esc(t('Loading\u2026'))}</p>`; dlg.showModal();
   try {
     const hh = await api('GET', '/households', { query: { size: 100, sort: 'name,asc' } });
-    dlg.innerHTML = `<button class="btn quiet close" data-close>Close</button><h2 id="dlgTitle">New meeting</h2>
-      <div class="field"><label for="nmType">What is it?</label><input type="text" id="nmType" placeholder="For example, Annual review"></div>
-      <div class="field"><label for="nmHh">Client</label><select id="nmHh"><option value="">No client attached (prospect)</option>${hh.items.map(h => `<option value="${esc(h.id)}">${esc(h.name)}</option>`).join('')}</select></div>
-      <div class="field"><label for="nmTime">Time</label><input type="time" id="nmTime" value="10:00"></div>
-      <div class="field"><label for="nmMins">Minutes</label><input type="number" id="nmMins" value="45" min="15" step="15"></div>
-      <button class="btn primary" id="nmGo">Add to ${esc(fmtDate(date))}</button>`;
+    dlg.innerHTML = `<button class="btn quiet close" data-close>${esc(t('Close'))}</button><h2 id="dlgTitle">${esc(t('New meeting'))}</h2>
+      <div class="field"><label for="nmType">${esc(t('What is it?'))}</label><input type="text" id="nmType" placeholder="${esc(t('For example, Annual review'))}"></div>
+      <div class="field"><label for="nmHh">${esc(t('Client'))}</label><select id="nmHh"><option value="">${esc(t('No client attached (prospect)'))}</option>${hh.items.map(h => `<option value="${esc(h.id)}">${esc(h.name)}</option>`).join('')}</select></div>
+      <div class="field"><label for="nmTime">${esc(t('Time'))}</label><input type="time" id="nmTime" value="10:00"></div>
+      <div class="field"><label for="nmMins">${esc(t('Minutes'))}</label><input type="number" id="nmMins" value="45" min="15" step="15"></div>
+      <button class="btn primary" id="nmGo">${esc(t('Add to {date}', { date: fmtDate(date) }))}</button>`;
     $('nmGo').onclick = async () => {
       const type = $('nmType').value.trim(); if (!type) { toast('Give the meeting a name.'); return; }
       const b = $('nmGo'); b.disabled = true;
@@ -690,43 +711,43 @@ export async function addMeeting(date, done) {
         toast('Meeting added.'); dlg.close(); done();
       } catch (e) { toast(e.message); b.disabled = false; }
     };
-  } catch (e) { dlg.innerHTML = `<button class="btn quiet close" data-close>Close</button><p class="err">${esc(e.message)}</p>`; }
+  } catch (e) { dlg.innerHTML = `<button class="btn quiet close" data-close>${esc(t('Close'))}</button><p class="err">${esc(e.message)}</p>`; }
 }
 
 export async function openMeeting(id, done) {
   const dlg = $('dlg');
-  dlg.innerHTML = '<p class="empty">Loading…</p>'; dlg.showModal();
+  dlg.innerHTML = `<p class="empty">${esc(t('Loading\u2026'))}</p>`; dlg.showModal();
   try {
     const m = await api('GET', '/meetings/' + encodeURIComponent(id));
     let record = null;
     try { record = await api('GET', '/meetings/' + encodeURIComponent(id) + '/record'); } catch { /* most meetings have none */ }
-    dlg.innerHTML = `<button class="btn quiet close" data-close>Close</button><h2 id="dlgTitle">${esc(m.type)}</h2>
-      <div class="meta">${esc(m.householdName || m.prospectName || 'No client attached')} • ${esc(fmtDate(localDate(new Date(m.startsAt))))} at ${esc(fmtTime(m.startsAt))} • ${m.durationMinutes} minutes</div>
-      <h3>Prep brief</h3><p class="draft">${esc(m.brief || 'No brief yet.')}</p>
-      ${record ? `<h3>${record.kind === 'transcript' ? 'Transcript' : 'Notes'}</h3>
-        ${record.consent ? `<p class="hint">Recording consent: ${record.consent.obtained ? 'on file' + (record.consent.method ? ', ' + esc(record.consent.method) : '') : '<strong>not on file</strong>'}.</p>` : ''}
+    dlg.innerHTML = `<button class="btn quiet close" data-close>${esc(t('Close'))}</button><h2 id="dlgTitle">${esc(m.type)}</h2>
+      <div class="meta">${esc(m.householdName || m.prospectName || t('No client attached'))} • ${esc(t('{date} at {time} \u2022 {n} minutes', { date: fmtDate(localDate(new Date(m.startsAt))), time: fmtTime(m.startsAt), n: m.durationMinutes }))}</div>
+      <h3>${esc(t('Prep brief'))}</h3><p class="draft">${esc(m.brief || t('No brief yet.'))}</p>
+      ${record ? `<h3>${esc(t(record.kind === 'transcript' ? 'Transcript' : 'Notes'))}</h3>
+        ${record.consent ? `<p class="hint">${esc(t('Recording consent:'))} ${record.consent.obtained ? esc(record.consent.method ? t('on file, {how}', { how: record.consent.method }) : t('on file')) : `<strong>${esc(t('not on file'))}</strong>`}.</p>` : ''}
         ${record.withheld ? `<p class="err">${esc(record.withheldReason)}</p>`
-          : `<p class="draft">${esc(record.content)}</p><div class="actions"><button class="btn primary" id="mtNext">Suggest next steps</button></div><div id="mtOut"></div>`}`
-        : '<p class="hint">No notes or transcript for this meeting.</p>'}
+          : `<p class="draft">${esc(record.content)}</p><div class="actions"><button class="btn primary" id="mtNext">${esc(t('Suggest next steps'))}</button></div><div id="mtOut"></div>`}`
+        : `<p class="hint">${esc(t('No notes or transcript for this meeting.'))}</p>`}
       <div class="actions" style="margin:4px 0 10px">
-        ${record && !record.withheld ? '<button class="btn" id="mtSum">Summarise</button>' : ''}
-        ${new Date(m.startsAt) > new Date() ? '<button class="btn" id="mtAgenda">Draft agenda</button>' : ''}</div>
+        ${record && !record.withheld ? `<button class="btn" id="mtSum">${esc(t('Summarise'))}</button>` : ''}
+        ${new Date(m.startsAt) > new Date() ? `<button class="btn" id="mtAgenda">${esc(t('Draft agenda'))}</button>` : ''}</div>
       <div id="mtDraft"></div>
-      ${new Date(m.startsAt) > new Date() ? `<h3>Move</h3>
-        <div class="field"><label for="mtWhen">New date and time</label><input type="datetime-local" id="mtWhen" value="${esc(localDate(new Date(m.startsAt)))}T${esc(new Date(m.startsAt).toTimeString().slice(0, 5))}"></div>
-        <button class="btn" id="mtMove">Move meeting</button>` : ''}
-      <div class="actions"><button class="btn quiet" id="mtDel">Cancel meeting</button></div>`;
+      ${new Date(m.startsAt) > new Date() ? `<h3>${esc(t('Move'))}</h3>
+        <div class="field"><label for="mtWhen">${esc(t('New date and time'))}</label><input type="datetime-local" id="mtWhen" value="${esc(localDate(new Date(m.startsAt)))}T${esc(new Date(m.startsAt).toTimeString().slice(0, 5))}"></div>
+        <button class="btn" id="mtMove">${esc(t('Move meeting'))}</button>` : ''}
+      <div class="actions"><button class="btn quiet" id="mtDel">${esc(t('Cancel meeting'))}</button></div>`;
     const nx = $('mtNext');
     if (nx) nx.onclick = async () => {
       nx.disabled = true;
       try {
         const s = await api('POST', '/meetings/' + encodeURIComponent(id) + '/record/next-steps');
-        $('mtOut').innerHTML = `<p class="hint">Drafts only. Nothing is created until you add one as a follow-up.</p>
-          <ul class="rows">${s.items.map((it, i) => `<li><div class="grow"><div class="title">${esc(it.title)}</div><div class="meta">${it.dueDate ? 'Suggested due ' + esc(fmtDate(it.dueDate)) : 'No date'}</div></div>
-          <button class="btn" data-accept="${i}">Add as follow-up</button></li>`).join('')}</ul>`;
+        $('mtOut').innerHTML = `<p class="hint">${esc(t('Drafts only. Nothing is created until you add one as a follow-up.'))}</p>
+          <ul class="rows">${s.items.map((it, i) => `<li><div class="grow"><div class="title">${esc(it.title)}</div><div class="meta">${it.dueDate ? esc(t('Suggested due {date}', { date: fmtDate(it.dueDate) })) : esc(t('No date'))}</div></div>
+          <button class="btn" data-accept="${i}">${esc(t('Add as follow-up'))}</button></li>`).join('')}</ul>`;
         $('mtOut').querySelectorAll('[data-accept]').forEach(b => b.onclick = async () => {
           const it = s.items[+b.dataset.accept]; b.disabled = true;
-          try { await api('POST', '/tasks', { body: { title: it.title, householdId: it.householdId || undefined, dueDate: it.dueDate || undefined, origin: 'meeting', originMeetingId: id } }); toast('Added to your follow-ups.'); b.textContent = 'Added'; advLoadStrip(); }
+          try { await api('POST', '/tasks', { body: { title: it.title, householdId: it.householdId || undefined, dueDate: it.dueDate || undefined, origin: 'meeting', originMeetingId: id } }); toast('Added to your follow-ups.'); b.textContent = t('Added'); advLoadStrip(); }
           catch (e) { toast(e.message); b.disabled = false; }
         });
       } catch (e) { toast(e.message); nx.disabled = false; }
@@ -747,7 +768,7 @@ export async function openMeeting(id, done) {
       try { await api('DELETE', '/meetings/' + encodeURIComponent(id)); toast('Meeting cancelled.'); dlg.close(); done(); advLoadStrip(); }
       catch (e) { toast(e.message); }
     };
-  } catch (e) { dlg.innerHTML = `<button class="btn quiet close" data-close>Close</button><p class="err">${esc(e.message)}</p>`; }
+  } catch (e) { dlg.innerHTML = `<button class="btn quiet close" data-close>${esc(t('Close'))}</button><p class="err">${esc(e.message)}</p>`; }
 }
 
 /* ---- Inbox --------------------------------------------------------------------------------
@@ -756,7 +777,7 @@ export async function openMeeting(id, done) {
  * the person's record, so there are two doors to it and only one item.
  */
 export function advInbox() {
-  $('section').innerHTML = `<h2 class="pagehead">Inbox</h2>
+  $('section').innerHTML = `<h2 class="pagehead">${esc(t('Inbox'))}</h2>
     <div id="inboxTabs"></div>
     <div class="grid" style="margin-top:16px">${panel('w-inbox', 'wide')}</div>`;
   const tabs = [['approve', 'Drafts to approve'], ['followups', 'Follow-ups'], ['all', 'Everything sent']];
@@ -793,17 +814,18 @@ function roleOverview(key) {
   return async (el) => {
     el.innerHTML = `<div class="grid">${panel('w-rolepri', 'wide')}</div>`;
     const host = $('w-rolepri');
-    host.innerHTML = head(ROLE[key].name + ' priorities') + '<div class="skel"></div><div class="skel m"></div>';
+    const title = raw(t('{role} priorities', { role: ROLE[key].name }));
+    host.innerHTML = head(title) + '<div class="skel"></div><div class="skel m"></div>';
     try {
       const work = (await collectRoleWork(state.session && state.session.advisorId)).filter(w => w.role === key);
-      host.innerHTML = head(ROLE[key].name + ' priorities', work.length ? work.length + ' to answer' : '')
+      host.innerHTML = head(title, work.length ? raw(t('{n} to answer', { n: work.length })) : '')
         + (work.length ? `<ul class="rows">${work.map(w => `<li><div class="grow"><div class="title">${esc(w.meaning)}</div>
             <div class="source">${esc(sourceLine(w.source.kinds, w.source.at))}</div></div>
-            <button class="btn" data-ritem="${esc(itemKey(w))}">${esc(w.action.label)}</button></li>`).join('')}</ul>`
-          : `<p class="empty serif">Nothing pressing in ${esc(ROLE[key].name.toLowerCase())} today.</p>`);
+            <button class="btn" data-ritem="${esc(itemKey(w))}">${esc(t(w.action.label))}</button></li>`).join('')}</ul>`
+          : `<p class="empty serif">${esc(t('Nothing pressing in {role} today.', { role: ROLE[key].name.toLowerCase() }))}</p>`);
       host.querySelectorAll('[data-ritem]').forEach(b => b.onclick = () =>
         runItemAction(work.find(w => itemKey(w) === b.dataset.ritem), b));
-    } catch (e) { host.innerHTML = head(ROLE[key].name + ' priorities') + `<div class="err">${esc(e.message)}</div>`; }
+    } catch (e) { host.innerHTML = head(title) + `<div class="err">${esc(e.message)}</div>`; }
   };
 }
 
@@ -815,13 +837,13 @@ function referralsPanel(el) {
   load($('w-ref'), 'Referrals', () => api('GET', '/prospects', { query: { size: 100 } }), (r) => {
     const refs = r.items.filter(p => p.source === 'referral');
     const value = refs.reduce((a, p) => a + (p.estimatedAssets || 0), 0);
-    return head('Referrals', refs.length + ' in the pipeline, about ' + money(value))
+    return head('Referrals', raw(t('{n} in the pipeline, about {value}', { n: refs.length, value: money(value) })))
       + (refs.length ? `<ul class="rows">${refs.map(p => `<li><div class="grow">
         <div class="title">${esc(p.name)}</div>
-        <div class="meta">${esc(STAGE_LABEL[p.stage])} • ${p.estimatedAssets ? esc(money(p.estimatedAssets)) : 'Assets unknown'} • ${daysBetween(p.stageChangedAt)} days at this stage</div>
+        <div class="meta">${esc(STAGE_LABEL[p.stage])} • ${p.estimatedAssets ? esc(money(p.estimatedAssets)) : esc(t('Assets unknown'))} • ${esc(t('{n} days at this stage', { n: daysBetween(p.stageChangedAt) }))}</div>
         <div class="source">${esc(sourceLine('crm', p.lastContactAt || p.createdAt))}</div></div>
-        <button class="btn" data-pros="${esc(p.id)}">Open</button></li>`).join('')}</ul>`
-        : '<p class="empty">Nobody has been referred to you yet.</p>');
+        <button class="btn" data-pros="${esc(p.id)}">${esc(t('Open'))}</button></li>`).join('')}</ul>`
+        : `<p class="empty">${esc(t('Nobody has been referred to you yet.'))}</p>`);
   }, (el2) => el2.querySelectorAll('[data-pros]').forEach(b => b.onclick = () => openProspect(b.dataset.pros, () => referralsPanel(el))));
 }
 
@@ -832,10 +854,10 @@ function clientMeetingsPanel(el) {
   const to = new Date(); to.setDate(to.getDate() + 14);
   load($('w-cm'), 'Meetings', () => api('GET', '/meetings', { query: { from: localDate(new Date()), to: localDate(to) } }), (r) =>
     head('Meetings', 'Next 14 days') + (r.items.length ? `<ul class="rows">${r.items.map(m => `
-      <li><div class="grow"><div class="title">${esc(m.householdName || m.prospectName || 'No client attached')}</div>
-      <div class="meta">${esc(fmtDate(m.startsAt.slice(0, 10)))} at ${esc(fmtTime(m.startsAt))} • ${esc(m.type)}</div></div>
-      <span class="badge ${m.prepStatus === 'ready' ? 'ready' : 'prep'}">${m.prepStatus === 'ready' ? 'Prep ready' : 'Needs prep'}</span>
-      <button class="btn" data-mt="${esc(m.id)}">Open</button></li>`).join('')}</ul>` : '<p class="empty">Nothing is booked in the next two weeks.</p>'),
+      <li><div class="grow"><div class="title">${esc(m.householdName || m.prospectName || t('No client attached'))}</div>
+      <div class="meta">${esc(t('{date} at {time}', { date: fmtDate(m.startsAt.slice(0, 10)), time: fmtTime(m.startsAt) }))} • ${esc(m.type)}</div></div>
+      <span class="badge ${m.prepStatus === 'ready' ? 'ready' : 'prep'}">${esc(t(m.prepStatus === 'ready' ? 'Prep ready' : 'Needs prep'))}</span>
+      <button class="btn" data-mt="${esc(m.id)}">${esc(t('Open'))}</button></li>`).join('')}</ul>` : `<p class="empty">${esc(t('Nothing is booked in the next two weeks.'))}</p>`),
   (el2) => el2.querySelectorAll('[data-mt]').forEach(b => b.onclick = () => openMeeting(b.dataset.mt, () => clientMeetingsPanel(el))));
 }
 
@@ -843,27 +865,27 @@ function clientMeetingsPanel(el) {
 function billingPanel(el) {
   el.innerHTML = `<div class="grid">${panel('w-fees', 'wide')}</div>`;
   load($('w-fees'), 'Billing and fees', () => api('GET', '/billing/fees', { query: { size: 100 } }), (r) =>
-    head('Billing and fees', money(r.items.reduce((a, f) => a + f.annualFee, 0)) + ' a year across ' + r.items.length + ' households')
-    + `<div class="tablewrap"><table><thead><tr><th>Household</th><th class="num">Assets</th><th class="num">Rate</th><th class="num">Annual fee</th><th>Basis</th></tr></thead><tbody>
-      ${r.items.map(f => `<tr><td>${esc(f.householdName)}</td><td class="num">${money(f.aum)}</td><td class="num">${f.annualRatePct}%</td><td class="num">${money(f.annualFee)}</td><td>${f.override ? '<span class="badge warn">Override</span>' : 'Schedule'}</td></tr>`).join('')}</tbody></table></div>`
-    + `<p class="hint">Changing what a household is charged is done on the household itself, where the reason is recorded with it.</p>`);
+    head('Billing and fees', raw(t('{value} a year across {n} households', { value: money(r.items.reduce((a, f) => a + f.annualFee, 0)), n: r.items.length })))
+    + `<div class="tablewrap"><table><thead><tr><th>${esc(t('Household'))}</th><th class="num">${esc(t('Assets'))}</th><th class="num">${esc(t('Rate'))}</th><th class="num">${esc(t('Annual fee'))}</th><th>${esc(t('Basis'))}</th></tr></thead><tbody>
+      ${r.items.map(f => `<tr><td>${esc(f.householdName)}</td><td class="num">${money(f.aum)}</td><td class="num">${f.annualRatePct}%</td><td class="num">${money(f.annualFee)}</td><td>${f.override ? `<span class="badge warn">${esc(t('Override'))}</span>` : esc(t('Schedule'))}</td></tr>`).join('')}</tbody></table></div>`
+    + `<p class="hint">${esc(t('Changing what a household is charged is done on the household itself, where the reason is recorded with it.'))}</p>`);
 }
 
 function compliancePanel(el) {
   el.innerHTML = `<div class="grid">${panel('w-comp', 'wide')}</div>`;
   load($('w-comp'), 'Compliance', () => api('GET', '/firm/compliance', { query: { size: 20 } }), (r) =>
-    head('Compliance', r.totalItems + ' items') + (r.items.length ? `<ul class="rows">${r.items.map(c => `
+    head('Compliance', raw(t('{n} items', { n: r.totalItems }))) + (r.items.length ? `<ul class="rows">${r.items.map(c => `
       <li><div class="grow"><div class="title">${esc(c.title)}</div>
-      <div class="meta">${esc(CATEGORY[c.category] || c.category)} • ${esc(c.advisorName || 'The firm')} • due ${esc(fmtDate(c.dueDate))}</div></div>
-      <span class="badge ${c.status === 'overdue' ? 'crit' : c.status === 'done' ? 'ok' : 'plain'}">${esc(c.status)}</span></li>`).join('')}</ul>`
-      : '<p class="empty">Nothing is outstanding.</p>'));
+      <div class="meta">${esc(CATEGORY[c.category] || c.category)} • ${esc(c.advisorName || t('The firm'))} • ${esc(t('due {date}', { date: fmtDate(c.dueDate) }))}</div></div>
+      <span class="badge ${c.status === 'overdue' ? 'crit' : c.status === 'done' ? 'ok' : 'plain'}">${esc(COMPLIANCE_STATUS[c.status] || c.status)}</span></li>`).join('')}</ul>`
+      : `<p class="empty">${esc(t('Nothing is outstanding.'))}</p>`));
 }
 
 function scorecardPanel(el) {
   el.innerHTML = `<div class="grid">${panel('w-score', 'wide')}</div>`;
   load($('w-score'), 'Your scorecard', () => api('GET', '/firm/advisors/' + encodeURIComponent(SCORE_ID()) + '/scorecard'), (s) =>
-    head('Your scorecard', esc(s.advisorName)) + metricRows(s.metrics)
-    + '<p class="hint">Compared with the firm median. Where you sit against named colleagues is shown to a principal only. Nothing here is shared with the firm.</p>');
+    head('Your scorecard', raw(s.advisorName)) + metricRows(s.metrics)
+    + `<p class="hint">${esc(t('Compared with the firm median. Where you sit against named colleagues is shown to a principal only. Nothing here is shared with the firm.'))}</p>`);
 }
 
 const ROLE_PANEL = {
@@ -880,18 +902,18 @@ const ROLE_PANEL = {
  * administrator's privilege.
  */
 export function advSystems() {
-  $('section').innerHTML = `<h2 class="pagehead">Systems</h2><div class="grid">${panel('w-sys', 'wide')}</div>`;
+  $('section').innerHTML = `<h2 class="pagehead">${esc(t('Systems'))}</h2><div class="grid">${panel('w-sys', 'wide')}</div>`;
   const run = () => load($('w-sys'), 'Systems', () => api('GET', '/systems'), (r) =>
-    head('Systems', r.items.filter(x => x.status === 'connected').length + ' of ' + r.items.length + ' connected')
+    head('Systems', raw(t('{n} of {total} connected', { n: r.items.filter(x => x.status === 'connected').length, total: r.items.length })))
     + (r.note ? `<p class="hint gap">${esc(r.note)}</p>` : '')
     + `<ul class="rows">${r.items.map(x => `<li><div class="grow">
         <div class="title">${esc(x.name)}</div>
-        <div class="meta">${esc(SYSTEM_KIND[x.kind] || x.kind)}${x.connectedBy ? ' • set up by ' + esc(x.connectedBy) : ''}</div>
+        <div class="meta">${esc(SYSTEM_KIND[x.kind] || x.kind)}${x.connectedBy ? ' • ' + esc(t('set up by {who}', { who: x.connectedBy })) : ''}</div>
         ${x.cannotSee ? `<div class="meta gap">${esc(x.cannotSee)}</div>` : ''}
-        ${x.lastSyncAt ? `<div class="source">Last synced ${esc(fmtTime(x.lastSyncAt))}</div>` : ''}</div>
-      <span class="badge ${x.status === 'connected' ? 'ok' : x.status === 'error' ? 'crit' : 'plain'}">${x.status === 'connected' ? 'Connected' : x.status === 'error' ? 'Not working' : 'Not connected'}</span>
-      ${r.canEdit ? `<button class="btn" data-sys="${esc(x.id)}" data-to="${x.status === 'connected' ? 'not_connected' : 'connected'}">${x.status === 'connected' ? 'Disconnect' : 'Connect'}</button>` : ''}</li>`).join('')}</ul>`
-    + (r.canEdit ? '' : '<p class="hint">Connections are set up by whoever administers the firm. You can see what they are, and what the platform cannot see because of them.</p>'),
+        ${x.lastSyncAt ? `<div class="source">${esc(t('Last synced {time}', { time: fmtTime(x.lastSyncAt) }))}</div>` : ''}</div>
+      <span class="badge ${x.status === 'connected' ? 'ok' : x.status === 'error' ? 'crit' : 'plain'}">${esc(t(x.status === 'connected' ? 'Connected' : x.status === 'error' ? 'Not working' : 'Not connected'))}</span>
+      ${r.canEdit ? `<button class="btn" data-sys="${esc(x.id)}" data-to="${x.status === 'connected' ? 'not_connected' : 'connected'}">${esc(t(x.status === 'connected' ? 'Disconnect' : 'Connect'))}</button>` : ''}</li>`).join('')}</ul>`
+    + (r.canEdit ? '' : `<p class="hint">${esc(t('Connections are set up by whoever administers the firm. You can see what they are, and what the platform cannot see because of them.'))}</p>`),
   (el) => el.querySelectorAll('[data-sys]').forEach(b => b.onclick = async () => {
     b.disabled = true;
     try { await api('PATCH', '/systems/' + encodeURIComponent(b.dataset.sys), { body: { status: b.dataset.to } });
@@ -900,7 +922,7 @@ export function advSystems() {
   }));
   run();
 }
-const SYSTEM_KIND = { custodian: 'Custodian', crm: 'CRM', email: 'Email', calendar: 'Calendar', documents: 'Documents' };
+const SYSTEM_KIND = lookup({ custodian: 'Custodian', crm: 'CRM', email: 'Email', calendar: 'Calendar', documents: 'Documents' });
 
 export const ADV_RENDER = {
   today: advToday, inbox: advInbox, calendar: advCalendar, glance: advGlance, systems: advSystems,
@@ -916,17 +938,17 @@ export const ADV_RENDER = {
  */
 
 /* ---- Reporting and the advisor's own scorecard (PO-07, AX-08) ---- */
-const fmtMetric = (m) => m.unit === 'usd' ? money(m.value) : m.value.toLocaleString('en-US');
+const fmtMetric = (m) => m.unit === 'usd' ? money(m.value) : m.value.toLocaleString(locale());
 
 export function metricRows(metrics) {
   return `<ul class="rows">${metrics.map(m => {
     const better = m.change === 0 ? '' : (m.lowerIsBetter ? (m.change < 0 ? 'up' : 'neg') : (m.change > 0 ? 'up' : 'neg'));
     return `<li><div class="grow"><div class="title">${esc(m.label)}</div>
-      ${m.previousValue !== undefined ? `<div class="meta">was ${m.unit === 'usd' ? money(m.previousValue) : m.previousValue}</div>` : ''}</div>
+      ${m.previousValue !== undefined ? `<div class="meta">${esc(t('was {value}', { value: m.unit === 'usd' ? money(m.previousValue) : m.previousValue }))}</div>` : ''}</div>
       <span class="figure-sm">${esc(fmtMetric(m))}</span>
       ${m.change !== undefined ? `<span class="${better}" style="min-width:52px;text-align:right">${m.change > 0 ? '+' : ''}${m.unit === 'usd' ? money(m.change) : m.change}</span>` : ''}
-      ${m.firmMedian !== undefined ? `<span class="meta" style="min-width:110px;text-align:right">firm median ${m.unit === 'usd' ? money(m.firmMedian) : m.firmMedian}</span>` : ''}
-      ${m.rank ? `<span class="badge plain">#${m.rank} of ${m.outOf}</span>` : ''}</li>`;
+      ${m.firmMedian !== undefined ? `<span class="meta" style="min-width:110px;text-align:right">${esc(t('firm median {value}', { value: m.unit === 'usd' ? money(m.firmMedian) : m.firmMedian }))}</span>` : ''}
+      ${m.rank ? `<span class="badge plain">${esc(t('#{rank} of {total}', { rank: m.rank, total: m.outOf }))}</span>` : ''}</li>`;
   }).join('')}</ul>`;
 }
 
@@ -934,11 +956,11 @@ export function advReports(host) {
   (host || $('section')).innerHTML = `<div class="grid">${panel('w-report', 'wide')}</div>`;
   let days = 30;
   const runReport = () => load($('w-report'), 'Practice report', () => api('GET', '/reports/practice', { query: { from: backDate(days) } }), (r) =>
-    `<div class="panel-head"><h2>Practice report</h2><label class="hint">Last <select id="repDays" aria-label="Reporting period">
+    `<div class="panel-head"><h2>${esc(t('Practice report'))}</h2><label class="hint">Last <select id="repDays" aria-label="${esc(t('Reporting period'))}">
       <option value="30">30 days</option><option value="90">90 days</option></select></label></div>`
-    + `<p class="hint">${esc(fmtDate(r.from))} to ${esc(fmtDate(r.to))}, against ${esc(fmtDate(r.previousFrom))} to ${esc(fmtDate(r.previousTo))}.</p>`
+    + `<p class="hint">${esc(t('{from} to {to}, against {pfrom} to {pto}', { from: fmtDate(r.from), to: fmtDate(r.to), pfrom: fmtDate(r.previousFrom), pto: fmtDate(r.previousTo) }))}</p>`
     + metricRows(r.metrics)
-    + Object.entries(r.breakdowns).map(([k, rows]) => rows.length ? `<h3>${esc(BREAKDOWN[k] || k)}</h3><ul class="rows">${rows.map(x => `
+    + Object.entries(r.breakdowns).map(([k, rows]) => rows.length ? `<h3>${esc(t(BREAKDOWN[k] || k))}</h3><ul class="rows">${rows.map(x => `
         <li><div class="grow"><div class="title">${esc(x.label)}</div></div><span>${x.count}</span></li>`).join('')}</ul>` : '').join(''),
   (el) => { const f = el.querySelector('#repDays'); f.value = String(days); f.onchange = () => { days = +f.value; runReport(); }; });
   runReport();
@@ -955,21 +977,21 @@ const SCORE_ID = () => (state.session && state.session.advisorId) || 'adv1';
 export function advPlaybooks(host) {
   (host || $('section')).innerHTML = `<div class="grid">${panel('w-pb', 'wide')}</div>`;
   load($('w-pb'), 'Playbooks', () => Promise.all([api('GET', '/playbooks'), api('GET', '/households', { query: { size: 100, sort: 'name,asc' } })]),
-    ([pbs, hh]) => head('Playbooks', pbs.items.length + ' available') + pbs.items.map(pb => `
+    ([pbs, hh]) => head('Playbooks', raw(t('{n} available', { n: pbs.items.length }))) + pbs.items.map(pb => `
       <article class="onb" data-pb="${esc(pb.id)}"><div class="onb-head"><div>
         <div class="title">${esc(pb.name)}</div><div class="meta">${esc(pb.description)}</div></div>
-        <button class="btn primary" data-run="${esc(pb.id)}">Run</button></div>
+        <button class="btn primary" data-run="${esc(pb.id)}">${esc(t('Run'))}</button></div>
       <ul class="steps">${pb.steps.map(st => `<li class="step"><span class="grow">${esc(st.title)}</span>
-        <span class="meta">${st.dayOffset === 0 ? 'on the day' : st.dayOffset < 0 ? Math.abs(st.dayOffset) + ' days before' : st.dayOffset + ' days after'}</span></li>`).join('')}</ul>
-      <div class="field" style="margin-top:8px"><label for="pbHh-${esc(pb.id)}">For</label>
-        <select id="pbHh-${esc(pb.id)}"><option value="">No household</option>${hh.items.map(h => `<option value="${esc(h.id)}">${esc(h.name)}</option>`).join('')}</select></div>
+        <span class="meta">${esc(st.dayOffset === 0 ? t('on the day') : st.dayOffset < 0 ? t('{n} days before', { n: Math.abs(st.dayOffset) }) : t('{n} days after', { n: st.dayOffset }))}</span></li>`).join('')}</ul>
+      <div class="field" style="margin-top:8px"><label for="pbHh-${esc(pb.id)}">${esc(t('For'))}</label>
+        <select id="pbHh-${esc(pb.id)}"><option value="">${esc(t('No household'))}</option>${hh.items.map(h => `<option value="${esc(h.id)}">${esc(h.name)}</option>`).join('')}</select></div>
       </article>`).join(''),
   (el) => el.querySelectorAll('[data-run]').forEach(b => b.onclick = async () => {
     const id = b.dataset.run, hhId = el.querySelector('#pbHh-' + CSS.escape(id)).value;
     b.disabled = true;
     try {
       const r = await api('POST', '/playbooks/' + encodeURIComponent(id) + '/runs', { body: { householdId: hhId || undefined } });
-      toast(r.tasks.length + ' follow-ups added.'); advLoadStrip();
+      toast(t('{n} follow-ups added.', { n: r.tasks.length })); advLoadStrip();
     } catch (e) { toast(e.message); } finally { b.disabled = false; }
   }));
 }
@@ -977,12 +999,12 @@ export function advPlaybooks(host) {
 /* Households a colleague has shared with you, and ones you have shared out (PO-04). */
 export function teamSharePanelFor(elId) {
   load($(elId), 'Shared with the team', () => api('GET', '/team-shares'), (r) => {
-    const live = r.items.filter(t => !t.revokedAt);
-    return head('Shared with the team', live.length + ' active') + (live.length ? `<ul class="rows">${live.map(t => `
-      <li><div class="grow"><div class="title">${esc(t.householdName)}</div>
-      <div class="meta">${t.direction === 'in' ? 'Shared with you by ' + esc(t.sharedByName) : 'You shared this with ' + esc(t.sharedWithName)}${t.reason ? ' • ' + esc(t.reason) : ''}</div></div>
-      <span class="badge plain">${t.direction === 'in' ? 'read access' : 'shared out'}</span></li>`).join('')}</ul>`
-      : '<p class="empty">Nothing is shared with or by you.</p>');
+    const live = r.items.filter(x => !x.revokedAt);
+    return head('Shared with the team', raw(t('{n} active', { n: live.length }))) + (live.length ? `<ul class="rows">${live.map(x => `
+      <li><div class="grow"><div class="title">${esc(x.householdName)}</div>
+      <div class="meta">${esc(x.direction === 'in' ? t('Shared with you by {who}', { who: x.sharedByName }) : t('You shared this with {who}', { who: x.sharedWithName }))}${x.reason ? ' • ' + esc(x.reason) : ''}</div></div>
+      <span class="badge plain">${esc(t(x.direction === 'in' ? 'read access' : 'shared out'))}</span></li>`).join('')}</ul>`
+      : `<p class="empty">${esc(t('Nothing is shared with or by you.'))}</p>`);
   });
 }
 
@@ -998,17 +1020,17 @@ export async function runDraft(btn, out, method, path, body, use) {
   try {
     const r = await api(method, path, body ? { body } : undefined);
     if (r.refused) {
-      out.innerHTML = `<p class="err">The model declined this request${r.refusalCategory ? ' (' + esc(r.refusalCategory) + ')' : ''}.</p>`;
+      out.innerHTML = `<p class="err">${esc(r.refusalCategory ? t('The model declined this request ({why}).', { why: r.refusalCategory }) : t('The model declined this request.'))}</p>`;
       return;
     }
     out.innerHTML = `<div class="answer suggestion">
-      <p class="demo-lbl">${use ? 'Suggested rewrite' : 'Draft'}</p>
+      <p class="demo-lbl">${esc(t(use ? 'Suggested rewrite' : 'Draft'))}</p>
       <p class="draft">${esc(r.draft)}</p>
-      ${r.provenance.readFrom && r.provenance.readFrom.length ? `<div class="answer-cites"><strong>Read from</strong>
+      ${r.provenance.readFrom && r.provenance.readFrom.length ? `<div class="answer-cites"><strong>${esc(t('Read from'))}</strong>
         <ul>${r.provenance.readFrom.map(c => `<li><span class="tag">${esc(sourceKind(c.source))}</span> ${esc(c.label)}</li>`).join('')}</ul></div>` : ''}
-      <p class="hint">${r.provenance.live ? 'Drafted by ' + esc(r.provenance.model) : 'Written offline: no model is connected'}
-        \u2022 prompt ${esc(r.provenance.promptVersion)}. ${use ? 'Nothing has changed until you use it.' : 'A draft \u2014 nothing has been saved or sent.'}</p>
-      <div class="actions">${use ? '<button class="btn primary" data-use>Use this wording</button><button class="btn" data-discard>Keep what I have</button>' : '<button class="btn" data-copy>Copy</button>'}</div></div>`;
+      <p class="hint">${esc(r.provenance.live ? t('Drafted by {model}', { model: r.provenance.model }) : t('Written offline: no model is connected'))}
+        \u2022 ${esc(t('prompt {version}.', { version: r.provenance.promptVersion }))} ${esc(t(use ? 'Nothing has changed until you use it.' : 'A draft \u2014 nothing has been saved or sent.'))}</p>
+      <div class="actions">${use ? `<button class="btn primary" data-use>${esc(t('Use this wording'))}</button><button class="btn" data-discard>${esc(t('Keep what I have'))}</button>` : `<button class="btn" data-copy>${esc(t('Copy'))}</button>`}</div></div>`;
     const copy = out.querySelector('[data-copy]');
     if (copy) copy.onclick = async () => {
       try { await navigator.clipboard.writeText(r.draft); toast('Copied.'); }

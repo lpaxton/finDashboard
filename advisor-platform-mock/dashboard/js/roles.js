@@ -14,13 +14,22 @@
    quiet 60+ days · life events · stalled onboarding. The thresholds below are that list. */
 import { api } from './api.js';
 import { daysBetween } from './format.js';
+/* The role names and every meaning sentence below are what the advisor reads, so they are
+   built through t() rather than concatenated — a sentence assembled from fragments can only be
+   translated into the language it was assembled for. */
+import { t } from './i18n.js';
 
-export const ROLES = [
+const ROLES_EN = [
   { key: 'bd', mark: 'BD', name: 'Prospecting', full: 'Prospecting and business development' },
   { key: 'ca', mark: 'CA', name: 'Clients', full: 'Client advisor' },
   { key: 'op', mark: 'OP', name: 'Operations', full: 'Business operations' },
   { key: 'pd', mark: 'PD', name: 'Development', full: 'Professional development' }
 ];
+/* The mark (BD, CA, OP, PD) is not translated: it is the role's identity in the design system,
+   used as a two-letter badge and a colour, and it stays the same in every language so the four
+   roles remain recognisable on a screen shared between an English and a French reader (ST-02). */
+const roleView = (r) => ({ ...r, get name() { return t(r.name); }, get full() { return t(r.full); } });
+export const ROLES = ROLES_EN.map(roleView);
 export const ROLE = Object.fromEntries(ROLES.map(r => [r.key, r]));
 
 /* CS-09's thresholds, in one place so the rule can be read rather than hunted for. */
@@ -60,15 +69,15 @@ export async function collectRoleWork(advisorId) {
     const inStage = daysBetween(p.stageChangedAt);
     const sinceContact = p.lastContactAt ? daysBetween(p.lastContactAt) : null;
     if (p.stage === 'proposal' && inStage >= SLIPPING.proposalWaitingDays) {
-      out.push(item('bd', 40 + inStage, `The ${p.name} proposal has been out for ${inStage} days.`,
+      out.push(item('bd', 40 + inStage, t('The {name} proposal has been out for {n} days.', { name: p.name, n: inStage }),
         { label: 'Open the proposal', kind: 'prospect', id: p.id },
         { kinds: ['crm'], at: p.stageChangedAt }, { subject: p.name }));
     } else if (p.stage === 'lead' && sinceContact === null && inStage >= SLIPPING.leadNoReplyDays) {
-      out.push(item('bd', 35 + inStage, `${p.name} came in ${inStage} days ago and has had no reply.`,
+      out.push(item('bd', 35 + inStage, t('{name} came in {n} days ago and has had no reply.', { name: p.name, n: inStage }),
         { label: 'Open the lead', kind: 'prospect', id: p.id },
         { kinds: ['crm'], at: p.createdAt }, { subject: p.name }));
     } else if (sinceContact !== null && sinceContact >= SLIPPING.prospectQuietDays && p.stage !== 'converted') {
-      out.push(item('bd', 30 + sinceContact / 2, `${p.name} has been quiet for ${sinceContact} days.`,
+      out.push(item('bd', 30 + sinceContact / 2, t('{name} has been quiet for {n} days.', { name: p.name, n: sinceContact }),
         { label: 'Open the prospect', kind: 'prospect', id: p.id },
         { kinds: ['crm'], at: p.lastContactAt }, { subject: p.name }));
     }
@@ -85,14 +94,14 @@ export async function collectRoleWork(advisorId) {
   }
   for (const a of (alerts && alerts.items) || []) {
     if (!a.householdId) continue;
-    out.push(item('ca', PRIORITY_WEIGHT[a.severity], a.title + (a.householdName ? ' — ' + a.householdName + '.' : '.'),
+    out.push(item('ca', PRIORITY_WEIGHT[a.severity], a.householdName ? t('{what} — {who}.', { what: a.title, who: a.householdName }) : a.title + '.',
       { label: 'Open the household', kind: 'household', id: a.householdId },
       { kinds: [a.source], at: a.createdAt }, { subject: a.householdName, alertId: a.id }));
   }
   for (const h of (households && households.items) || []) {
     const quiet = h.lastContactAt ? daysBetween(h.lastContactAt) : null;
     if (quiet !== null && quiet >= SLIPPING.clientQuietDays) {
-      out.push(item('ca', 25 + quiet / 4, `${h.name} has not been contacted in ${quiet} days.`,
+      out.push(item('ca', 25 + quiet / 4, t('{name} has not been contacted in {n} days.', { name: h.name, n: quiet }),
         { label: 'Open the household', kind: 'household', id: h.id },
         { kinds: ['crm'], at: h.lastContactAt }, { subject: h.name }));
     }
@@ -109,8 +118,8 @@ export async function collectRoleWork(advisorId) {
   const waiting = ((comms && comms.items) || []).filter(c => !c.complianceReview);
   if (waiting.length) {
     out.push(item('op', 20 + waiting.length, waiting.length === 1
-      ? `One message is drafted and waiting for your yes.`
-      : `${waiting.length} messages are drafted and waiting for your yes.`,
+      ? t('One message is drafted and waiting for your yes.')
+      : t('{n} messages are drafted and waiting for your yes.', { n: waiting.length }),
       { label: 'Open the inbox', kind: 'inbox' },
       { kinds: ['platform'], at: waiting.map(c => c.createdAt).sort().pop() }, { drafted: true }));
   }
@@ -127,7 +136,7 @@ export async function collectRoleWork(advisorId) {
       .sort((a, b) => Math.abs(b.change) - Math.abs(a.change))[0];
     if (moved) {
       const better = moved.lowerIsBetter ? moved.change < 0 : moved.change > 0;
-      out.push(item('pd', 12, `${moved.label} ${better ? 'moved in your favour' : 'moved against you'} this period.`,
+      out.push(item('pd', 12, t(better ? '{metric} moved in your favour this period.' : '{metric} moved against you this period.', { metric: moved.label }),
         { label: 'Open your scorecard', kind: 'role', id: 'pd' },
         { kinds: ['platform'], at: scorecard.dataAsOf }, { optional: true }));
     }
@@ -152,9 +161,12 @@ function reasonFor(lead, items) {
   if (!items.length) return null;
   const name = ROLE[lead].name;
   const n = items.length;
-  const what = lead === 'bd' ? 'growth work has gone quiet'
+  const what = t(lead === 'bd' ? 'growth work has gone quiet'
     : lead === 'ca' ? 'the day is client work'
     : lead === 'op' ? 'work is waiting on your yes'
-    : 'nothing else is pressing';
-  return `${name} first today: ${what}, and ${n === 1 ? 'one thing needs' : n + ' things need'} an answer.`;
+    : 'nothing else is pressing');
+  /* Whole sentence, both numbers written out: the singular and the plural differ by more than
+     an "s" in most languages, and this one is read every morning. */
+  return t(n === 1 ? '{role} first today: {why}, and one thing needs an answer.'
+    : '{role} first today: {why}, and {n} things need an answer.', { role: name, why: what, n });
 }

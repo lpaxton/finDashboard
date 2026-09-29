@@ -17,7 +17,7 @@ Shareable version: https://claude.ai/code/artifact/d179b0d4-48da-44e7-bc51-58805
 | --- | --- |
 | Features with at least one API operation | **44** of 75 |
 | Features with no operation yet | **31** |
-| Operations carrying a requirement ID | **51** of 75 |
+| Operations carrying a requirement ID | **53** of 77 |
 
 ### Intelligence Platform
 
@@ -137,7 +137,7 @@ Shareable version: https://claude.ai/code/artifact/d179b0d4-48da-44e7-bc51-58805
 | **AX-09** Playbooks | `POST /playbooks/{playbookId}/runs` | Platform |
 | **AX-10** Client billing | `GET /billing/fees`<br>`GET /me/fees` | Green Meadows |
 | **AX-11** Fee plan customisation | `GET /billing/fees`<br>`PATCH /billing/fee-plan`<br>`PATCH /billing/fees/{householdId}` | Green Meadows, Platform |
-| **AX-12** Client-side experience | `GET /me/documents`<br>`GET /me/household`<br>`GET /me/preferences`<br>`POST /households/{householdId}/shares` | Green Meadows, Platform |
+| **AX-12** Client-side experience | `GET /me/documents`<br>`GET /me/household`<br>`GET /me/preferences`<br>`GET /settings`<br>`PATCH /settings`<br>`POST /households/{householdId}/shares` | Green Meadows, Platform |
 
 <!-- /generated:tables -->
 

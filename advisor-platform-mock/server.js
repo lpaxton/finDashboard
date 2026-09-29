@@ -50,7 +50,12 @@ function createServer(options = {}) {
      Only these exact paths are reachable; nothing is resolved from the request. */
   const STATIC = {
     '/styles.css': ['dashboard/styles.css', 'text/css; charset=utf-8'],
-    '/src/mock-core.js': ['src/mock-core.js', 'text/javascript; charset=utf-8']
+    '/src/mock-core.js': ['src/mock-core.js', 'text/javascript; charset=utf-8'],
+    /* mock-core imports this, and the dashboard imports mock-core when it runs the mock in the
+       browser — so the import has to resolve over HTTP as well as on disk. It is listed here
+       rather than reached by a glob because the rule above is that nothing is resolved from the
+       request path. */
+    '/src/i18n.js': ['src/i18n.js', 'text/javascript; charset=utf-8']
   };
   const JS_DIR = 'dashboard/js';
   const jsFile = (p) => {
