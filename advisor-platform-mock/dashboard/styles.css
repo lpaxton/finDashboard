@@ -537,6 +537,14 @@ dialog.sheet { max-width: 460px; border: 1px solid var(--line); border-radius: v
 .card-meaning { margin: 0 0 12px; font-size: 15px; line-height: 1.45; }
 .cardlink { margin: 0 16px 14px; align-self: flex-start; }
 
+/* The foot of the navigation: Settings, set apart from the sections above it by a rule,
+   because it is a door out of the view rather than another place inside it. */
+.spine-foot { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--line); }
+.spine-settings { display: block; width: 100%; text-align: left; background: none; border: 0;
+  padding: 8px 12px; border-radius: var(--radius-1); color: var(--muted);
+  font: 400 14px/1.3 var(--sans); }
+.spine-settings:hover { background: var(--bg); color: var(--ink); }
+
 /* ---- The suggestion well: the platform's own voice, in violet (CS-03, CS-05) ---- */
 .well { background: var(--ai-soft); border-left: 3px solid var(--ai-deep-edge); border-radius: 0 var(--radius-1) var(--radius-1) 0;
   padding: 10px 12px; margin: 0 0 10px; }

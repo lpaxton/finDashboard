@@ -3,6 +3,7 @@
 import { api } from './api.js';
 import { $, esc, money, moneyFull, pct, pctClass, daysAgo, fmtTime, statusBadge, SHARE_TYPES, sourceLine, sourceKind } from './format.js';
 import { isSnoozed, snoozedUntil } from './viewstate.js';
+import { THEMES, getTheme, applyTheme } from './state.js';
 /* head(), load() and toast() translate what they are given, which is how every panel heading,
    hint and confirmation in the dashboard is localised without touching each call site. A title
    that is really data — a person's name, a household's — is passed through raw(). */
@@ -213,6 +214,19 @@ export function bookPanel({ scope, canShare, id, title, size = 8, advisorId = nu
 }
 
 
+/* Settings sits at the foot of the navigation, under everything a view can show.
+
+   It is a door, not a destination: it opens the side panel rather than replacing the section,
+   so it carries no data-sec, is never aria-selected, and leaves the advisor exactly where they
+   were when they close it. A nav item that changed the page would lose their place to change a
+   language, which is the one thing they are least likely to want.
+
+   Rendered by the nav rather than by each view, so both the spine and the firm's section list
+   get it from one place and the client portal — which has no nav — reaches the same panel from
+   its Preferences panel instead. */
+const settingsItem = () => `<div class="spine-foot"><button class="spine-settings" data-settings
+  aria-expanded="false" aria-controls="setPanel">${esc(t('Settings'))}</button></div>`;
+
 /* A section switcher inside a view. The role switcher above it stays the top level.
    A rail on the left at full width; below 860px it collapses to a toggle that names the
    section you are in, so the current position is still readable with the list closed. */
@@ -258,6 +272,7 @@ export function spine(el, groups, active, go) {
         ${g.items.map(([k, text, mark]) => `<button role="tab" data-sec="${esc(k)}" aria-selected="${k === active}">
           ${mark ? roleMark(mark, k.replace(/^role:/, '')) : ''}<span>${esc(t(text))}</span></button>`).join('')}
         </div>`).join('')}
+      ${settingsItem()}
     </div>`;
   placeNav(el);
   const toggle = el.querySelector('.subnav-toggle');
@@ -291,6 +306,7 @@ export function subnav(el, items, active, go) {
     </button>
     <div class="subnav-list" id="${esc(listId)}" role="tablist" aria-orientation="vertical">
       ${items.map(([k, label]) => `<button role="tab" data-sec="${esc(k)}" aria-selected="${k === active}">${esc(t(label))}</button>`).join('')}
+      ${settingsItem()}
     </div>`;
 
   placeNav(el);
@@ -500,7 +516,7 @@ export { loadActivity };
    Changing it re-renders rather than reloads: the advisor keeps their place, and a reload would
    also lose an unsent draft. The server is asked first and the interface follows, so a failed
    write leaves the two agreeing rather than a French screen and an English preference. */
-export async function openSettings(onChanged) {
+export async function openSettings() {
   const p = $('setPanel');
   if (p.classList.contains('open')) { closeSettings(); return; }
   p.innerHTML = `<div class="side-head"><h2 id="setTitle">${esc(t('Settings'))}</h2>
@@ -509,7 +525,7 @@ export async function openSettings(onChanged) {
   p.hidden = false;
   requestAnimationFrame(() => p.classList.add('open'));
   document.body.classList.add('side-open');
-  $('setBtn').setAttribute('aria-expanded', 'true');
+  document.querySelectorAll('[data-settings]').forEach(b => b.setAttribute('aria-expanded', 'true'));
   $('setClose').onclick = closeSettings;
 
   const body = $('setBody');
@@ -521,19 +537,29 @@ export async function openSettings(onChanged) {
         <select id="setLang">${cfg.availableLanguages.map(l =>
           `<option value="${esc(l.code)}" ${l.code === cfg.language ? 'selected' : ''}>${esc(l.label)}</option>`).join('')}</select></div>
       <p class="hint">${esc(t('Changes the interface, and the dates, numbers and amounts with it. Drafts the platform writes for you are written in the same language.'))}</p>
-      <p class="hint">${esc(t('Client and household names stay as they are recorded. They are data, not wording.'))}</p>`;
+      <p class="hint">${esc(t('Client and household names stay as they are recorded. They are data, not wording.'))}</p>
+      <div class="field" style="margin-top:22px"><label for="setTheme">${esc(t('Appearance'))}</label>
+        <select id="setTheme">${THEMES.map(([k, label]) =>
+          `<option value="${esc(k)}" ${k === getTheme() ? 'selected' : ''}>${esc(t(label))}</option>`).join('')}</select></div>
+      <p class="hint">${esc(t('Kept on this browser rather than on your account, because light or dark belongs to the screen you are at rather than to you.'))}</p>`;
     $('setLang').onchange = async (e) => {
       const code = e.target.value, was = cfg.language;
       e.target.disabled = true;
       try {
         await api('PATCH', '/settings', { body: { language: code } });
         cfg.language = code;
+        /* setLang notifies whoever registered with onLangChange — the shell, which re-renders
+           the view. Going through the listener rather than a callback means every door into
+           this panel behaves the same, and a new door cannot forget to pass one. */
         setLang(code);
-        if (onChanged) onChanged(code);
         toast('Language changed.');
       } catch (err) { e.target.value = was; toast(err.message); }
       finally { e.target.disabled = false; }
     };
+    /* No server round trip: the theme is this browser's, so it takes effect on the keystroke.
+       Nothing re-renders — the whole point of driving it from CSS custom properties is that the
+       page repaints itself. */
+    $('setTheme').onchange = (e) => { applyTheme(e.target.value); toast('Appearance changed.'); };
   } catch (e) { body.innerHTML = `<p class="err">${esc(e.message)}</p>`; }
 }
 export function closeSettings() {
@@ -541,7 +567,7 @@ export function closeSettings() {
   if (!p || !p.classList.contains('open')) { if (p) p.hidden = true; return; }
   p.classList.remove('open');
   document.body.classList.remove('side-open');
-  $('setBtn').setAttribute('aria-expanded', 'false');
+  document.querySelectorAll('[data-settings]').forEach(b => b.setAttribute('aria-expanded', 'false'));
   setTimeout(() => { if (!p.classList.contains('open')) p.hidden = true; }, 240);
 }
 

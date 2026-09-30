@@ -171,3 +171,44 @@ test('a client reads the portal in their own language too', () => {
     'the setting is not an advisor privilege');
   assert.equal(call('grace', 'GET', '/settings').data.language, 'fr');
 });
+
+/* ---- Settings: where it is reached from, and what belongs in it ------------------------- *
+ * Two decisions worth holding still. Settings has to be reachable from every view, including
+ * the one with no navigation at all; and the theme is a browser preference while the language
+ * is an account one, which is the sort of distinction that quietly collapses later.
+ */
+test('settings is reachable from every view, including the one with no nav', () => {
+  const ui = fs.readFileSync(path.join(jsDir, 'ui.js'), 'utf8');
+  const client = fs.readFileSync(path.join(jsDir, 'client.js'), 'utf8');
+  const html = fs.readFileSync(path.join(__dirname, '..', 'dashboard', 'index.html'), 'utf8');
+
+  // The spine (advisor) and the section list (firm) both render the same foot item.
+  assert.equal((ui.match(/\$\{settingsItem\(\)\}/g) || []).length, 2,
+    'both spine() and subnav() must render the settings item');
+  // The client portal has no nav, so it carries its own door to the same panel.
+  assert.match(client, /data-settings/, 'the client portal must be able to reach settings');
+  // And it is not left in the header as well, or there are two doors to one room.
+  assert.doesNotMatch(html, /id="setBtn"/, 'the header button was replaced by the nav item');
+  // The label is built per call, not frozen at module load, or it stays English after a switch.
+  assert.match(ui, /const settingsItem = \(\) =>/, 'the item must be a function so t() runs each render');
+});
+
+test('the theme is a property of the browser, the language a property of the account', () => {
+  const st = fs.readFileSync(path.join(jsDir, 'state.js'), 'utf8');
+  const ui = fs.readFileSync(path.join(jsDir, 'ui.js'), 'utf8');
+
+  // Three options, and "system" is a real one rather than a label for light.
+  assert.match(st, /THEMES = \[\['system'/, 'system must be offered, and first');
+  for (const k of ['light', 'dark']) assert.ok(st.includes(`'${k}'`), k + ' must be offered');
+  assert.match(st, /else delete el\.dataset\.theme/, 'system must clear the attribute, not set one');
+
+  // Stored locally. If this ever goes to the server, the same person gets one theme across a
+  // desktop and a phone, which is the wrong answer for light and dark.
+  assert.match(st, /vsSet\('theme', pref\)/, 'the theme belongs in view state');
+  const patch = ui.slice(ui.indexOf("api('PATCH', '/settings'"), ui.indexOf("api('PATCH', '/settings'") + 120);
+  assert.doesNotMatch(patch, /theme/, 'the theme must not be sent to /settings');
+
+  // The accent is a light-mode colour lifted for dark ground, so it has to be recomputed.
+  assert.match(st, /if \(state\.branding\) applyBranding\(state\.branding\)/,
+    'changing theme must re-apply branding, or the firm mark keeps the old contrast');
+});

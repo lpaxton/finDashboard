@@ -2,9 +2,9 @@
 import { api } from './api.js';
 import { CONFIG, setPersona } from './config.js';
 import { $, esc } from './format.js';
-import { state, applyBranding } from './state.js';
+import { state, applyBranding, applyTheme, getTheme } from './state.js';
 import { openAsk, closeAsk, openActivity, closeActivity, setAskContext, openSettings, closeSettings } from './ui.js';
-import { t, setLang, getLang, locale } from './i18n.js';
+import { t, setLang, getLang, locale, onLangChange } from './i18n.js';
 import { advisorView } from './advisor.js';
 import { firmView } from './firm.js';
 import { clientView } from './client.js';
@@ -28,7 +28,6 @@ function showView(v) {
   tabs.hidden = s.views.length < 2;
   tabs.innerHTML = s.views.map(x => `<button role="tab" data-view="${x}" aria-selected="${x === v}">${esc(t(VIEW_LABEL[x]))}</button>`).join('');
   $('actBtn').textContent = t('Activity');
-  $('setBtn').textContent = t('Settings');
   $('askBtn').textContent = t('Ask');
   document.title = t('Advisor platform');
   const signIn = $('demoSignIn'); if (signIn) signIn.textContent = t('Sign in as');
@@ -55,6 +54,12 @@ function showView(v) {
 
 async function boot() {
   $('demo').hidden = !(CONFIG.mode === 'mock' || CONFIG.personaPicker);
+  /* Theme before anything is drawn. It is read from this browser rather than from the server,
+     so there is nothing to wait for — but the module itself is deferred, so a person who has
+     chosen light on a dark machine still sees one dark frame first. Removing that last flash
+     needs an inline script in the head, which would have to duplicate the storage key and the
+     persona scoping; not worth it for a POC, and logged rather than hidden. */
+  applyTheme(getTheme());
   $('view').innerHTML = '<div class="skel"></div><div class="skel m"></div>';
   try { state.session = await api('GET', '/session'); }
   catch (e) { $('view').innerHTML = `<p class="err">${esc(e.message || t("Couldn't sign you in."))}</p>`; return; }
@@ -66,15 +71,19 @@ async function boot() {
   showView(state.session.views[0]);
 }
 
-/* Changing the language re-renders the view in place. The three side panels are closed first:
-   they were rendered in the old language and are not worth re-rendering, and an advisor who
-   just changed a setting is looking at the page, not at the panel. */
-const relabel = () => { closeAsk(); closeActivity(); if (state.view) showView(state.view); };
+/* Changing the language re-renders the view in place. Ask and Activity are closed first: they
+   were rendered in the old language and are not worth re-rendering, and someone who just
+   changed a setting is looking at the page, not at those panels. Settings itself stays open —
+   they may want to change something else while they are in there.
+
+   Registered as a listener rather than passed to openSettings as a callback, so every door into
+   Settings behaves the same and a new one cannot forget to wire it. */
+onLangChange(() => { closeAsk(); closeActivity(); if (state.view) showView(state.view); });
 
 document.addEventListener('click', (e) => {
   if (e.target.closest('#askBtn')) { closeActivity(); closeSettings(); openAsk(state.session.roles.includes('principal')); return; }
   if (e.target.closest('#actBtn')) { closeAsk(); closeSettings(); openActivity(); return; }
-  if (e.target.closest('#setBtn')) { closeAsk(); closeActivity(); openSettings(relabel); return; }
+  if (e.target.closest('[data-settings]')) { closeAsk(); closeActivity(); openSettings(); return; }
   const t = e.target.closest('[data-view]'); if (t) showView(t.dataset.view);
   const p = e.target.closest('[data-persona]');
   if (p) { setPersona(p.dataset.persona); document.querySelectorAll('[data-persona]').forEach(b => b.setAttribute('aria-pressed', String(b === p))); boot(); }

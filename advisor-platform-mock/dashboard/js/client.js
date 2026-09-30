@@ -47,6 +47,11 @@ export function clientView() {
   load($('c-prefs'), 'Preferences', () => api('GET', '/me/preferences'), (p) => head('Preferences') + `
     <div class="field"><div class="checks"><label><input type="checkbox" id="pfPaper" ${p.paperless ? 'checked' : ''}> ${esc(t('Send documents electronically only'))}</label></div></div>
     <fieldset class="field"><legend>${esc(t('Tell me about updates by'))}</legend><div class="checks">${[['email', 'Email'], ['sms', 'Text message'], ['portal', 'This portal']].map(([k, l]) => `<label><input type="checkbox" data-ch="${k}" ${p.notificationChannels.includes(k) ? 'checked' : ''}> ${esc(t(l))}</label>`).join('')}</div></fieldset>
-    <button class="btn primary" id="pfSave">${esc(t('Save preferences'))}</button>`,
+    <button class="btn primary" id="pfSave">${esc(t('Save preferences'))}</button>
+    <!-- The portal has no navigation, so this is the client's door to the same Settings panel
+         an advisor reaches from the foot of theirs. Language and appearance belong to the
+         person reading, and a client reads this portal. -->
+    <p class="hint" style="margin-top:14px"><button class="link" data-settings
+      aria-expanded="false" aria-controls="setPanel">${esc(t('Language and appearance'))}</button></p>`,
   () => { $('pfSave').onclick = async () => { try { await api('PATCH', '/me/preferences', { body: { paperless: $('pfPaper').checked, notificationChannels: [...document.querySelectorAll('[data-ch]:checked')].map(x => x.dataset.ch) } }); toast('Preferences saved.'); } catch (e) { toast(e.message); } }; });
 }

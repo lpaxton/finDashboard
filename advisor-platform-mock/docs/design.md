@@ -27,6 +27,58 @@ Entries are newest first.
 
 ## Log
 
+### 30 September 2026 · Settings moves into the navigation, and gains light/dark
+
+**Asked for.** Luke: *"let's move 'Settings' that has the language selector to the bottom of the
+left side navigation"* and *"inside of settings, let's add the ability to switch from light and
+dark CSS."*
+
+**Built.** Settings is now the foot of the navigation, under a rule, below everything a view can
+show. It is a **door, not a destination**: it opens the same side panel as before rather than
+replacing the section, so it carries no `data-sec`, is never `aria-selected`, and leaves the
+adviser exactly where they were. A nav item that changed the page would cost them their place to
+change a language, which is the one thing they are least likely to want.
+
+**The client portal has no navigation at all,** which the move nearly broke. Language and
+appearance belong to the person reading, and a client reads the portal — so the portal's door is
+a line in the Preferences panel it already has, *"Language and appearance"*, opening the same
+panel. One panel, three doors: the adviser's spine, the firm's section list, and the client's
+Preferences. A test asserts all three, and that the header button did not quietly survive
+alongside them.
+
+**Light and dark, and where the preference lives.** Three options, and *Match my system* is the
+default and a real third option rather than a label for one of the other two — it removes the
+attribute and lets the machine keep deciding.
+
+It is stored in **view state, not in the contract**, and that is the decision rather than the
+shortcut. The language a person reads is a property of *them* and should follow them to a new
+machine. Light or dark is a property of the *screen they are at*: dark on a phone at night,
+light at a desk in the morning, the same person both times. Sending it to `/settings` would give
+one answer to both. A test holds that line, because it is exactly the sort of distinction that
+collapses the next time someone tidies two similar-looking settings into one.
+
+**Two things that fell out of it.**
+
+*The firm's accent has to be recomputed on a theme change.* It is stored as a light-mode colour
+and lifted toward the page ink for dark ground, so switching theme without re-applying it leaves
+the firm mark at the old contrast. `applyBranding` now keeps what it was last given so
+`applyTheme` can re-run it — a display change, so re-applied rather than re-fetched.
+
+*The language re-render moved from a callback to a listener.* `openSettings` used to take an
+`onChanged` function, which meant every new door had to remember to pass one. The shell now
+registers with `onLangChange` at boot, and `setLang` notifies it. Three doors, no callbacks.
+
+**Not built, and logged rather than hidden.** The theme is applied in `boot()`, and the module is
+deferred — so someone who has chosen light on a dark machine still sees **one dark frame** before
+it applies. Removing that needs an inline script in the document head, which would have to
+duplicate the storage key and its persona scoping. Not worth it for a POC; worth knowing before
+it ships.
+
+**Implications.** No contract change: the theme never reaches the server, and `/settings` is
+unchanged. `styles.css`, `state.js`, `ui.js`, `app.js`, `client.js`, `index.html`.
+
+---
+
 ### 29 September 2026 · The role cards become role sections
 
 **Asked for,** over four messages while looking at the screen: *"i hate the boards. let's remove
