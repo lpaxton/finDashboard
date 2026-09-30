@@ -27,6 +27,75 @@ Entries are newest first.
 
 ## Log
 
+### 30 September 2026 · SimGPT — rehearsing a conversation (AX-05, AX-06, AX-07)
+
+**Asked for.** Luke, after the touchpoint map: build the two products, aRCHi's regulatory review is
+already done, there are no endpoints so mock the interactions — **start with SimGPT**.
+
+**Built.** `POST /meetings/{meetingId}/rehearsal`, the model capability behind it, and a rehearsal
+panel beside the page. The platform plays the client for one turn and says one thing about how the
+adviser's turn landed. Three requirements that had no endpoint at all now have one.
+
+**Where it is reached from.** Two doors, both from the touchpoint map's primary placements:
+
+- **An upcoming meeting** — beside *Draft agenda*, which is the right neighbour because the two
+  share their whole context. Opening it closes the dialog: an adviser practising a meeting wants
+  the meeting on screen, not a modal over it.
+- **"Prepare for {household}" on Today** — and this one replaced an action rather than adding one.
+  That card used to offer *Add as a follow-up*, which would have created a follow-up saying
+  "prepare for it" — a note restating the card. Preparing **is** the action, so the button now
+  rehearses. AX-07 asks for coaching in the workflow rather than somewhere the adviser has to go
+  and find it; this is what that means in practice.
+
+**The one design decision everything else follows from: a rehearsal is not a record.**
+
+Nothing is stored. The exchange travels with each request and the server keeps none of it — the
+route is asserted to contain no `push`. It does not appear in the activity log either, which was
+a deliberate call against the grain of X-05: the log is a record of what happened, and "Dana
+rehearsed talking to the Lindqvists" is not something that happened *to the Lindqvists*. Filing
+it would make a conversation the client never had into a fact about them.
+
+The worry underneath all of it is not regulatory, it is epistemic, and I raised it in the
+touchpoint map before building: **an adviser remembers what a rehearsal client told them.** So:
+
+- The prompt's strongest instruction is the invention ban — the context block is everything known,
+  and a question it cannot answer gets *"I'd have to check"* rather than a plausible figure. A
+  test asserts that line survives in both languages, because it is the line a future edit would
+  most easily soften.
+- **The scene is composed by the platform, not the model.** It states the meeting, the household,
+  the contact gap and what the record says is open. A model writing that could invent the
+  household's circumstances before the adviser has said a word — the worst possible place for an
+  invention, because it reads as briefing. A test stubs a model that tries and checks the scene
+  is unmoved.
+- Every client turn is labelled **Simulated client**, every time, not once at the top where it
+  scrolls away. The framing note is dashed, which in this design system has always meant *not the
+  real thing*.
+
+**The coaching note is the product.** A simulated client on its own is a novelty; a simulated
+client plus *"you led with a number and left the worry unanswered"* is coaching. Both come back in
+one completion and are split here rather than asked for twice — a second round trip would double
+the wait and let the note drift from the turn it is about. A reply in the wrong shape degrades to
+a client turn with no note rather than showing a parsing failure.
+
+**Offline it still works, and deliberately reads as offline.** No model connected means the client
+works through the household's own open signals, one per turn, and the note counts what the adviser
+did rather than judging it. It is flat on purpose: an offline rehearsal that read as fluent would
+be doing the one thing this feature must never do.
+
+**Two bugs found by looking rather than by testing.** The transcript collapsed to 14px — `.sim-body`
+lost the cascade to `.side-body`, which is declared later in the file and sets `overflow-y: auto`;
+fixed with a compound selector and `min-height: 0`. And the offline client repeated its first line
+every turn until it was given the turn count.
+
+**Implications.** Contract **0.5.0-draft**; one operation, two schemas, no change to anything that
+existed. New `dashboard/js/sim.js` and a fourth side panel. Eight tests, five verified by injecting
+the matching fault.
+
+**Still to build:** aRCHi. Its socket is one enum value on `POST /households/{id}/shares` — see the
+touchpoint map.
+
+---
+
 ### 30 September 2026 · The whole item goes in the violet box
 
 **Asked for.** Luke: *"i like the display of content when a user clicks the 'Show the Next 2'

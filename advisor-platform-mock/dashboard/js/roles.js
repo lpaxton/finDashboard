@@ -87,8 +87,16 @@ export async function collectRoleWork(advisorId) {
   const CA_KINDS = { contact: 1, prep: 1, tax: 1, onboarding: 1 };
   for (const a of (next && next.items) || []) {
     if (!CA_KINDS[a.kind]) continue;
+    /* "Prepare for the Castellano household" is the one next action where adding a follow-up
+       achieves nothing: the follow-up would say "prepare for it", which the card already says.
+       Preparing is the action, so the button rehearses the meeting instead (AX-07 — coaching
+       where the work is, rather than somewhere the adviser has to go and find it). The meeting
+       is the calendar citation the platform already attached when it raised the item. */
+    const prep = a.kind === 'prep' && (a.citations || []).find(c => c.source === 'calendar');
     out.push(item('ca', PRIORITY_WEIGHT[a.priority] + 20, a.title + '. ' + a.reason,
-      { label: 'Add as a follow-up', kind: 'next-action', id: a.id, nextAction: a },
+      prep
+        ? { label: 'Rehearse this', kind: 'rehearsal', id: prep.id, subject: a.householdName }
+        : { label: 'Add as a follow-up', kind: 'next-action', id: a.id, nextAction: a },
       { kinds: a.citations.map(c => c.source), at: a.citations.map(c => c.dataAsOf).sort().pop() },
       { subject: a.householdName, drafted: true }));
   }

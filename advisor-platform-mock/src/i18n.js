@@ -103,7 +103,18 @@ const FR = {
   'Documents processed': 'Documents traités',
   'drafts': 'brouillons',
   'hours': 'heures',
-  'documents': 'documents'
+  'documents': 'documents',
+
+  // SimGPT — the scene, which is a statement of the record and never an invention
+  '{type} with {who}. Last contact {when}. {open}': '{type} avec {who}. Dernier contact {when}. {open}',
+  'Likely to come up: {list}.': 'Sujets probables : {list}.',
+  'Nothing is open on the record.': 'Rien n’est ouvert au dossier.',
+  'not recorded': 'non renseigné',
+  'a prospect': 'un prospect',
+  'losses worth harvesting': 'des moins-values à concrétiser',
+  'a holding over the concentration limit': 'une position au-delà de la limite de concentration',
+  'drift from the target allocation': 'un écart par rapport à l’allocation cible',
+  'more cash than the target': 'plus de liquidités que la cible'
 };
 
 const DICT = { fr: FR };

@@ -120,7 +120,9 @@ function createServer(options = {}) {
       // src/mock-core.js stays synchronous and has no idea a model exists.
       if (r.async) {
         const out = await ai[r.async](r.context);
-        const status = r.async === 'modelStatus' ? 200 : 201;
+        /* 201 says "a draft was created". A rehearsal creates nothing at all — it is an
+           exchange, not a resource — so it answers 200 like a read does. */
+        const status = ['modelStatus', 'rehearseMeeting'].includes(r.async) ? 200 : 201;
         send(res, status, out);
         return done(status);
       }

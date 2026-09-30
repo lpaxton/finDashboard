@@ -4,7 +4,7 @@
  * GENERATED FROM openapi.yaml. Do not edit by hand: run `npm run types`.
  * `npm test` fails if this file and the contract disagree.
  *
- * Contract version 0.4.0-draft.
+ * Contract version 0.5.0-draft.
  */
 
 export interface Error {
@@ -1198,6 +1198,45 @@ export interface AiDraft {
   provenance: DraftProvenance;
 }
 
+export interface RehearsalTurn {
+  /**
+   * What the adviser just said. Empty opens the rehearsal and returns the scene without a client
+   * turn.
+   */
+  said: string;
+  /**
+   * Everything said so far, oldest first, sent back with each turn. The server keeps no
+   * rehearsal state: an adviser's practice is theirs, and a transcript the platform held would
+   * be a record of the client that the client never made.
+   */
+  exchange?: Array<{
+    who: 'adviser' | 'client';
+    text: string;
+  }>;
+}
+
+export interface Rehearsal {
+  capability: 'meeting_rehearsal';
+  /**
+   * Who the adviser is about to talk to and what the record says they are likely to raise.
+   * Returned on the opening turn only.
+   */
+  scene?: string | null;
+  /** What the simulated client says back. */
+  client?: string | null;
+  /**
+   * One observation about the adviser's last turn — what landed, what was left hanging. This is
+   * the part that is worth having (AX-07); a simulated client on its own is a novelty. Null on
+   * the opening turn, when there is nothing yet to observe.
+   */
+  coaching?: string | null;
+  /** Always false. A rehearsal creates nothing and is filed nowhere (X-03). */
+  accepted: boolean;
+  refused?: boolean;
+  refusalCategory?: string | null;
+  provenance: DraftProvenance;
+}
+
 export interface Activity {
   id: string;
   /** Format: date-time. */
@@ -1733,6 +1772,12 @@ export interface Operations {
     path: '/meetings/{meetingId}/agenda';
     request: never;
     response: AiDraft;
+  };
+  rehearseMeeting: {
+    method: 'POST';
+    path: '/meetings/{meetingId}/rehearsal';
+    request: RehearsalTurn;
+    response: Rehearsal;
   };
   redraftCommunication: {
     method: 'POST';

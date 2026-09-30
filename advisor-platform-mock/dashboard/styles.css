@@ -611,6 +611,56 @@ dialog.sheet { max-width: 460px; border: 1px solid var(--line); border-radius: v
   font: 500 10px/1 var(--mono); text-transform: uppercase; letter-spacing: 0.08em; padding: 4px 8px; margin-bottom: 8px; }
 .well-actions { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
 
+/* ---- SimGPT: rehearsing a conversation (AX-05, AX-06, AX-07) ------------------------------ *
+   A wider panel than Ask, because this is a conversation with turns rather than a question with
+   an answer, and a 420px column turns every reply into a narrow stack. */
+.side.wide { width: min(560px, 100vw); }
+/* The panel body normally scrolls as one column. A rehearsal needs the compose box pinned to
+   the bottom and only the transcript scrolling, so this one body is a flex column that does not
+   scroll itself — min-height: 0 because a flex child will not shrink below its content without
+   it, which is what collapsed the transcript to nothing the first time. */
+/* Compound selector on purpose: .side-body is declared further down this file and sets
+   `overflow-y: auto`, so a single .sim-body class loses the cascade to it and the transcript
+   collapses to nothing. */
+.side-body.sim-body { display: flex; flex-direction: column; gap: 0; overflow: hidden; min-height: 0; }
+
+/* The frame, stated once at the top and again on every client turn. Dashed, because in this
+   design system dashed has always meant "not the real thing" — and a simulated client is
+   exactly that (TR-02). */
+.sim-frame { margin: 0 0 14px; padding: 11px 13px; font-size: 13.5px; line-height: 1.55;
+  color: var(--muted); border: 1px dashed var(--ai); border-radius: var(--radius-1); }
+
+.sim-scene { margin: 0 0 16px; font-size: 14px; line-height: 1.55; color: var(--ink); }
+.sim-scene-label { font: 500 10px/1 var(--mono); text-transform: uppercase; letter-spacing: 0.08em;
+  color: var(--muted); border: 1px solid var(--line); border-radius: var(--radius-pill);
+  padding: 3px 7px; margin-right: 7px; white-space: nowrap; }
+
+.sim-turns { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column;
+  gap: 14px; padding-bottom: 14px; }
+.sim-turn p { margin: 0; font-size: 15px; line-height: 1.55; }
+/* The adviser's own words sit right and quiet; the simulated client sits left, in the violet
+   that means the platform is speaking. Nothing about the client turn should read as a record. */
+.sim-turn.me { align-self: flex-end; max-width: 82%; background: var(--bg);
+  border: 1px solid var(--line); border-radius: var(--radius-2) var(--radius-2) 2px var(--radius-2);
+  padding: 10px 13px; }
+.sim-turn.them { align-self: flex-start; max-width: 92%; background: var(--ai-soft);
+  border-left: 3px solid var(--ai-deep-edge);
+  border-radius: 0 var(--radius-2) var(--radius-2) 0; padding: 11px 13px; }
+.sim-who { display: block; font: 500 10px/1 var(--mono); text-transform: uppercase;
+  letter-spacing: 0.08em; color: var(--ai); margin-bottom: 7px; }
+
+/* The coaching note is the product. It is set apart from the client turn it is about, because
+   one is the client speaking and the other is the platform speaking about the adviser. */
+.sim-coach { margin-top: 11px; padding-top: 10px; border-top: 1px solid var(--line); }
+.sim-coach-label { display: block; font: 500 10px/1 var(--mono); text-transform: uppercase;
+  letter-spacing: 0.08em; color: var(--muted); margin-bottom: 5px; }
+.sim-coach p { font-size: 14px; color: var(--muted); }
+.sim-turn .source { margin-top: 9px; }
+
+.sim-compose { border-top: 1px solid var(--line); padding-top: 14px; display: flex;
+  flex-direction: column; gap: 10px; }
+.sim-compose textarea { width: 100%; resize: vertical; font: inherit; }
+
 /* ---- The receipt: what the platform did, from what, and when (TR-04) ---- */
 .receipt { display: flex; gap: 7px; align-items: baseline; margin: 6px 0 0;
   font: 400 12px/1.5 var(--mono); color: var(--muted); }

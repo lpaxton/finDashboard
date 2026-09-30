@@ -43,6 +43,7 @@ export function fakeGenerate(capability, ctx = {}) {
   switch (capability) {
     case 'meeting_summary': return meetingSummary(ctx);
     case 'meeting_agenda': return meetingAgenda(ctx);
+    case 'meeting_rehearsal': return rehearsal(ctx);
     case 'email_draft': return emailDraft(ctx);
     default: return words(ctx).none + capability + '.';
   }
@@ -81,6 +82,36 @@ function meetingAgenda(ctx = {}) {
     '',
     w.offlineAgenda
   ].join('\n');
+}
+
+/* SimGPT with no model connected. It cannot improvise a client, so it does not pretend to: it
+   turns the household's own open signals back into the questions a client would ask about them,
+   and its coaching note counts what the adviser did rather than judging it. Deliberately flat —
+   an offline rehearsal that read as fluent would be the one thing this whole feature must not
+   do, which is put words in a real client's mouth. */
+function rehearsal(ctx = {}) {
+  const { signals = [], tasks = [], exchange = [], said = '', language } = ctx;
+  const fr = language === 'fr';
+  /* It works through the topics actually on file, one per turn, rather than repeating the first
+     one — an offline client that says the same sentence three times is not a rehearsal, it is a
+     broken button. The turn count drives it, so it stays deterministic. */
+  const topics = [...signals.map(x => x.topic || x.label), ...tasks].filter(Boolean);
+  const turn = exchange.filter(x => x.who === 'client').length;
+  const topic = topics.length ? topics[turn % topics.length] : null;
+  const first = turn === 0;
+  const client = topic
+    ? (fr
+        ? (first ? `Avant tout : ${String(topic).toLowerCase()}. Qu’est-ce que cela signifie pour nous concrètement ?`
+                 : `D’accord. Et ${String(topic).toLowerCase()} — où en sommes-nous là-dessus ?`)
+        : (first ? `Before anything else — ${String(topic).toLowerCase()}. What does that actually mean for us?`
+                 : `All right. And ${String(topic).toLowerCase()} — where are we on that?`))
+    : (fr ? 'D’accord. De quoi devrions-nous parler en premier ?' : 'All right. What should we take first?');
+  const words = String(said).trim().split(/\s+/).filter(Boolean).length;
+  const asked = /\?/.test(said);
+  const coach = fr
+    ? `Rédigé hors ligne, sans modèle. Votre tour : ${words} mots, ${asked ? 'et vous avez posé une question' : 'et aucune question posée'}.`
+    : `Written offline, with no model reading it. Your turn ran to ${words} words and ${asked ? 'ended on a question' : 'asked nothing back'}.`;
+  return `CLIENT: ${client}\nCOACH: ${coach}`;
 }
 
 /* No "Subject:" line: the subject is its own field in the draft frame, and repeating it inside

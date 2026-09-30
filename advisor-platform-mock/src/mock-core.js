@@ -159,10 +159,10 @@ function createMock() {
     ['adv2', 'tax_loss_harvesting', 'h11', 8200], ['adv2', 'tax_loss_harvesting', 'h14', 6300], ['adv2', 'allocation_drift', 'h12', 5.9]
   ].map(([advisorId, kind, householdId, value], i) => ({ id: 'si' + i, advisorId, kind, householdId, value }));
   const SIGNAL_META = {
-    tax_loss_harvesting: { label: 'Tax-loss harvesting opportunities', detail: (v) => T('About {amount} in unrealized losses', { amount: usd(Math.round(v.reduce((a, b) => a + b, 0))) }) },
-    concentration:       { label: 'Households over concentration limit', detail: (v) => T('Largest: {n}% in one holding', { n: Math.max(...v) }) },
-    allocation_drift:    { label: 'Households outside target allocation', detail: () => T('Drift beyond 5 points') },
-    idle_cash:           { label: 'Households with idle cash above 10%', detail: (v) => T('About {amount} total', { amount: usd(v.reduce((a, b) => a + b, 0)) }) }
+    tax_loss_harvesting: { label: 'Tax-loss harvesting opportunities', topic: 'losses worth harvesting', detail: (v) => T('About {amount} in unrealized losses', { amount: usd(Math.round(v.reduce((a, b) => a + b, 0))) }) },
+    concentration:       { label: 'Households over concentration limit', topic: 'a holding over the concentration limit', detail: (v) => T('Largest: {n}% in one holding', { n: Math.max(...v) }) },
+    allocation_drift:    { label: 'Households outside target allocation', topic: 'drift from the target allocation', detail: () => T('Drift beyond 5 points') },
+    idle_cash:           { label: 'Households with idle cash above 10%', topic: 'more cash than the target', detail: (v) => T('About {amount} total', { amount: usd(v.reduce((a, b) => a + b, 0)) }) }
   };
   const itemDetail = (s) => s.kind === 'tax_loss_harvesting' ? 'Unrealized loss of $' + s.value.toLocaleString('en-US')
     : s.kind === 'concentration' ? s.value + '% of equities in one holding'
@@ -1446,6 +1446,42 @@ function createMock() {
         readFrom: [{ source: 'calendar', id: x.id, label: x.type },
           ...(h ? [{ source: 'greenmeadows', id: h.id, label: h.name + ' positions and balances' }] : [])] } };
     }],
+    /* SimGPT (AX-05, AX-06, AX-07). The context is the agenda drafter's, because a rehearsal
+       needs exactly what an agenda needs: what is on file, what is open, and what has been left
+       too long. Nothing is stored — the exchange arrives with the request and leaves with the
+       response, which is what keeps a rehearsal from becoming a record of the client. */
+    ['POST', /^\/meetings\/([^/]+)\/rehearsal$/, (m, q, b) => {
+      if (!isRole('advisor')) return forbid();
+      const x = MEETINGS.find(y => y.id === m[1] && y.advisorId === user().advisorId); if (!x) return notFound('Meeting');
+      if (!b || typeof b.said !== 'string') return fail(400, 'bad_request', 'Send what you said, even if it is empty to open.');
+      const exchange = Array.isArray(b.exchange) ? b.exchange.slice(-12) : [];
+      const h = x.householdId ? hhById(x.householdId) : null;
+      const sigs = h ? Object.keys(SIGNAL_META)
+        .filter(k => SIGNAL_ROWS.some(sr => sr.kind === k && sr.householdId === h.id))
+        .map(k => ({ label: T(SIGNAL_META[k].label), topic: T(SIGNAL_META[k].topic),
+          detail: itemDetail(SIGNAL_ROWS.find(sr => sr.kind === k && sr.householdId === h.id)) })) : [];
+      const tasks = TASKS.filter(t => t.householdId === (h && h.id) && t.status === 'open').map(t => t.title);
+      const who = h ? h.name : (prospectName(x.id) || T('a prospect'));
+      /* The scene is composed here rather than by the model: it is a statement of what is on
+         file, and the one part of this screen that must not be able to invent anything. */
+      const scene = !b.said
+        ? T('{type} with {who}. Last contact {when}. {open}', {
+            type: x.type, who,
+            when: h && h.lastContactAt ? sinceWords(h.lastContactAt) : T('not recorded'),
+            open: sigs.length || tasks.length
+              ? T('Likely to come up: {list}.', { list: [...sigs.map(sg => sg.topic), ...tasks].slice(0, 3).join(', ') })
+              : T('Nothing is open on the record.')
+          })
+        : null;
+      return { status: 200, async: 'rehearseMeeting', context: {
+        householdName: who, type: x.type, startsAt: x.startsAt, aum: h ? h.aum : null,
+        brief: x.brief, signals: sigs, tasks, scene,
+        lastContact: h && h.lastContactAt ? daysSince(h.lastContactAt) + ' days ago' : null,
+        said: b.said, exchange,
+        readFrom: [{ source: 'calendar', id: x.id, label: x.type },
+          ...(h ? [{ source: 'crm', id: h.id, label: h.name + ' contact history' }] : [])] } };
+    }],
+
     ['POST', /^\/communications\/([^/]+)\/redraft$/, (m, q, b) => {
       if (!isRole('advisor')) return forbid();
       const c = COMMS.find(x => x.id === m[1] && x.advisorId === user().advisorId); if (!c) return notFound('Message');

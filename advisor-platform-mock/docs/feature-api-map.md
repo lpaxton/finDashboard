@@ -15,9 +15,9 @@ Shareable version: https://claude.ai/code/artifact/d179b0d4-48da-44e7-bc51-58805
 
 | | Count |
 | --- | --- |
-| Features with at least one API operation | **44** of 75 |
-| Features with no operation yet | **31** |
-| Operations carrying a requirement ID | **53** of 77 |
+| Features with at least one API operation | **47** of 75 |
+| Features with no operation yet | **28** |
+| Operations carrying a requirement ID | **54** of 78 |
 
 ### Intelligence Platform
 
@@ -130,9 +130,9 @@ Shareable version: https://claude.ai/code/artifact/d179b0d4-48da-44e7-bc51-58805
 | **AX-02** Onboarding tracker | `GET /onboarding`<br>`POST /onboarding/{onboardingId}/convert` | Platform |
 | **AX-03** Document intelligence | — *Nothing reads a document* | — |
 | **AX-04** Other onboarding assistance | `GET /onboarding`<br>`GET /onboarding/{onboardingId}`<br>`POST /onboarding/{onboardingId}/convert` | Platform |
-| **AX-05** Practice client conversations | — *Not started* | — |
-| **AX-06** Simulated client conversation | — *Not started* | — |
-| **AX-07** Coaching in workflow | — *Not started* | — |
+| **AX-05** Practice client conversations | `POST /meetings/{meetingId}/rehearsal` | Calendar |
+| **AX-06** Simulated client conversation | `POST /meetings/{meetingId}/rehearsal` | Calendar |
+| **AX-07** Coaching in workflow | `POST /meetings/{meetingId}/rehearsal` | Calendar |
 | **AX-08** Scorecards | `GET /firm/advisors/{advisorId}/scorecard` | Platform |
 | **AX-09** Playbooks | `POST /playbooks/{playbookId}/runs` | Platform |
 | **AX-10** Client billing | `GET /billing/fees`<br>`GET /me/fees` | Green Meadows |

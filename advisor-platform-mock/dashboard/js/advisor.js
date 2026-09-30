@@ -5,6 +5,7 @@ import { toast, spark, head, panel, load, alertsList, openHousehold, bookPanel, 
 import { snooze, unsnooze, unsnoozeAll, dropExpiredSnoozes, get as vsGet, set as vsSet, isSnoozed } from './viewstate.js';
 import { ROLES, ROLE, collectRoleWork, rankRoles } from './roles.js';
 import { PANELS, cardId, arrange, leadWith, move, nudge, pinsFor } from './cards.js';
+import { openSim } from './sim.js';
 import { state } from './state.js';
 /* head(), load(), toast(), sortTable() and the nav helpers translate what they are given, so
    panel titles, column headings and confirmations here need no wrapping. What is wrapped below
@@ -387,6 +388,7 @@ async function runItemAction(w, btn) {
   if (a.kind === 'prospect') return openProspect(a.id, drawToday);
   if (a.kind === 'communication') { vsSet('openComm', a.id); vsSet('inboxTab', 'approve'); return goSection('inbox'); }
   if (a.kind === 'inbox') return goSection('inbox');
+  if (a.kind === 'rehearsal') return openSim(a.id, a.subject);
   if (a.kind === 'role') return goSection('role:' + a.id);
   if (a.kind === 'next-action') {
     const t = a.nextAction.suggestedTask;
@@ -880,7 +882,8 @@ export async function openMeeting(id, done) {
         : `<p class="hint">${esc(t('No notes or transcript for this meeting.'))}</p>`}
       <div class="actions" style="margin:4px 0 10px">
         ${record && !record.withheld ? `<button class="btn" id="mtSum">${esc(t('Summarise'))}</button>` : ''}
-        ${new Date(m.startsAt) > new Date() ? `<button class="btn" id="mtAgenda">${esc(t('Draft agenda'))}</button>` : ''}</div>
+        ${new Date(m.startsAt) > new Date() ? `<button class="btn" id="mtAgenda">${esc(t('Draft agenda'))}</button>
+          <button class="btn" id="mtSim">${esc(t('Rehearse this'))}</button>` : ''}</div>
       <div id="mtDraft"></div>
       ${new Date(m.startsAt) > new Date() ? `<h3>${esc(t('Move'))}</h3>
         <div class="field"><label for="mtWhen">${esc(t('New date and time'))}</label><input type="datetime-local" id="mtWhen" value="${esc(localDate(new Date(m.startsAt)))}T${esc(new Date(m.startsAt).toTimeString().slice(0, 5))}"></div>
@@ -905,6 +908,10 @@ export async function openMeeting(id, done) {
     if (sum) sum.onclick = () => runDraft(sum, $('mtDraft'), 'POST', '/meetings/' + encodeURIComponent(id) + '/record/summary');
     const ag = $('mtAgenda');
     if (ag) ag.onclick = () => runDraft(ag, $('mtDraft'), 'POST', '/meetings/' + encodeURIComponent(id) + '/agenda');
+    /* The rehearsal opens beside the page, so the dialog closes: an adviser practising a meeting
+       wants the meeting on screen, not a modal over it. */
+    const sim = $('mtSim');
+    if (sim) sim.onclick = () => { dlg.close(); openSim(id, m.householdName || m.prospectName || m.type); };
     const mv = $('mtMove');
     if (mv) mv.onclick = async () => {
       const when = $('mtWhen').value;

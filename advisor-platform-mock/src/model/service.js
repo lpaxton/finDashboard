@@ -37,6 +37,26 @@ async function run(capability, context) {
   };
 }
 
+/* SimGPT returns two blocks in one completion, so it is split here rather than asked for twice:
+   a second round trip to get the coaching note would double the cost and the wait, and let the
+   note drift from the turn it is about. A reply that does not come back in the expected shape
+   degrades to a client turn with no note rather than showing the adviser a parsing failure. */
+export async function rehearseMeeting(ctx) {
+  const out = await run('meeting_rehearsal', ctx);
+  const text = out.draft || '';
+  const m = /CLIENT:\s*([\s\S]*?)(?:\n\s*COACH:\s*([\s\S]*))?$/i.exec(text.trim());
+  const { draft, capability, ...rest } = out;
+  return {
+    capability: 'meeting_rehearsal',
+    scene: ctx.scene || null,
+    client: out.refused ? null : ((m && m[1] ? m[1] : text).trim() || null),
+    /* No note on the opening turn. There is nothing yet to observe, and a coach that comments on
+       a turn the adviser has not taken is the tell that nothing is really being read. */
+    coaching: out.refused || !ctx.said ? null : ((m && m[2] ? m[2].trim() : null) || null),
+    ...rest
+  };
+}
+
 export const summariseMeeting = (ctx) => run('meeting_summary', ctx);
 export const draftAgenda = (ctx) => run('meeting_agenda', ctx);
 export const draftEmail = (ctx) => run('email_draft', ctx);
