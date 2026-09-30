@@ -740,6 +740,7 @@ const FR = {
   'Today’s top priority': 'Priorité du jour',
   'Rehearsal': 'Répétition',
   'Rehearse this': 'Répéter cet entretien',
+  'Rehearse': 'Répéter',
   'Close the rehearsal': 'Fermer la répétition',
   'Practice. The client here is simulated from what is on file — nothing they say is something your client said, and nothing you say is filed anywhere.':
     'Entraînement. Le client est simulé à partir du dossier : rien de ce qu’il dit n’a été dit par votre client, et rien de ce que vous dites n’est consigné.',

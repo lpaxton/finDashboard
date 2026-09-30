@@ -87,6 +87,29 @@ lost the cascade to `.side-body`, which is declared later in the file and sets `
 fixed with a compound selector and `min-height: 0`. And the offline client repeated its first line
 every turn until it was given the turn count.
 
+**A correction, straight away.** I wrote above that one of the doors was *"Prepare for {household}"
+on Today*. It is not. The item exists and carries the right action, but it ranks fifth in the
+Clients role and the Today card shows the top item plus two — so it surfaces on **Clients →
+Overview** and never on Today. Checked in the browser rather than assumed, after Luke asked where
+the buttons actually were.
+
+**Then, from Luke:** *"i would think at a minimum we should have buttons for every meeting
+interaction."* Right — a rehearsal reached only from inside a meeting is a rehearsal an adviser
+has to go looking for, which is the opposite of what AX-07 asks for. There is now a **Rehearse**
+control on every meeting wherever meetings are listed:
+
+| Where | Meetings shown | Rehearse offered |
+| --- | --- | --- |
+| Today → Today's meetings | 5 | 4 — not the one at 9:30, which has happened |
+| Clients → Meetings, next 14 days | 7 | 6 — same rule |
+| Calendar → a meeting | the dialog | beside *Draft agenda* |
+| Clients → Overview | the prep priorities | on the row |
+
+One helper renders the control and one wires it, so a fourth list of meetings cannot be the one
+that forgets. **Only on a meeting that has not happened yet:** rehearsing one that is over is not
+a smaller version of the feature, it is a different thing, and offering it would say the platform
+has not noticed what time it is.
+
 **Implications.** Contract **0.5.0-draft**; one operation, two schemas, no change to anything that
 existed. New `dashboard/js/sim.js` and a fourth side panel. Eight tests, five verified by injecting
 the matching fault.

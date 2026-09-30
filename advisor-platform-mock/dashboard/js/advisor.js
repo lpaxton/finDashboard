@@ -401,15 +401,29 @@ async function runItemAction(w, btn) {
   }
 }
 
+/* Rehearsing is offered wherever a meeting is listed, not only inside the meeting (AX-07 asks for
+   coaching in the workflow rather than somewhere the adviser has to go and find it). One helper,
+   so a fourth list of meetings cannot end up being the one that forgets.
+
+   Only on a meeting that has not happened. Rehearsing one that is over is not a smaller version
+   of the feature, it is a different thing entirely, and offering it would say the platform has
+   not noticed what time it is. */
+const rehearseBtn = (m) => new Date(m.startsAt) > new Date()
+  ? `<button class="btn quiet" data-sim="${esc(m.id)}" data-sim-who="${esc(m.householdName || m.prospectName || m.type)}">${esc(t('Rehearse'))}</button>`
+  : '';
+const wireRehearse = (el) => el.querySelectorAll('[data-sim]').forEach(b =>
+  b.onclick = () => openSim(b.dataset.sim, b.dataset.simWho));
+
 /* Today's meetings keep their place: they are time-bound, which is what earns a place (FO-03). */
 function drawMeetings() {
   load($('w-meetings'), "Today's meetings", () => api('GET', '/meetings'), (r) => {
     const list = r.items, nextIdx = list.findIndex(m => new Date(m.startsAt) > new Date());
     return head("Today's meetings", raw(t('{n} scheduled', { n: list.length }))) + (list.length ? `<ol class="timeline">${list.map((m, i) => `
       <li class="meet${i === nextIdx ? ' next' : ''}"><div class="meet-row"><span class="time">${esc(fmtTime(m.startsAt))}</span><span class="client">${esc(m.householdName || m.prospectName || t('No client attached'))}</span><span class="type">${esc(m.type)}</span>
-      ${i === nextIdx ? `<span class="badge next">${esc(t('Next up'))}</span>` : ''}<span class="badge ${m.prepStatus === 'ready' ? 'ready' : 'prep'}">${esc(t(m.prepStatus === 'ready' ? 'Prep ready' : 'Needs prep'))}</span></div>
+      ${i === nextIdx ? `<span class="badge next">${esc(t('Next up'))}</span>` : ''}<span class="badge ${m.prepStatus === 'ready' ? 'ready' : 'prep'}">${esc(t(m.prepStatus === 'ready' ? 'Prep ready' : 'Needs prep'))}</span>
+      ${rehearseBtn(m)}</div>
       ${disclosure('brief:' + m.id, t('Show the prep brief'), { openLabel: t('Hide the prep brief'), cls: 'brief' })}</li>`).join('')}</ol>` : `<p class="empty">${esc(t('No meetings today.'))}</p>`);
-  }, (el) => wireDisclosures(el, async (key, inner) => {
+  }, (el) => { wireRehearse(el); wireDisclosures(el, async (key, inner) => {
     inner.innerHTML = `<p class="meta">${esc(t('Loading\u2026'))}</p>`;
     try {
       const m = await api('GET', '/meetings/' + encodeURIComponent(key.slice('brief:'.length)));
@@ -418,7 +432,7 @@ function drawMeetings() {
         + (m.preparedAt ? `<p class="receipt"><span class="dot" aria-hidden="true"></span>${esc(t('Prepared by the platform at {time} from {sources}.', { time: fmtTime(m.preparedAt), sources: sourceLine(m.briefSources).replace(/^\S+\s/, '') }))}</p>`
           : m.briefSources ? `<p class="source">${esc(sourceLine(m.briefSources))}</p>` : '');
     } catch { inner.innerHTML = `<p class="meta">${esc(t('The brief could not be loaded. Close this and open it again to retry.'))}</p>`; }
-  }));
+  }); });
 }
 
 /* Every signal leads with what it means and one suggested action (FO-09, CS-03, UX-011). */
@@ -1013,8 +1027,9 @@ function clientMeetingsPanel(el) {
       <li><div class="grow"><div class="title">${esc(m.householdName || m.prospectName || t('No client attached'))}</div>
       <div class="meta">${esc(t('{date} at {time}', { date: fmtDate(m.startsAt.slice(0, 10)), time: fmtTime(m.startsAt) }))} • ${esc(m.type)}</div></div>
       <span class="badge ${m.prepStatus === 'ready' ? 'ready' : 'prep'}">${esc(t(m.prepStatus === 'ready' ? 'Prep ready' : 'Needs prep'))}</span>
+      ${rehearseBtn(m)}
       <button class="btn" data-mt="${esc(m.id)}">${esc(t('Open'))}</button></li>`).join('')}</ul>` : `<p class="empty">${esc(t('Nothing is booked in the next two weeks.'))}</p>`),
-  (el2) => el2.querySelectorAll('[data-mt]').forEach(b => b.onclick = () => openMeeting(b.dataset.mt, () => clientMeetingsPanel(el))));
+  (el2) => { wireRehearse(el2); el2.querySelectorAll('[data-mt]').forEach(b => b.onclick = () => openMeeting(b.dataset.mt, () => clientMeetingsPanel(el))); });
 }
 
 /* What the firm charges this advisor's households (AX-10). */
