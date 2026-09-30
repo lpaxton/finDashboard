@@ -23,7 +23,9 @@ const src = fs.readFileSync(path.join(jsDir, 'i18n.js'), 'utf8');
 const entries = () => {
   const Q = String.raw`(?:'(?:[^'\\]|\\.)*'|"(?:[^"\\]|\\.)*")`;
   const re = new RegExp(String.raw`^ {2}(${Q}):\s*(${Q}),?$`, 'gm');
-  const unq = (s) => s.slice(1, -1).replace(/\\'/g, "'").replace(/\\"/g, '"').replace(/\\\\/g, '\\');
+  const unq = (s) => s.slice(1, -1)
+    .replace(/\\u([0-9a-fA-F]{4})/g, (m, h) => String.fromCharCode(parseInt(h, 16)))
+    .replace(/\\'/g, "'").replace(/\\"/g, '"').replace(/\\\\/g, '\\');
   return [...src.matchAll(re)].map(m => [unq(m[1]), unq(m[2])]);
 };
 

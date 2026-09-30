@@ -537,6 +537,38 @@ dialog.sheet { max-width: 460px; border: 1px solid var(--line); border-radius: v
 .card-meaning { margin: 0 0 12px; font-size: 15px; line-height: 1.45; }
 .cardlink { margin: 0 16px 14px; align-self: flex-start; }
 
+/* ---- The six cards of Today, and moving them -------------------------------------------- *
+   Every card gets the same two controls in the same corner whatever kind of card it is, so a
+   role section's coloured band and a panel's serif heading each keep their own shape. Absolute
+   rather than part of either header, for that reason. */
+.tcard { position: relative; }
+.tcard-ctl { position: absolute; top: 7px; right: 8px; display: flex; gap: 2px; z-index: 2; }
+/* The controls are absolute, so the headers underneath have to be told to leave room: without
+   this the grip lands on "5 scheduled" and on the LEADING TODAY chip. */
+.tcard .panel-head, .tcard .rolesec-head { padding-right: 56px; }
+.tcard .panel { padding-top: 18px; }
+.tcard-ctl button { background: none; border: 0; padding: 4px 5px; border-radius: var(--radius-1);
+  color: var(--muted); line-height: 1; cursor: pointer; }
+.tcard-ctl button:hover { background: var(--bg); color: var(--ink); }
+/* On a role section the controls sit on the coloured band, so they take its ink instead. */
+.rolesec .tcard-ctl button { color: rgba(251, 250, 246, 0.72); }
+.rolesec .tcard-ctl button:hover { background: var(--glass-fill); color: #FBFAF6; }
+.tcard-grip { cursor: grab; font-size: 15px; letter-spacing: -1px; }
+.tcard-grip:active { cursor: grabbing; }
+/* A tack that is in means the card is held; it takes the interactive colour rather than a
+   colour of its own, because "set by the advisor" already means --brand everywhere else. */
+.tcard-tack.on { color: var(--brand); }
+.rolesec .tcard-tack.on { color: #FBFAF6; background: var(--glass-fill); }
+.tcard-tack svg { display: block; }
+
+.tcard.dragging { opacity: 0.4; }
+/* The drop target is outlined rather than moved: showing the card sliding into place before the
+   drop would promise an arrangement that a cancelled drag then takes away. */
+.tcard.over { outline: 2px solid var(--brand); outline-offset: 2px; border-radius: var(--radius-2); }
+
+/* The order pill is a state now, not an explainer that opens and shuts. */
+.orderpill.on { background: var(--brand-soft); color: var(--brand); border-color: var(--brand); }
+
 /* The foot of the navigation: Settings, set apart from the sections above it by a rule,
    because it is a door out of the view rather than another place inside it. */
 .spine-foot { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--line); }

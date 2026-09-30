@@ -4,6 +4,7 @@ import { $, esc, money, moneyFull, pct, pctClass, fmtTime, fmtDate, localDate, d
 import { toast, spark, head, panel, load, alertsList, openHousehold, bookPanel, spine, roleMark, roleTabs, disclosure, wireDisclosures, snoozeChoices, SNOOZE_CHOICES, loadActivity, onUndo } from './ui.js';
 import { snooze, unsnooze, unsnoozeAll, dropExpiredSnoozes, get as vsGet, set as vsSet, isSnoozed } from './viewstate.js';
 import { ROLES, ROLE, collectRoleWork, rankRoles } from './roles.js';
+import { PANELS, cardId, arrange, leadWith, move, nudge, pinsFor } from './cards.js';
 import { state } from './state.js';
 /* head(), load(), toast(), sortTable() and the nav helpers translate what they are given, so
    panel titles, column headings and confirmations here need no wrapping. What is wrapped below
@@ -53,12 +54,12 @@ export function advLoadStrip(el) {
 
 /* What the advisor pinned. The platform may suggest a pin but never adds one itself
    (UX_IA §6.1, ST-07, TM-03). */
-const pins = () => vsGet('pins', []) || [];
-export const isPinned = (key) => pins().some(p => p.key === key);
-export function togglePin(key, label) {
-  const now = pins().filter(p => p.key !== key);
-  vsSet('pins', isPinned(key) ? now : [...now, { key, label }]);
-}
+/* The star on each role card used to pin that role into a "Pinned" group in the spine. It is
+   now a tack that holds the card's place on Today, which is what Luke asked it to be — and
+   that left the spine group with nothing to feed it, so it has gone too rather than sitting
+   there permanently empty. If pinning a section into the spine is wanted back, it needs its own
+   control somewhere that is not the card, because the card's control now means something else.
+   Logged in docs/design.md. */
 
 export function advisorView() {
   $('view').innerHTML = `<div class="viewbody">
@@ -74,13 +75,11 @@ export function advisorView() {
 }
 
 function drawSpine(go) {
-  const p = pins();
   spine($('advnav'), [
     { items: [['today', 'Today'], ['inbox', 'Inbox'], ['calendar', 'Calendar']] },
     /* ROLES.name is already in the reader's language, so it is passed as data rather than as
        a key: translating a translation loses it and fills the missing-key list with French. */
     { label: 'Your roles', items: ROLES.map(r => ['role:' + r.key, raw(r.name), r.mark]) },
-    ...(p.length ? [{ label: 'Pinned', items: p.map(x => [x.key, x.label]) }] : []),
     { items: [['glance', 'Book at a glance'], ['systems', 'Systems']] }
   ], advSection, go);
 }
@@ -97,21 +96,59 @@ export const goSection = (k) => { advSection = k; advisorView(); };
  */
 export function advToday() {
   $('section').innerHTML = `<div id="todayHead"></div><div class="rolecards" id="roleCards">
-    ${ROLES.map(() => '<div class="skel m" style="height:150px"></div>').join('')}</div>
-    <div class="grid" style="margin-top:20px"><div class="col">${panel('w-meetings')}</div><div class="col">${panel('w-signals')}</div></div>`;
-  drawRoleCards();
-  drawMeetings();
-  drawSignals();
-  onUndo(() => { drawRoleCards(); });
+    ${CARD_IDS().map(() => '<div class="skel m" style="height:150px"></div>').join('')}</div>`;
+  drawToday();
+  onUndo(() => { drawToday(); });
 }
 
-/* An item the advisor answered "not this" to is gone until something changes (CS-04, CS-05).
-   It lives in view state because there is nowhere in the contract to put a preference about a
-   suggestion; the reason teaches nothing yet, which is honest and is logged. */
-const itemKey = (w) => w.role + ':' + (w.action.id || w.meaning.slice(0, 40));
-const notThis = () => vsGet('notThis', []) || [];
+/* ---- The order of the six ------------------------------------------------------------------
+ * Four role sections and the two standing panels, in an order the advisor can change: drag a
+ * card by its grip, or tack one to a slot so the rest flow around it. The arithmetic is in
+ * cards.js and has no idea a browser exists; this is the part that knows about the DOM.
+ *
+ * Three modes, and the two buttons above the grid switch between them:
+ *   auto   what the platform worked out this morning, with the advisor's pins honoured.
+ *   lead   the same, but today's top priority forced to the front — pins and all.
+ *   mine   the arrangement the advisor dragged the cards into.
+ * Dragging anything puts you in `mine`, because you have just told it what you want.
+ */
+const CARD_IDS = () => [...ROLES.map(r => cardId(r.key)), ...PANELS];
+const PANEL_OF = { meetings: 'w-meetings', signals: 'w-signals' };
+const cardPins = () => vsGet('cardPins', {}) || {};
+const orderMode = () => vsGet('orderMode', 'auto') || 'auto';
+const savedOrder = () => (vsGet('cardOrder', []) || []).filter(id => CARD_IDS().includes(id));
 
-async function drawRoleCards() {
+/* A stored order is repaired rather than trusted: a card added to Today in a later release must
+   appear for someone who arranged the six before it existed, not vanish because it is missing
+   from a list in their browser. */
+function sequenceFor(rankedRoleKeys) {
+  const all = CARD_IDS();
+  if (orderMode() === 'mine') {
+    const mine = savedOrder();
+    return [...mine, ...all.filter(id => !mine.includes(id))];
+  }
+  return [...rankedRoleKeys.map(cardId), ...PANELS];
+}
+
+/* The grip and the tack, at the top right of every card, whatever kind of card it is. Absolute
+   rather than part of either header, so a role section's coloured band and a panel's serif
+   heading each keep their own shape and still get the same two controls in the same place. */
+function cardControls(id) {
+  const pinned = id in cardPins();
+  return `<div class="tcard-ctl">
+    <button class="tcard-grip" data-grip="${esc(id)}" draggable="true"
+      aria-label="${esc(t('Move this card'))}" title="${esc(t('Drag to move, or use the arrow keys'))}">
+      <span aria-hidden="true">\u2059</span></button>
+    <button class="tcard-tack${pinned ? ' on' : ''}" data-tack="${esc(id)}" aria-pressed="${pinned}"
+      aria-label="${esc(t(pinned ? 'Unpin this card from its place' : 'Pin this card to this place'))}"
+      title="${esc(t(pinned ? 'Unpin this card from its place' : 'Pin this card to this place'))}">
+      <svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true">
+        <path d="M9.6 1.2 14.8 6.4l-1.1 1.1-1.3-.4-2.6 2.6.5 2.4-1.1 1.1L6 10.8l-3.6 3.6-.9-.9L5.2 10 2 6.8l1.1-1.1 2.4.5L8.1 3.6l-.4-1.3z"
+          fill="currentColor"/></svg></button>
+  </div>`;
+}
+
+async function drawToday() {
   const host = $('roleCards');
   if (!host) return;
   dropExpiredSnoozes();
@@ -121,23 +158,122 @@ async function drawRoleCards() {
 
   const hidden = new Set(notThis());
   work = work.filter(w => !hidden.has(itemKey(w)) && !isSnoozed(itemKey(w)));
-  const pinnedOrder = !!vsGet('roleOrderPinned', false);
-  const { order, byRole, lead, reason } = rankRoles(work, pinnedOrder);
+  /* The ranking is always computed, whatever the mode: the "leading today" mark and the reason
+     under the button are about what is most pressing, not about where a card happens to sit. */
+  const { order: ranked, byRole, lead, reason } = rankRoles(work, false);
 
-  $('todayHead').innerHTML = `<div class="todayline">
-    ${reason ? `<button class="orderpill" id="whyOrder" aria-expanded="false"><span class="dot" aria-hidden="true"></span>${esc(t('Why today\'s order changed'))}</button>` : ''}
-    <button class="btn quiet" id="pinOrder" aria-pressed="${pinnedOrder}">${esc(t(pinnedOrder ? 'Unpin this order' : 'Pin this order'))}</button>
-  </div><p class="orderwhy" id="orderWhy" hidden>${esc(reason || '')}</p>`;
-  const why = $('whyOrder');
-  if (why) why.onclick = () => {
-    const el = $('orderWhy'), open = el.hidden;
-    el.hidden = !open; why.setAttribute('aria-expanded', String(open));
-  };
-  $('pinOrder').onclick = () => { vsSet('roleOrderPinned', !pinnedOrder); drawRoleCards(); };
+  let order = arrange(sequenceFor(ranked), cardPins());
+  if (orderMode() === 'lead') order = leadWith(order, cardId(lead));
 
-  host.innerHTML = order.map(k => roleCard(k, byRole[k], k === lead && !pinnedOrder)).join('');
+  host.innerHTML = order.map(id => `<article class="tcard" data-card="${esc(id)}">
+    ${cardControls(id)}
+    ${id.startsWith('role:')
+      ? roleCard(id.slice(5), byRole[id.slice(5)], id.slice(5) === lead)
+      : panel(PANEL_OF[id], '')}
+  </article>`).join('');
+
+  drawHead(reason, lead);
   wireRoleCards(host, byRole);
+  wireCardOrder(host, () => drawToday());
+  drawMeetings();
+  drawSignals();
 }
+
+function drawHead(reason, lead) {
+  const mode = orderMode();
+  const mine = savedOrder().length > 0;
+  $('todayHead').innerHTML = `<div class="todayline">
+    <button class="orderpill${mode === 'lead' ? ' on' : ''}" id="whyOrder" aria-pressed="${mode === 'lead'}">
+      <span class="dot" aria-hidden="true"></span>${esc(t('Today\u2019s top priority'))}</button>
+    <button class="btn quiet" id="pinOrder" aria-pressed="${mode === 'mine'}" ${mine ? '' : 'disabled'}
+      title="${esc(t(mine ? 'Put the cards back the way you arranged them' : 'Drag a card to make an order of your own'))}">${esc(t('My pin order'))}</button>
+  </div><p class="orderwhy" id="orderWhy" ${mode === 'lead' && reason ? '' : 'hidden'}>${esc(reason || '')}</p>`;
+
+  /* One button, two jobs, and they are the same job: it says what today's top priority is and
+     it puts that card first. Pressing it again lets the order go back to what it was, so it
+     reads as a state rather than as a thing that happened to you (ST-08). */
+  $('whyOrder').onclick = () => {
+    vsSet('orderMode', orderMode() === 'lead' ? 'auto' : 'lead');
+    drawToday();
+  };
+  $('pinOrder').onclick = () => { vsSet('orderMode', 'mine'); drawToday(); };
+}
+
+/* Dragging, and the keyboard that has to do the same job.
+   The cards are moved in the DOM rather than re-rendered: the two panels hold data already
+   fetched and open disclosures the advisor opened, and re-rendering to change an order would
+   throw both away and ask the server for them again. */
+function wireCardOrder(host, redraw) {
+  const idsNow = () => [...host.querySelectorAll('.tcard')].map(el => el.dataset.card);
+
+  const apply = (next) => {
+    const byId = Object.fromEntries([...host.querySelectorAll('.tcard')].map(el => [el.dataset.card, el]));
+    next.forEach(id => byId[id] && host.appendChild(byId[id]));
+    /* An arrangement made by hand is theirs from now on, and the pins move with the cards they
+       are on — a tack means "this slot" from the moment it is set, and keeps meaning that. */
+    vsSet('cardOrder', next);
+    vsSet('orderMode', 'mine');
+    vsSet('cardPins', pinsFor(next, Object.keys(cardPins())));
+    drawHead(null, null);
+  };
+
+  let dragging = null;
+  host.querySelectorAll('[data-grip]').forEach(g => {
+    const card = g.closest('.tcard');
+    g.ondragstart = (e) => {
+      dragging = g.dataset.grip;
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('text/plain', dragging);
+      e.dataTransfer.setDragImage(card, 24, 18);
+      card.classList.add('dragging');
+    };
+    g.ondragend = () => { dragging = null; host.querySelectorAll('.tcard').forEach(c => c.classList.remove('dragging', 'over')); };
+    /* The same move without a mouse. Left and right rather than up and down, because the grid
+       is two across and reading order is what the arrow follows. */
+    g.onkeydown = (e) => {
+      const by = { ArrowLeft: -1, ArrowUp: -1, ArrowRight: 1, ArrowDown: 1 }[e.key];
+      if (!by) return;
+      e.preventDefault();
+      apply(nudge(idsNow(), g.dataset.grip, by));
+      host.querySelector(`[data-grip="${CSS.escape(g.dataset.grip)}"]`).focus();
+    };
+  });
+
+  host.querySelectorAll('.tcard').forEach(card => {
+    card.ondragover = (e) => {
+      if (!dragging || card.dataset.card === dragging) return;
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      card.classList.add('over');
+    };
+    card.ondragleave = () => card.classList.remove('over');
+    card.ondrop = (e) => {
+      e.preventDefault();
+      card.classList.remove('over');
+      const id = e.dataTransfer.getData('text/plain') || dragging;
+      if (!id) return;
+      const ids = idsNow();
+      /* Dropped past the middle means after, which is what makes the last slot reachable. */
+      const r = card.getBoundingClientRect();
+      const after = (e.clientY - r.top) > r.height / 2;
+      apply(move(ids, id, card.dataset.card, after));
+    };
+  });
+
+  host.querySelectorAll('[data-tack]').forEach(b => b.onclick = () => {
+    const id = b.dataset.tack, pins = { ...cardPins() };
+    if (id in pins) delete pins[id]; else pins[id] = idsNow().indexOf(id);
+    vsSet('cardPins', pins);
+    toast(id in pins ? 'Pinned to this place.' : 'Unpinned.');
+    redraw();
+  });
+}
+
+/* An item the advisor answered "not this" to is gone until something changes (CS-04, CS-05).
+   It lives in view state because there is nowhere in the contract to put a preference about a
+   suggestion; the reason teaches nothing yet, which is honest and is logged. */
+const itemKey = (w) => w.role + ':' + (w.action.id || w.meaning.slice(0, 40));
+const notThis = () => vsGet('notThis', []) || [];
 
 /* A role's work on Today. It used to be a card — a coloured band, a border, and on the leading
    one a full-bleed gradient behind everything. Luke asked for the boxes gone and the two things
@@ -173,7 +309,7 @@ function roleCard(key, items, isLead) {
   return `<section class="rolesec${isLead ? ' lead' : ''} role-${esc(key)}" data-role="${esc(key)}">
     <h3 class="rolesec-head">${roleMark(r.mark, key)}<span class="rolesec-name">${esc(r.name)}</span>
       ${isLead ? `<span class="chip">${esc(t('Leading today'))}</span>` : ''}
-      <button class="pin" data-pinrole="${esc(key)}" aria-pressed="${isPinned('role:' + key)}" aria-label="${esc(t(isPinned('role:' + key) ? 'Unpin {what}' : 'Pin {what}', { what: r.name }))}">${isPinned('role:' + key) ? '★' : '☆'}</button></h3>
+      </h3>
     <div class="rolesec-body">${body}</div>
     <button class="link cardlink" data-open-role="${esc(key)}">${esc(t('Open {what}', { what: r.name.toLowerCase() }))}</button>
   </section>`;
@@ -184,11 +320,6 @@ function wireRoleCards(host, byRole) {
   const find = (k) => all.find(w => itemKey(w) === k);
   wireDisclosures(host);
   host.querySelectorAll('[data-open-role]').forEach(b => b.onclick = () => goSection('role:' + b.dataset.openRole));
-  host.querySelectorAll('[data-pinrole]').forEach(b => b.onclick = () => {
-    const k = b.dataset.pinrole;
-    togglePin('role:' + k, ROLE[k].name);
-    advisorView();
-  });
   host.querySelectorAll('[data-do]').forEach(b => b.onclick = () => runItemAction(find(b.dataset.do), b));
   /* Not now, and the advisor picks when (CS-05). An item that stands on a real alert is set
      aside through the contract, so it survives a change of browser and lands in the activity
@@ -198,7 +329,7 @@ function wireRoleCards(host, byRole) {
     const w = find(b.dataset.later), row = b.closest('.well-actions'), keep = row.innerHTML, well = b.closest('.well');
     row.outerHTML = snoozeChoices(b.dataset.later);
     const group = well.querySelector('.notnow');
-    group.querySelector('[data-snooze-cancel]').onclick = () => { group.outerHTML = `<div class="well-actions">${keep}</div>`; drawRoleCards(); };
+    group.querySelector('[data-snooze-cancel]').onclick = () => { group.outerHTML = `<div class="well-actions">${keep}</div>`; drawToday(); };
     group.querySelectorAll('[data-snooze]').forEach(c => c.onclick = async () => {
       const until = SNOOZE_CHOICES.find(([k]) => k === c.dataset.when)[2]();
       const said = t('Set aside. It comes back {when}.', { when: c.textContent.toLowerCase() });
@@ -209,9 +340,9 @@ function wireRoleCards(host, byRole) {
         } catch (e) { toast(e.message); }
       } else {
         snooze(itemKey(w), until);
-        toast(said, { label: 'Undo', run: () => { unsnooze(itemKey(w)); drawRoleCards(); } });
+        toast(said, { label: 'Undo', run: () => { unsnooze(itemKey(w)); drawToday(); } });
       }
-      drawRoleCards();
+      drawToday();
       loadActivity();
     });
     group.querySelector('[data-snooze]').focus();
@@ -228,15 +359,15 @@ function wireRoleCards(host, byRole) {
       const k = itemKey(w);
       vsSet('notThis', [...notThis(), k]);
       toast('Put away. It will not come back unless something changes.',
-        { label: 'Undo', run: () => { vsSet('notThis', notThis().filter(x => x !== k)); drawRoleCards(); } });
+        { label: 'Undo', run: () => { vsSet('notThis', notThis().filter(x => x !== k)); drawToday(); } });
     }
-    drawRoleCards();
+    drawToday();
     loadActivity();
   });
 }
 
 async function reopenAlert(id) {
-  try { await api('PATCH', '/alerts/' + encodeURIComponent(id), { body: { status: 'open' } }); drawRoleCards(); loadActivity(); }
+  try { await api('PATCH', '/alerts/' + encodeURIComponent(id), { body: { status: 'open' } }); drawToday(); loadActivity(); }
   catch (e) { toast(e.message); }
 }
 
@@ -244,7 +375,7 @@ async function runItemAction(w, btn) {
   if (!w) return;
   const a = w.action;
   if (a.kind === 'household') return openHousehold(a.id, true);
-  if (a.kind === 'prospect') return openProspect(a.id, drawRoleCards);
+  if (a.kind === 'prospect') return openProspect(a.id, drawToday);
   if (a.kind === 'communication') { vsSet('openComm', a.id); vsSet('inboxTab', 'approve'); return goSection('inbox'); }
   if (a.kind === 'inbox') return goSection('inbox');
   if (a.kind === 'role') return goSection('role:' + a.id);
@@ -254,7 +385,7 @@ async function runItemAction(w, btn) {
     try {
       await api('POST', '/tasks', { body: { title: t.title, dueDate: t.dueDate, householdId: t.householdId || undefined } });
       toast('Added to your follow-ups.');
-      drawRoleCards();
+      drawToday();
     } catch (e) { toast(e.message); btn.disabled = false; }
   }
 }

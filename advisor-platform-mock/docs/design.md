@@ -27,6 +27,71 @@ Entries are newest first.
 
 ## Log
 
+### 30 September 2026 · Today's six cards can be moved, and tacked (ST-03, ST-07, ST-08)
+
+**Asked for.** Luke, in one message: let the user move and reorder the six cards; turn the star
+into a pin/tack that holds a card in its spot; rename *"Why today's order changed"* to **Today's
+top priority** and make it move that card to the front **even if it's pinned**; rename *"Pin this
+order"* to **My pin order** and make it shuffle back to the arrangement the user made.
+
+**The six** are the four role sections and the two standing panels — Today's meetings and
+Portfolio signals. They were in two separate grids; they are one now, which is what let them be
+reordered against each other at all.
+
+**Three orders, and which one wins.**
+
+| Mode | What it shows |
+| --- | --- |
+| `auto` | What the platform worked out this morning, with the advisor's pins honoured |
+| `lead` | The same, with today's top priority forced to the front — **pins and all** |
+| `mine` | The arrangement the advisor dragged the cards into |
+
+Dragging anything puts you in `mine`, because you have just said what you want.
+
+**Today's top priority outranks a pin, and that is the point.** A tack that could veto it would
+make the button do nothing in exactly the case it exists for. It is not destructive: the pins are
+untouched, so *My pin order* puts everything back. A test holds this specifically, because it is
+the kind of rule that looks like a bug to whoever meets it next.
+
+**One button, two jobs, and they are the same job.** *Today's top priority* both says what the
+top priority is — the sentence that used to hide behind *"Why today's order changed"* — and puts
+that card first. Pressing it again lets the order fall back, so it reads as a state rather than
+as something that happened to you (ST-08).
+
+**Moving the cards moves the DOM, not the render.** The two panels hold data already fetched and
+disclosures the advisor opened; re-rendering to change an order would throw both away and ask the
+server for them again. A reorder appends the existing elements in the new order — no refetch, no
+flash, and every handler survives.
+
+**The keyboard does the same job as the drag.** Arrow keys on a focused grip move the card. Not
+optional: a reorder that can only be done by dragging cannot be done by everyone, and does not
+work at all on a touch screen, where the HTML drag events never fire. Left/right rather than
+up/down, because the grid is two across and the arrow follows reading order.
+
+**What a pin remembers.** The slot, not the neighbour. It is re-read after every reorder, so a
+tack means "this slot" from the moment it is set and keeps meaning that after the advisor moves
+it by hand. A pin that clashes with another, or that points past the end of the list, takes the
+next free slot rather than being dropped — a tack that silently stopped holding would be worse
+than one that shifted by one.
+
+**What this cost, and it is worth knowing.** The star on each role card used to pin that *role*
+into a **Pinned** group in the spine. The tack means something else now, which left that spine
+group with nothing feeding it, so it has gone rather than sitting there permanently empty. If
+pinning a section into the spine is wanted back it needs its own control somewhere that is not
+the card. **Nothing else was lost:** ST-07 is still kept, by a different thing.
+
+**Not built.** Touch dragging. The HTML drag events do not fire on a touch screen, and the grid
+is one column on a phone where reordering matters least. The keyboard path covers the
+accessibility case; a pointer-events implementation would cover touch, and is a bigger piece
+than this was.
+
+**Implications.** No contract change — the order and the pins are the advisor's own choices about
+data, not data, so they live in view state where ST-07's other promises already live. New module
+`dashboard/js/cards.js`, which is the arithmetic and knows nothing about a browser; ten tests
+against it, three verified by injecting the matching fault.
+
+---
+
 ### 30 September 2026 · Settings moves into the navigation, and gains light/dark
 
 **Asked for.** Luke: *"let's move 'Settings' that has the language selector to the bottom of the
