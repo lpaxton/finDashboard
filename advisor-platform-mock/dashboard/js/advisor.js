@@ -401,18 +401,31 @@ async function runItemAction(w, btn) {
   }
 }
 
-/* Rehearsing is offered wherever a meeting is listed, not only inside the meeting (AX-07 asks for
-   coaching in the workflow rather than somewhere the adviser has to go and find it). One helper,
-   so a fourth list of meetings cannot end up being the one that forgets.
+/* What a meeting offers depends on whether it has happened, and the two sets do not overlap.
 
-   Only on a meeting that has not happened. Rehearsing one that is over is not a smaller version
-   of the feature, it is a different thing entirely, and offering it would say the platform has
-   not noticed what time it is. */
-const rehearseBtn = (m) => new Date(m.startsAt) > new Date()
-  ? `<button class="btn quiet" data-sim="${esc(m.id)}" data-sim-who="${esc(m.householdName || m.prospectName || m.type)}">${esc(t('Rehearse'))}</button>`
-  : '';
-const wireRehearse = (el) => el.querySelectorAll('[data-sim]').forEach(b =>
-  b.onclick = () => openSim(b.dataset.sim, b.dataset.simWho));
+   Ahead of you: the prep brief, and practice. Behind you: the notes. A prep brief on a meeting
+   that is over is a rehearsal of a thing that already went however it went, and a rehearsal is
+   not a smaller version of itself after the fact — it is a different thing, and offering it
+   would say the platform had not noticed what time it is.
+
+   One pair of helpers, used by every list of meetings, so a fourth list cannot be the one that
+   forgets (AX-07 asks for coaching in the workflow rather than somewhere to go and find it). */
+const isPast = (m) => new Date(m.startsAt) <= new Date();
+const practiceBtn = (m) => `<button class="btn" data-sim="${esc(m.id)}" data-sim-who="${esc(m.householdName || m.prospectName || m.type)}">${esc(t('Practice with SimGPT'))}</button>`;
+/* A meeting that is over offers its notes — but only if there are any. The list says so, which
+   is why Meeting carries hasRecord: a button that had to fetch the record to find out whether it
+   could be offered would be a button that lies half the time. Without a record there is still
+   the meeting itself to open, which is honest and is not the same promise. */
+const notesBtn = (m) => m.hasRecord
+  ? `<button class="btn" data-notes="${esc(m.id)}">${esc(t('See meeting notes'))}</button>`
+  : `<button class="btn" data-notes="${esc(m.id)}">${esc(t('Open the meeting'))}</button>`;
+const meetingActions = (m) => isPast(m) ? notesBtn(m) : practiceBtn(m);
+const wireRehearse = (el, after) => {
+  el.querySelectorAll('[data-sim]').forEach(b => b.onclick = () => openSim(b.dataset.sim, b.dataset.simWho));
+  /* The notes live in the meeting itself, beside the summary and the next steps the platform can
+     draft from them, so this opens the meeting rather than duplicating the record somewhere. */
+  el.querySelectorAll('[data-notes]').forEach(b => b.onclick = () => openMeeting(b.dataset.notes, after || (() => {})));
+};
 
 /* Today's meetings keep their place: they are time-bound, which is what earns a place (FO-03). */
 function drawMeetings() {
@@ -420,10 +433,11 @@ function drawMeetings() {
     const list = r.items, nextIdx = list.findIndex(m => new Date(m.startsAt) > new Date());
     return head("Today's meetings", raw(t('{n} scheduled', { n: list.length }))) + (list.length ? `<ol class="timeline">${list.map((m, i) => `
       <li class="meet${i === nextIdx ? ' next' : ''}"><div class="meet-row"><span class="time">${esc(fmtTime(m.startsAt))}</span><span class="client">${esc(m.householdName || m.prospectName || t('No client attached'))}</span><span class="type">${esc(m.type)}</span>
-      ${i === nextIdx ? `<span class="badge next">${esc(t('Next up'))}</span>` : ''}<span class="badge ${m.prepStatus === 'ready' ? 'ready' : 'prep'}">${esc(t(m.prepStatus === 'ready' ? 'Prep ready' : 'Needs prep'))}</span>
-      ${rehearseBtn(m)}</div>
-      ${disclosure('brief:' + m.id, t('Show the prep brief'), { openLabel: t('Hide the prep brief'), cls: 'brief' })}</li>`).join('')}</ol>` : `<p class="empty">${esc(t('No meetings today.'))}</p>`);
-  }, (el) => { wireRehearse(el); wireDisclosures(el, async (key, inner) => {
+      ${i === nextIdx ? `<span class="badge next">${esc(t('Next up'))}</span>` : ''}<span class="badge ${m.prepStatus === 'ready' ? 'ready' : 'prep'}">${esc(t(m.prepStatus === 'ready' ? 'Prep ready' : 'Needs prep'))}</span></div>
+      <div class="meet-actions">${isPast(m)
+        ? notesBtn(m)
+        : disclosure('brief:' + m.id, t('Show the prep brief'), { openLabel: t('Hide the prep brief'), cls: 'brief' }) + practiceBtn(m)}</div></li>`).join('')}</ol>` : `<p class="empty">${esc(t('No meetings today.'))}</p>`);
+  }, (el) => { wireRehearse(el, drawMeetings); wireDisclosures(el, async (key, inner) => {
     inner.innerHTML = `<p class="meta">${esc(t('Loading\u2026'))}</p>`;
     try {
       const m = await api('GET', '/meetings/' + encodeURIComponent(key.slice('brief:'.length)));
@@ -897,7 +911,7 @@ export async function openMeeting(id, done) {
       <div class="actions" style="margin:4px 0 10px">
         ${record && !record.withheld ? `<button class="btn" id="mtSum">${esc(t('Summarise'))}</button>` : ''}
         ${new Date(m.startsAt) > new Date() ? `<button class="btn" id="mtAgenda">${esc(t('Draft agenda'))}</button>
-          <button class="btn" id="mtSim">${esc(t('Rehearse this'))}</button>` : ''}</div>
+          <button class="btn" id="mtSim">${esc(t('Practice with SimGPT'))}</button>` : ''}</div>
       <div id="mtDraft"></div>
       ${new Date(m.startsAt) > new Date() ? `<h3>${esc(t('Move'))}</h3>
         <div class="field"><label for="mtWhen">${esc(t('New date and time'))}</label><input type="datetime-local" id="mtWhen" value="${esc(localDate(new Date(m.startsAt)))}T${esc(new Date(m.startsAt).toTimeString().slice(0, 5))}"></div>
@@ -1027,9 +1041,9 @@ function clientMeetingsPanel(el) {
       <li><div class="grow"><div class="title">${esc(m.householdName || m.prospectName || t('No client attached'))}</div>
       <div class="meta">${esc(t('{date} at {time}', { date: fmtDate(m.startsAt.slice(0, 10)), time: fmtTime(m.startsAt) }))} • ${esc(m.type)}</div></div>
       <span class="badge ${m.prepStatus === 'ready' ? 'ready' : 'prep'}">${esc(t(m.prepStatus === 'ready' ? 'Prep ready' : 'Needs prep'))}</span>
-      ${rehearseBtn(m)}
+      ${meetingActions(m)}
       <button class="btn" data-mt="${esc(m.id)}">${esc(t('Open'))}</button></li>`).join('')}</ul>` : `<p class="empty">${esc(t('Nothing is booked in the next two weeks.'))}</p>`),
-  (el2) => { wireRehearse(el2); el2.querySelectorAll('[data-mt]').forEach(b => b.onclick = () => openMeeting(b.dataset.mt, () => clientMeetingsPanel(el))); });
+  (el2) => { wireRehearse(el2, () => clientMeetingsPanel(el)); el2.querySelectorAll('[data-mt]').forEach(b => b.onclick = () => openMeeting(b.dataset.mt, () => clientMeetingsPanel(el))); });
 }
 
 /* What the firm charges this advisor's households (AX-10). */

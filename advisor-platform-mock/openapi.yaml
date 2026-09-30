@@ -1360,6 +1360,14 @@ components:
         householdName: { type: string }
         type: { type: string, example: Annual review }
         prepStatus: { $ref: '#/components/schemas/PrepStatus' }
+        hasRecord:
+          type: boolean
+          description: >
+            Whether notes or a transcript were captured. On the list, so a screen can offer to
+            show the notes of a meeting that has them and not of one that has not — the record
+            itself is a separate fetch and is consent-gated, and a button that had to make the
+            call to find out whether it could be offered would be a button that lies half the
+            time. Requirement: MEET-04, MEET-06.
         brief: { type: string, nullable: true, description: AI-drafted prep brief. Draft until the advisor accepts it. }
         preparedAt:
           type: string

@@ -847,7 +847,8 @@ function createMock() {
       const from = q.from || dateOnly(0), to = q.to || from;
       const list = meetingsFor(user().advisorId).filter(x => { const d = new Date(x.startsAt); const ds = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); return ds >= from && ds <= to; })
         .sort((a, b) => a.startsAt.localeCompare(b.startsAt))
-        .map(({ advisorId, brief, ...x }) => ({ ...x, householdName: hhName(x.householdId), prospectName: prospectName(x.id), brief: null }));
+        .map(({ advisorId, brief, ...x }) => ({ ...x, householdName: hhName(x.householdId), prospectName: prospectName(x.id),
+          brief: null, hasRecord: RECORDS.some(r => r.meetingId === x.id) }));
       return ok({ items: list });
     }],
     ['GET', /^\/meetings\/([^/]+)$/, (m) => {

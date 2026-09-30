@@ -130,3 +130,28 @@ test('with no model connected the client still moves through the topics on file'
   assert.equal(new Set(seen).size, seen.length, 'each turn raises a different thing on file');
   assert.ok(seen.every(Boolean));
 });
+
+test('a past meeting offers its notes only when there are notes', async () => {
+  // "See meeting notes" on a meeting that captured none is a button that lies, and the list is
+  // where the decision has to be made: fetching the record to find out would mean fetching it
+  // for every row, and the record is consent-gated besides.
+  const mk = createMock();
+  const list = mk.handle('GET', '/meetings', {}, null, 'dana').data.items;
+  assert.ok(list.length, 'need meetings to check');
+  for (const m of list) {
+    assert.equal(typeof m.hasRecord, 'boolean', m.id + ' must say whether it has a record');
+    const r = mk.handle('GET', `/meetings/${m.id}/record`, {}, null, 'dana');
+    assert.equal(m.hasRecord, r.status === 200,
+      m.id + ': hasRecord must agree with whether the record is actually there');
+  }
+});
+
+test('the two sets of meeting actions do not overlap', () => {
+  // Ahead of you: the prep brief and practice. Behind you: the notes. A prep brief on a meeting
+  // that is over is a rehearsal of something that already went however it went.
+  const advisor = fs.readFileSync(path.join(__dirname, '..', 'dashboard', 'js', 'advisor.js'), 'utf8');
+  assert.match(advisor, /const meetingActions = \(m\) => isPast\(m\) \? notesBtn\(m\) : practiceBtn\(m\)/,
+    'one helper decides, so a new list of meetings cannot invent a third rule');
+  assert.match(advisor, /isPast\(m\)\s*\n?\s*\?\s*notesBtn\(m\)\s*\n?\s*:\s*disclosure\('brief:'/,
+    "a past meeting must not be offered the prep brief either");
+});

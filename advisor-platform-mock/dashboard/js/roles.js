@@ -95,7 +95,7 @@ export async function collectRoleWork(advisorId) {
     const prep = a.kind === 'prep' && (a.citations || []).find(c => c.source === 'calendar');
     out.push(item('ca', PRIORITY_WEIGHT[a.priority] + 20, a.title + '. ' + a.reason,
       prep
-        ? { label: 'Rehearse this', kind: 'rehearsal', id: prep.id, subject: a.householdName }
+        ? { label: 'Practice with SimGPT', kind: 'rehearsal', id: prep.id, subject: a.householdName }
         : { label: 'Add as a follow-up', kind: 'next-action', id: a.id, nextAction: a },
       { kinds: a.citations.map(c => c.source), at: a.citations.map(c => c.dataAsOf).sort().pop() },
       { subject: a.householdName, drafted: true }));

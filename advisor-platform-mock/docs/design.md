@@ -110,6 +110,29 @@ that forgets. **Only on a meeting that has not happened yet:** rehearsing one th
 a smaller version of the feature, it is a different thing, and offering it would say the platform
 has not noticed what time it is.
 
+**Then the wording and the shape.** Luke: *"change the word Rehearse to Practice with SimGPT and
+make it a button next to Show the prep brief. And if a meeting has passed, in the place of those
+two buttons add a button that says See Meeting Notes."* Which turns a single control into a rule
+about what a meeting offers at all:
+
+| | A meeting ahead of you | A meeting behind you |
+| --- | --- | --- |
+| Offers | Show the prep brief · **Practice with SimGPT** | **See meeting notes** |
+
+The two sets do not overlap, and that is the point: a prep brief on a meeting that is over is
+preparation for something that already went however it went. One helper decides, so a new list of
+meetings cannot invent a third rule, and a test asserts both halves.
+
+**Which exposed a button that would have lied.** *See meeting notes* on a meeting that captured
+none opens a dialog with nothing in it — and most meetings have no record. The list could not tell:
+`Meeting` had no field for it, and fetching the record per row to find out is both wasteful and
+wrong, because that fetch is consent-gated. So `Meeting` gains **`hasRecord`**, and a past meeting
+with nothing captured offers *Open the meeting* instead — honest, and not the same promise. A test
+asserts `hasRecord` agrees with whether the record is actually there, for every meeting.
+
+Both drawn as ordinary buttons rather than quiet ones: they sit side by side doing comparable
+things, and one of them rendered borderless read as the lesser of the two.
+
 **Implications.** Contract **0.5.0-draft**; one operation, two schemas, no change to anything that
 existed. New `dashboard/js/sim.js` and a fourth side panel. Eight tests, five verified by injecting
 the matching fault.

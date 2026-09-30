@@ -149,6 +149,11 @@ button { cursor: pointer; }
 .meet::before { content: ""; position: absolute; left: 0; top: 6px; width: 12px; height: 12px; border-radius: 50%; background: var(--surface); border: 2px solid var(--muted); }
 .meet.next::before { background: var(--brand); border-color: var(--brand); }
 .meet-row { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+/* The two things a meeting offers sit on one row under it. The disclosure is a block that owns
+   its own open panel, so the row is flex-wrap and the panel is allowed its full width beneath. */
+.meet-actions { display: flex; align-items: flex-start; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+.meet-actions .disc { margin: 0; }
+.meet-actions .disc-panel { width: 100%; }
 .time { font-weight: 600; min-width: 68px; font-variant-numeric: tabular-nums; }
 .client { font-weight: 500; }
 .type { color: var(--muted); font-size: 14px; }

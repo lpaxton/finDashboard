@@ -105,6 +105,14 @@ export interface Meeting {
   /** Example: "Annual review". */
   type: string;
   prepStatus: PrepStatus;
+  /**
+   * Whether notes or a transcript were captured. On the list, so a screen can offer to show the
+   * notes of a meeting that has them and not of one that has not — the record itself is a
+   * separate fetch and is consent-gated, and a button that had to make the call to find out
+   * whether it could be offered would be a button that lies half the time. Requirement: MEET-04,
+   * MEET-06.
+   */
+  hasRecord?: boolean;
   /** AI-drafted prep brief. Draft until the advisor accepts it. */
   brief?: string | null;
   /**
