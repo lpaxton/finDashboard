@@ -291,14 +291,18 @@ function roleCard(key, items, isLead) {
   const body = !top
     /* An empty role says so in one sentence, and never invents a task (FO-05). */
     ? `<p class="empty serif">${esc(t('Nothing pressing in {role} today.', { role: r.name.toLowerCase() }))}</p>`
-    /* The whole item in one box: what it means, then what the platform suggests doing about it,
-       then where it came from. The meaning and the source used to sit outside the well, which
-       left the violet holding three buttons and no subject — and made the top item read as a
-       different kind of thing from the ones under "Show the next two", which have always kept
-       their meaning, their source and their action together. Now they match. */
+    /* The whole item in one box, and the label first: whose voice this is, then what it means,
+       then what to do about it, then where it came from. The label leads because it qualifies
+       everything under it — a suggestion that announces itself after the reader has taken the
+       sentence as fact has announced itself too late (TR-01).
+
+       The meaning and the source used to sit outside the well, which left the violet holding
+       three buttons and no subject, and made the top item read as a different kind of thing
+       from the ones under "Show the next two" — which have always kept their meaning, their
+       source and their action together. Now they match. */
     : `<div class="well">
-         <p class="card-meaning">${esc(top.meaning)}</p>
          <span class="well-label">${esc(t('Suggested'))}</span>
+         <p class="card-meaning">${esc(top.meaning)}</p>
          <div class="well-actions">
            <button class="btn primary" data-do="${esc(itemKey(top))}">${esc(t(top.action.label))}</button>
            <button class="btn" data-later="${esc(itemKey(top))}">${esc(t('Not now'))}</button>

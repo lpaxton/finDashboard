@@ -37,6 +37,12 @@ button. add the text above the purple box and below the purple box inside the pu
 holds the whole item: what it means, then what the platform suggests doing about it, then where
 it came from.
 
+**And the label leads it.** Luke, straight after: *"move the Suggested tag to the top for each."*
+Right, and for a reason worth writing down: the label qualifies everything under it. A suggestion
+that announces itself *after* the reader has already taken the sentence as fact has announced
+itself too late — the order now is whose voice, then what it means, then what to do, then where
+it came from.
+
 **Why that was the right note.** The rows under *Show the next two* have always kept their
 meaning, their source and their action together in one object. The top item did not — the
 meaning sat above the violet and the source below it, which left the well holding three buttons
