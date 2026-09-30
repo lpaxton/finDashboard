@@ -27,6 +27,36 @@ Entries are newest first.
 
 ## Log
 
+### 30 September 2026 · The whole item goes in the violet box
+
+**Asked for.** Luke: *"i like the display of content when a user clicks the 'Show the Next 2'
+button. add the text above the purple box and below the purple box inside the purple box for all
+4 cards."*
+
+**Built.** On a role section the meaning and the source line move **inside** the well, so it
+holds the whole item: what it means, then what the platform suggests doing about it, then where
+it came from.
+
+**Why that was the right note.** The rows under *Show the next two* have always kept their
+meaning, their source and their action together in one object. The top item did not — the
+meaning sat above the violet and the source below it, which left the well holding three buttons
+and no subject, and made the most important item on the card read as **a different kind of
+thing** from the two beneath it. They are the same kind of thing, and now they look it.
+
+It also makes the violet mean what it is supposed to mean. `--ai` marks the platform's own
+voice; with the subject outside the box, the box was marking only the buttons, which is the
+narrower and less true claim.
+
+**Spacing set on `.well .card-meaning` and `.well .source`** rather than on those two classes
+directly: both are used outside a well elsewhere in the product and should not inherit a layout
+they are not in.
+
+**Implications.** `advisor.js` (one template) and `styles.css` (three rules). No contract change,
+nothing new said or done, and the empty case — *"Nothing pressing in development today"* — still
+has no well at all, because there is no suggestion to put in one.
+
+---
+
 ### 30 September 2026 · Today's six cards can be moved, and tacked (ST-03, ST-07, ST-08)
 
 **Asked for.** Luke, in one message: let the user move and reorder the six cards; turn the star

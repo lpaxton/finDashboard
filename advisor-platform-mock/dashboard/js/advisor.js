@@ -291,16 +291,21 @@ function roleCard(key, items, isLead) {
   const body = !top
     /* An empty role says so in one sentence, and never invents a task (FO-05). */
     ? `<p class="empty serif">${esc(t('Nothing pressing in {role} today.', { role: r.name.toLowerCase() }))}</p>`
-    : `<p class="card-meaning">${esc(top.meaning)}</p>
-       <div class="well">
+    /* The whole item in one box: what it means, then what the platform suggests doing about it,
+       then where it came from. The meaning and the source used to sit outside the well, which
+       left the violet holding three buttons and no subject — and made the top item read as a
+       different kind of thing from the ones under "Show the next two", which have always kept
+       their meaning, their source and their action together. Now they match. */
+    : `<div class="well">
+         <p class="card-meaning">${esc(top.meaning)}</p>
          <span class="well-label">${esc(t('Suggested'))}</span>
          <div class="well-actions">
            <button class="btn primary" data-do="${esc(itemKey(top))}">${esc(t(top.action.label))}</button>
            <button class="btn" data-later="${esc(itemKey(top))}">${esc(t('Not now'))}</button>
            <button class="btn quiet" data-notthis="${esc(itemKey(top))}">${esc(t('Not this'))}</button>
          </div>
+         <p class="source">${esc(sourceLine(top.source.kinds, top.source.at))}</p>
        </div>
-       <p class="source">${esc(sourceLine(top.source.kinds, top.source.at))}</p>
        ${rest.length ? disclosure('role:' + key, rest.length === 1 ? t('Show the next one') : t('Show the next {n}', { n: rest.length }),
          { openLabel: rest.length === 1 ? t('Hide the next one') : t('Hide the next {n}', { n: rest.length }),
            body: `<ul class="rows">${rest.map(w => `<li><div class="grow"><div class="title">${esc(w.meaning)}</div>
