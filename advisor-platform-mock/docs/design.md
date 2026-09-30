@@ -85,6 +85,27 @@ is one column on a phone where reordering matters least. The keyboard path cover
 accessibility case; a pointer-events implementation would cover touch, and is a bigger piece
 than this was.
 
+**Then, from a screenshot:** *"let's make it so the cards can be nested under each other without
+these big gaps."*
+
+A grid row is as tall as the tallest thing in it, so a short card beside a long one left a hole
+the height of the difference — Development sat in a column of its own dead space next to a
+five-meeting list. The six are laid out in **CSS columns** now, so each column packs down
+independently and the holes close.
+
+**The trade, stated because it is a real one.** The order reads **down the first column and then
+down the second**, rather than left-to-right in pairs. The top priority is still the first card,
+and a newspaper column is a familiar way to read a stack of unequal things — but it is a
+different reading order, and it is why the count stays capped at two. Three columns of
+column-major order stops being scannable.
+
+No JS and no dependency, which rules out a masonry library. `grid-template-rows: masonry` would
+keep the left-to-right order *and* close the holes, and is the right answer the moment it is in a
+shipping browser. Worth revisiting then.
+
+Verified that dragging, the arrow keys and the tacks all still behave inside a multi-column
+container, and that it collapses to one column on a phone.
+
 **Implications.** No contract change — the order and the pins are the advisor's own choices about
 data, not data, so they live in view state where ST-07's other promises already live. New module
 `dashboard/js/cards.js`, which is the arithmetic and knows nothing about a browser; ten tests

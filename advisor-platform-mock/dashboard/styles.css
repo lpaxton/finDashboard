@@ -498,10 +498,25 @@ dialog.sheet { max-width: 460px; border: 1px solid var(--line); border-radius: v
    window — opening Ask takes 420px out of the page without changing the viewport, so a media
    query would not notice it. Hence a container query. */
 #section { container-type: inline-size; }
-.rolecards { display: grid; grid-template-columns: 1fr; gap: 16px; align-items: start; }
+
+/* Columns, not a grid. A grid row is as tall as the tallest thing in it, so a short card beside
+   a long one left a hole the height of the difference — Development sat in a column of its own
+   dead space next to a five-meeting list. Cards pack down each column instead and the holes go.
+
+   The cost is that the order now reads down the first column and then down the second, rather
+   than left-to-right in pairs. That is the right trade for this screen: the top priority is
+   still the first card, and a newspaper column is a familiar way to read a stack of unequal
+   things. It is also why the count stays capped at two — three columns of column-major order
+   stops being scannable.
+
+   No JS and no dependency, which rules out masonry libraries; CSS `grid-template-rows: masonry`
+   would keep the left-to-right order but is not in a shipping browser yet. Worth revisiting. */
+.rolecards { column-count: 1; column-gap: 16px; }
 @container (min-width: 620px) {
-  .rolecards { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .rolecards { column-count: 2; }
 }
+/* A card is one object: it may not be split down the middle by a column break. */
+.rolecards > * { break-inside: avoid; margin-bottom: 16px; }
 
 /* The section is a panel that the coloured header caps: background and a hairline on the left,
    right and bottom, and no top border — the role's colour is the top edge. Same surface and
