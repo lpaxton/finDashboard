@@ -23,6 +23,8 @@ const W = {
     dear: 'Dear ', clientWord: 'client', following: 'Following up on our last conversation.',
     call: 'Do let me know if a call would be easier.', regards: 'Kind regards',
     offlineEmail: (tone) => `Assembled offline in a ${tone} register. No model wrote this.`,
+    notePass: 'Worth passing on: ', noteAbout: 'It is about ',
+    noteTime: (n) => `About ${n} minutes to read.`,
     neutral: 'neutral', none: 'No offline generator exists for '
   },
   fr: {
@@ -34,6 +36,8 @@ const W = {
     dear: 'Bonjour ', clientWord: 'cher client', following: 'Pour faire suite à notre dernier échange.',
     call: 'N’hésitez pas à me dire si un appel vous conviendrait mieux.', regards: 'Bien cordialement',
     offlineEmail: (tone) => `Constitué hors ligne sur un ton ${tone}. Aucun modèle ne l’a rédigé.`,
+    notePass: 'À vous transmettre : ', noteAbout: 'Il porte sur ',
+    noteTime: (n) => `Environ ${n} minutes de lecture.`,
     neutral: 'neutre', none: 'Aucun générateur hors ligne n’existe pour '
   }
 };
@@ -44,6 +48,7 @@ export function fakeGenerate(capability, ctx = {}) {
     case 'meeting_summary': return meetingSummary(ctx);
     case 'meeting_agenda': return meetingAgenda(ctx);
     case 'meeting_rehearsal': return rehearsal(ctx);
+    case 'article_note': return articleNote(ctx);
     case 'email_draft': return emailDraft(ctx);
     default: return words(ctx).none + capability + '.';
   }
@@ -112,6 +117,25 @@ function rehearsal(ctx = {}) {
     ? `Rédigé hors ligne, sans modèle. Votre tour : ${words} mots, ${asked ? 'et vous avez posé une question' : 'et aucune question posée'}.`
     : `Written offline, with no model reading it. Your turn ran to ${words} words and ${asked ? 'ended on a question' : 'asked nothing back'}.`;
   return `CLIENT: ${client}\nCOACH: ${coach}`;
+}
+
+/* aRCHi with no model connected. It has the article's title, the reading time and the adviser's
+   own reason for sending it, and it puts those three in a row — which is a covering note, just
+   not a written one. It says nothing about the client for the same reason the prompt does not:
+   it was told nothing about them. */
+function articleNote(ctx = {}) {
+  const { title, reason, readingMinutes, tone } = ctx;
+  const w = words(ctx);
+  /* The reason arrives as a noun phrase — "losses worth harvesting", "un écart par rapport à
+     l'allocation cible" — because that is the shape a signal's topic has in both languages.
+     The connector has to take one, so it is "it is about", not "sending it because". */
+  return [
+    w.notePass + (title || '') + '.',
+    reason ? w.noteAbout + String(reason).replace(/\.$/, '') + '.' : null,
+    readingMinutes ? w.noteTime(readingMinutes) : null,
+    '',
+    w.offlineEmail(tone || w.neutral)
+  ].filter(x => x !== null).join('\n');
 }
 
 /* No "Subject:" line: the subject is its own field in the draft frame, and repeating it inside

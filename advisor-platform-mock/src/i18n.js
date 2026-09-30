@@ -76,7 +76,7 @@ const FR = {
 
   // portfolio signals (FO-09)
   'Tax-loss harvesting opportunities': 'Moins-values à concrétiser',
-  'About {amount} in unrealized losses': 'Environ {amount} de moins-values latentes',
+  'About {amount} in unrealised losses': 'Environ {amount} de moins-values latentes',
   'Households over concentration limit': 'Foyers au-delà de la limite de concentration',
   'Largest: {n}% in one holding': 'Plus élevée : {n} % sur une seule position',
   'Households outside target allocation': 'Foyers hors allocation cible',
@@ -111,6 +111,25 @@ const FR = {
   'Nothing is open on the record.': 'Rien n’est ouvert au dossier.',
   'not recorded': 'non renseigné',
   'a prospect': 'un prospect',
+  // why an article was suggested for a message (GP-06, COMM-01)
+  'The subject line mentions {words}.': 'L’objet du message évoque {words}.',
+  '{name} has {topic} on the record.': '{name} présente {topic} au dossier.',
+  'tax-loss harvesting': 'la concrétisation des moins-values',
+  'concentration': 'la concentration',
+  'allocation drift': 'la dérive de l’allocation',
+  'idle cash': 'les liquidités non investies',
+  'Roth conversions': 'les conversions Roth',
+  'tax': 'la fiscalité',
+  'statements': 'les relevés',
+  'opening an account': 'l’ouverture d’un compte',
+  'equity compensation': 'la rémunération en actions',
+
+  // what one household's signal says, on the signal list and in the aRCHi picker beside it
+  'Unrealised loss of {amount}': 'Moins-value latente de {amount}',
+  '{n}% of equities in one holding': '{n} % des actions sur une seule position',
+  '{n} points from target': '{n} points d’écart par rapport à la cible',
+  'About {amount} in cash': 'Environ {amount} de liquidités',
+
   'losses worth harvesting': 'des moins-values à concrétiser',
   'a holding over the concentration limit': 'une position au-delà de la limite de concentration',
   'drift from the target allocation': 'un écart par rapport à l’allocation cible',

@@ -4,7 +4,7 @@
  * GENERATED FROM openapi.yaml. Do not edit by hand: run `npm run types`.
  * `npm test` fails if this file and the contract disagree.
  *
- * Contract version 0.5.0-draft.
+ * Contract version 0.7.0-draft.
  */
 
 export interface Error {
@@ -218,8 +218,15 @@ export interface Signal {
   kind: SignalKind;
   count: number;
   label: string;
-  /** Example: "About $61,200 in unrealized losses". */
+  /** Example: "About $61,200 in unrealised losses". */
   detail?: string;
+  /**
+   * What the signal is about, with no count and no figure in it. `label` and `detail` describe
+   * the advisor's book — how many households, how much in total — and are for the advisor's
+   * screen. This is the half that can be said to a client, and it is what an article is chosen
+   * and introduced by. Example: "losses worth harvesting".
+   */
+  topic?: string;
   source?: Source;
   /** Format: date-time. */
   dataAsOf?: string;
@@ -279,7 +286,7 @@ export interface AdvisorPage {
 export interface ComplianceItem {
   id: string;
   title: string;
-  category: 'communications_review' | 'annual_review' | 'disclosure' | 'restriction' | 'agreement';
+  category: 'communications_review' | 'annual_review' | 'disclosure' | 'restriction' | 'agreement' | 'content_review';
   advisorId?: string;
   advisorName?: string;
   householdId?: string | null;
@@ -295,15 +302,131 @@ export interface CompliancePage {
   totalItems: number;
 }
 
-export type ShareType = 'plan' | 'tax_explanation' | 'report' | 'proposal' | 'message' | 'document';
+/**
+ * `approved` is the only state that can be shared. `draft` has not been through review;
+ * `in_review` is waiting for it and appears in the compliance queue; `expired` was approved
+ * once and its approval has run out; `restricted` was withdrawn and must not go out again.
+ */
+export type ArticleStatus = 'draft' | 'in_review' | 'approved' | 'expired' | 'restricted';
+
+export interface Article {
+  id: string;
+  title: string;
+  /** One or two sentences, shown to the advisor when choosing. Not shown to the client. */
+  summary: string;
+  /** What the piece is written for. The four portfolio signal kinds are topics. */
+  topics: string[];
+  /** The current version, e.g. 3. A share records the version as it stood when it was sent. */
+  version: string;
+  status: ArticleStatus;
+  /**
+   * The languages this article is published in. An article cannot be sent in a language it does
+   * not have.
+   */
+  languages: string[];
+  readingMinutes: number;
+  approvedBy?: string | null;
+  /** Format: date-time. */
+  approvedAt?: string | null;
+  /**
+   * The date the approval runs out. A tax article past its expiry is not stale, it is wrong, so
+   * an expired article cannot be shared. Format: date.
+   */
+  expiresAt?: string | null;
+  /**
+   * Where the PDF is. A real build returns a signed, time-limited link into content storage;
+   * storage, retention and disposal are out of scope for this contract.
+   */
+  contentUrl?: string | null;
+  /**
+   * Computed: approved, not expired, not restricted. The picker offers only these, and the share
+   * endpoint enforces it rather than trusting the UI.
+   */
+  sendable?: boolean;
+}
+
+export interface ArticleVersion {
+  version: string;
+  /** Format: date-time. */
+  publishedAt: string;
+  status: ArticleStatus;
+  /** What changed in this version. */
+  note?: string | null;
+}
+
+export type ArticleDetail = Article & {
+  versions: ArticleVersion[];
+  /** How many times this article has been sent, across this advisor's households. */
+  sharedCount?: number;
+};
+
+export interface ArticlePage {
+  items: Article[];
+  page: number;
+  size: number;
+  totalItems: number;
+}
+
+/**
+ * No household id, and deliberately: the note goes to several households at once and is about
+ * the topic, not about anyone's holdings.
+ */
+export interface ArticleNoteRequest {
+  /**
+   * Why the advisor is sending it, as a phrase with no count and no figure in it — usually the
+   * topic of the signal it answers. Optional: a match made on a subject line has no such phrase
+   * to give, and leaving it out is better than inventing one.
+   */
+  reason?: string;
+  /** Warm and direct, Formal, or Brief. Same three as an email draft. */
+  tone?: string;
+}
+
+export type SuggestedArticle = Article & {
+  /**
+   * Why this one was suggested, in words, for the advisor to agree or disagree with.
+   * Advisor-facing: it may name the household.
+   */
+  because: string;
+  /**
+   * `subject` means the message's own subject line named the topic; `signal` means the household
+   * has an open signal this article is written for.
+   */
+  matchedOn: 'subject' | 'signal';
+  /**
+   * The sayable phrase the covering note is built from — the same field, and the same rule, as
+   * `Signal.topic`: no count and no figure in it. Null for a subject-line match, which has no
+   * such phrase. Not to be confused with `Article.topics`, which are ids.
+   */
+  topic?: string | null;
+};
+
+export interface SuggestedArticleList {
+  /** Matches that can be sent, best first. */
+  items: SuggestedArticle[];
+  /**
+   * Matches on the subject line that cannot be sent, each carrying the state that stops it.
+   * Returned rather than dropped: an advisor writing about Roth conversions is better served by
+   * 'the piece on that is out of date' than by silence.
+   */
+  unavailable: SuggestedArticle[];
+}
+
+/** `article` is a piece from the library (aRCHi); `sourceId` is then the article id. */
+export type ShareType = 'plan' | 'tax_explanation' | 'report' | 'proposal' | 'message' | 'document' | 'article';
 
 export interface ShareCreate {
   type: ShareType;
-  /** The advisor-side item being shared. */
+  /** The advisor-side item being shared. For type=article, the article id. */
   sourceId: string;
   title: string;
   /** Optional note shown to the client. */
   message?: string;
+  /**
+   * For type=article: which language version to send. Defaults to the article's primary
+   * language. The version actually sent is recorded on the share.
+   */
+  language?: string;
 }
 
 export interface SharedItem {
@@ -316,6 +439,15 @@ export interface SharedItem {
   /** Advisor who approved the share. */
   sharedBy: string;
   contentUrl?: string | null;
+  articleId?: string | null;
+  /**
+   * The version as it stood when this client was sent it. Stamped by the backend at send time
+   * and never updated afterwards — a later revision of the article does not change what this
+   * client received.
+   */
+  articleVersion?: string | null;
+  /** The language version sent. */
+  language?: string | null;
 }
 
 export interface SharedItemList {
@@ -1460,6 +1592,30 @@ export interface Operations {
     path: '/firm/compliance';
     request: never;
     response: CompliancePage;
+  };
+  listArticles: {
+    method: 'GET';
+    path: '/articles';
+    request: never;
+    response: ArticlePage;
+  };
+  getArticle: {
+    method: 'GET';
+    path: '/articles/{articleId}';
+    request: never;
+    response: ArticleDetail;
+  };
+  draftArticleNote: {
+    method: 'POST';
+    path: '/articles/{articleId}/note';
+    request: ArticleNoteRequest;
+    response: Draft;
+  };
+  suggestArticlesForCommunication: {
+    method: 'GET';
+    path: '/communications/{communicationId}/suggested-articles';
+    request: never;
+    response: SuggestedArticleList;
   };
   shareWithClient: {
     method: 'POST';

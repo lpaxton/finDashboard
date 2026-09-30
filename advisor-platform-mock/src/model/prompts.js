@@ -135,6 +135,43 @@ THE ADVISER JUST SAID
 ${c.said || '(nothing yet)'}`
   },
 
+  /* aRCHi (GP-06, TM-07). The article is the firm's and has been through review; this writes
+     only the line that goes with it. Two rules, and the second is what keeps an educational
+     piece educational:
+       - it is short. A covering note longer than the reason for sending is a second article,
+         and nobody reviewed that one.
+       - it says nothing about this household. The context block carries no holdings, no
+         balance and no circumstances, deliberately: the same note goes to several clients at
+         once, so a figure here would be one the model had invented for whoever read it. */
+  article_note: {
+    version: 'article_note/v1',
+    effort: 'low',
+    system: (lang) => `${languageRule(lang)}
+
+${HOUSE_RULES}
+
+Write the short note an adviser puts with an educational article when they send it to a client.
+Three sentences at most. Say what the piece is about and why it is worth the reading time, in
+the adviser's own words rather than the article's blurb. Do not summarise the article: it is
+attached, and a note that summarises it gives the client a reason not to open it.
+
+You are told nothing about this client, and that is deliberate — the same note goes to several
+households. Never mention their holdings, their balance, their tax position or their
+circumstances, and never suggest the article was written for them in particular. No greeting and
+no sign-off: the platform puts those on.
+
+The requested tone changes the register, never the facts:
+- Warm and direct: friendly first line, then straight to it.
+- Formal: no contractions, more distance.
+- Brief: two sentences at most.`,
+    user: (c) => `CONTEXT
+Article: ${c.title}
+What it covers: ${c.summary}
+Reading time: ${c.readingMinutes} minutes
+Why the adviser is sending it: ${c.reason || 'not stated — write about the piece itself'}
+Tone: ${c.tone || 'Warm and direct'}`
+  },
+
   email_draft: {
     version: 'email_draft/v3',
     effort: 'medium',

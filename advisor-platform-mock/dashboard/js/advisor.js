@@ -5,12 +5,13 @@ import { toast, spark, head, panel, load, alertsList, openHousehold, bookPanel, 
 import { snooze, unsnooze, unsnoozeAll, dropExpiredSnoozes, get as vsGet, set as vsSet, isSnoozed } from './viewstate.js';
 import { ROLES, ROLE, collectRoleWork, rankRoles } from './roles.js';
 import { PANELS, cardId, arrange, leadWith, move, nudge, pinsFor } from './cards.js';
-import { openSim } from './sim.js';
+import { openSim, closeSim } from './sim.js';
+import { openArchi, closeArchi } from './archi.js';
 import { state } from './state.js';
 /* head(), load(), toast(), sortTable() and the nav helpers translate what they are given, so
    panel titles, column headings and confirmations here need no wrapping. What is wrapped below
    is the prose written directly into the markup. */
-import { t as tr, raw, locale } from './i18n.js';
+import { t as tr, raw, locale, getLang, LANGS } from './i18n.js';
 /* `t` is also the name this file has long used for a task in two map callbacks, so the
    translator is imported as tr and re-exported locally as t for the rest of the module. */
 const t = tr;
@@ -388,7 +389,7 @@ async function runItemAction(w, btn) {
   if (a.kind === 'prospect') return openProspect(a.id, drawToday);
   if (a.kind === 'communication') { vsSet('openComm', a.id); vsSet('inboxTab', 'approve'); return goSection('inbox'); }
   if (a.kind === 'inbox') return goSection('inbox');
-  if (a.kind === 'rehearsal') return openSim(a.id, a.subject);
+  if (a.kind === 'rehearsal') { closeArchi(); return openSim(a.id, a.subject); }
   if (a.kind === 'role') return goSection('role:' + a.id);
   if (a.kind === 'next-action') {
     const t = a.nextAction.suggestedTask;
@@ -421,7 +422,9 @@ const notesBtn = (m) => m.hasRecord
   : `<button class="btn" data-notes="${esc(m.id)}">${esc(t('Open the meeting'))}</button>`;
 const meetingActions = (m) => isPast(m) ? notesBtn(m) : practiceBtn(m);
 const wireRehearse = (el, after) => {
-  el.querySelectorAll('[data-sim]').forEach(b => b.onclick = () => openSim(b.dataset.sim, b.dataset.simWho));
+  /* One panel beside the page at a time: they occupy the same strip, and two of them open
+     together would stack rather than tile. */
+  el.querySelectorAll('[data-sim]').forEach(b => b.onclick = () => { closeArchi(); openSim(b.dataset.sim, b.dataset.simWho); });
   /* The notes live in the meeting itself, beside the summary and the next steps the platform can
      draft from them, so this opens the meeting rather than duplicating the record somewhere. */
   el.querySelectorAll('[data-notes]').forEach(b => b.onclick = () => openMeeting(b.dataset.notes, after || (() => {})));
@@ -462,20 +465,29 @@ const SIGNAL_MEANING = {
 
 function drawSignals() {
   load($('w-signals'), 'Portfolio signals', () => api('GET', '/portfolio-signals'), (r) => head('Portfolio signals')
-    + (r.items.length ? `<ul class="rows">${r.items.map(s => `
+    + (r.items.length ? `<ul class="rows">${r.items.map(s => {
+      /* Built once and carried on the button: it is both what the row says and the reason the
+         covering note is written against, and those two must not be able to disagree. */
+      const meaning = (SIGNAL_MEANING[s.kind] || (() => s.label))(s);
+      return `
       <li data-sig="${esc(s.id)}"><div class="grow">
-        <div class="title">${esc((SIGNAL_MEANING[s.kind] || (() => s.label))(s))}</div>
+        <div class="title">${esc(meaning)}</div>
         <div class="source">${esc(sourceLine(s.source, s.dataAsOf))}</div>
-        ${disclosure('signal:' + s.id, t('Show which households'), { openLabel: t('Hide the households') })}
-      </div></li>`).join('')}</ul>` : `<p class="empty">${esc(t('No signals right now.'))}</p>`),
-  (el) => wireDisclosures(el, async (key, inner) => {
+        <div class="row-actions">${disclosure('signal:' + s.id, t('Show which households'), { openLabel: t('Hide the households') })}
+          <button class="btn" data-archi="${esc(s.id)}" data-topic="${esc(s.kind)}" data-subject="${esc(s.topic || s.label)}" data-meaning="${esc(meaning)}">${esc(t('Send an article'))}</button></div>
+      </div></li>`; }).join('')}</ul>` : `<p class="empty">${esc(t('No signals right now.'))}</p>`),
+  (el) => { el.querySelectorAll('[data-archi]').forEach(b => b.onclick = () => {
+    closeSim(); openArchi({ key: b.dataset.archi, topic: b.dataset.topic,
+      meaning: b.dataset.meaning, subject: b.dataset.subject });
+  });
+  wireDisclosures(el, async (key, inner) => {
     inner.innerHTML = `<p class="meta">${esc(t('Loading\u2026'))}</p>`;
     try {
       const r = await api('GET', '/portfolio-signals/' + encodeURIComponent(key.slice('signal:'.length)) + '/items', { query: { size: 8 } });
       inner.innerHTML = `<ul class="subrows">${r.items.map(i => `<li><span><button class="link" data-hh="${esc(i.householdId)}">${esc(i.householdName)}</button> <span class="meta">${esc(i.maskedAccountNumber)}</span></span><span>${esc(i.detail)}</span></li>`).join('')}</ul>`;
       inner.querySelectorAll('[data-hh]').forEach(x => x.onclick = () => openHousehold(x.dataset.hh, true));
     } catch { inner.innerHTML = `<p class="meta">${esc(t('These households could not be loaded. Close this and open it again to retry.'))}</p>`; }
-  }));
+  }); });
 }
 
 /* ---- Book at a glance -----------------------------------------------------------------------
@@ -612,6 +624,7 @@ function drawComm(el, c, done) {
       ${sent ? '' : `<select id="cmTone" aria-label="${esc(t('Tone for a rewrite'))}"><option>${esc(t('Warm and direct'))}</option><option>${esc(t('Formal'))}</option><option>${esc(t('Brief'))}</option></select>`}
     </div>
     <div id="cmDraft"></div>
+    ${sent ? '' : `<section class="suggest" id="cmSuggest" hidden></section>`}
   </section>`;
 
   $('cmBack').onclick = () => done();
@@ -667,7 +680,102 @@ function drawComm(el, c, done) {
     if (rt) rt.onclick = () => move('draft', 'Back to draft.');
     const sd = $('cmSend');
     if (sd) sd.onclick = () => confirmSend(c, () => move('sent', 'Sent.'));
+
+    suggestReading(c, (article, language) => {
+      /* Appended through the same save the advisor's own typing goes through, so the mention is
+         undoable, it lands in the activity log, and the message still lives in one place. */
+      const was = c.body;
+      body.value = body.value.trimEnd() + '\n\n'
+        + t('I have also put a short piece in your portal: \u201c{title}\u201d.', { title: article.title });
+      autoGrow(body);
+      save('body', body, was);
+    });
   }
+}
+
+/* ---- Suggested reading (GP-06, COMM-01, TM-02) ----------------------------------------------
+ * What the firm's library has that answers the message being written, matched on the subject
+ * line and on the household's own open signals, each match carrying the reason it was made.
+ *
+ * Sending one is its own act, and that is the whole shape of this. A message and an article
+ * reach the client by two different routes under two different approvals; one button standing
+ * for both is the thing X-03 exists to stop. So there is no attach: the strip opens the same
+ * aRCHi panel the portfolio signals open, with the same approval and the same receipt, and the
+ * message's own send sheet still says "Attached: Nothing" — which stays true, because nothing
+ * is attached to the email.
+ *
+ * What does connect them is a sentence. An article in the portal that the email never mentions
+ * is an article the client will not find, so once one has gone the row offers to say so in the
+ * message — as an edit the advisor makes, not one made for them.
+ */
+const CANNOT_SEND = {
+  expired: (x) => t('Cannot be sent: the approval ran out on {date}.', { date: fmtDate(x.expiresAt) }),
+  in_review: () => t('Cannot be sent: it is still with compliance.'),
+  restricted: () => t('Cannot be sent: it has been withdrawn.'),
+  draft: () => t('Cannot be sent: it has not been through review.')
+};
+
+async function suggestReading(c, mention) {
+  const box = $('cmSuggest');
+  if (!box) return;
+  let r;
+  try { r = await api('GET', '/communications/' + encodeURIComponent(c.id) + '/suggested-articles'); }
+  catch { return; }                       // a suggestion that cannot be fetched is not an error worth a banner
+  if (!box.isConnected) return;           // the advisor left the message while this was in flight
+  if (!r.items.length && !r.unavailable.length) return;   // no strip at all rather than an empty one
+  box.hidden = false;
+
+  /* An article published in a language the reader does not use is still offerable — the client
+     may well read it — but the strip has to say so, or a French screen quietly lists an English
+     title and leaves the advisor to notice. The panel says it again before anything is sent. */
+  const langName = (code) => (LANGS.find(([c]) => c === code) || [code, code])[1];
+  const meta = (x) => x.languages.includes(getLang())
+    ? t('Version {v} \u00b7 {n} min read', { v: x.version, n: x.readingMinutes })
+    : t('Version {v} \u00b7 {n} min read \u00b7 published in {lang} only',
+        { v: x.version, n: x.readingMinutes, lang: langName(x.languages[0]) });
+  const row = (x, tail) => `<li class="sug-row${tail ? '' : ' out'}" data-row="${esc(x.id)}">
+      <span class="grow"><span class="title">${esc(x.title)}</span>
+        <span class="meta">${esc(x.because)}</span>
+        <span class="source">${esc(tail ? meta(x) : (CANNOT_SEND[x.status] || (() => t('Cannot be sent.')))(x))}</span></span>
+      ${tail || ''}</li>`;
+
+  box.innerHTML = `<h3 class="ar-h">${esc(t('Suggested reading'))}</h3>
+    <p class="hint">${esc(t('From the firm’s library, matched to this message. Sending one is its own act: it goes to the client’s portal, not with this email.'))}</p>
+    <ul class="sug-list">
+      ${r.items.map(x => row(x, `<button class="btn" data-art="${esc(x.id)}">${esc(t('Send this'))}</button>`)).join('')}
+      ${r.unavailable.map(x => row(x, null)).join('')}
+    </ul>`;
+
+  box.querySelectorAll('[data-art]').forEach(b => b.onclick = () => {
+    const x = r.items.find(a => a.id === b.dataset.art);
+    closeSim();
+    openArchi({
+      key: 'comm:' + c.id + ':' + x.id,
+      /* Scoped to the article's own first topic rather than the whole shelf: the advisor came
+         here from one suggestion, and a picker that opened on everything would be a different
+         question from the one they asked. */
+      topic: x.topics[0],
+      articleId: x.id,
+      meaning: t('Alongside your message “{subject}” to {name}', { subject: c.subject, name: c.householdName }),
+      /* Null for a subject-line match, which has no phrase free of counts and figures to give.
+         The note is then about the piece itself, which is honest. */
+      subject: x.topic || null,
+      households: [{ householdId: c.householdId, householdName: c.householdName }],
+      onSent: ({ article, language }) => markSent(box, x.id, article, language, c, mention)
+    });
+  });
+}
+
+/* The row after it has gone: what was sent, and the one thing still worth doing about it. */
+function markSent(box, id, article, language, c, mention) {
+  const li = box.querySelector(`[data-row="${CSS.escape(id)}"]`);
+  if (!li) return;
+  li.classList.add('gone');
+  li.querySelector('.source').textContent = t('Sent to {name} \u00b7 version {v}', { name: c.householdName, v: article.version });
+  const btn = li.querySelector('[data-art]');
+  if (!btn) return;
+  btn.textContent = t('Mention it in the message');
+  btn.onclick = () => { mention(article, language); btn.remove(); };
 }
 
 /* The one-line receipt: what the platform did, or what the advisor did to it (TR-04). */
@@ -939,7 +1047,7 @@ export async function openMeeting(id, done) {
     /* The rehearsal opens beside the page, so the dialog closes: an adviser practising a meeting
        wants the meeting on screen, not a modal over it. */
     const sim = $('mtSim');
-    if (sim) sim.onclick = () => { dlg.close(); openSim(id, m.householdName || m.prospectName || m.type); };
+    if (sim) sim.onclick = () => { dlg.close(); closeArchi(); openSim(id, m.householdName || m.prospectName || m.type); };
     const mv = $('mtMove');
     if (mv) mv.onclick = async () => {
       const when = $('mtWhen').value;

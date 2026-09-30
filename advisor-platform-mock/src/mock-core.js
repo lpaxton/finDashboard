@@ -159,14 +159,188 @@ function createMock() {
     ['adv2', 'tax_loss_harvesting', 'h11', 8200], ['adv2', 'tax_loss_harvesting', 'h14', 6300], ['adv2', 'allocation_drift', 'h12', 5.9]
   ].map(([advisorId, kind, householdId, value], i) => ({ id: 'si' + i, advisorId, kind, householdId, value }));
   const SIGNAL_META = {
-    tax_loss_harvesting: { label: 'Tax-loss harvesting opportunities', topic: 'losses worth harvesting', detail: (v) => T('About {amount} in unrealized losses', { amount: usd(Math.round(v.reduce((a, b) => a + b, 0))) }) },
+    tax_loss_harvesting: { label: 'Tax-loss harvesting opportunities', topic: 'losses worth harvesting', detail: (v) => T('About {amount} in unrealised losses', { amount: usd(Math.round(v.reduce((a, b) => a + b, 0))) }) },
     concentration:       { label: 'Households over concentration limit', topic: 'a holding over the concentration limit', detail: (v) => T('Largest: {n}% in one holding', { n: Math.max(...v) }) },
     allocation_drift:    { label: 'Households outside target allocation', topic: 'drift from the target allocation', detail: () => T('Drift beyond 5 points') },
     idle_cash:           { label: 'Households with idle cash above 10%', topic: 'more cash than the target', detail: (v) => T('About {amount} total', { amount: usd(v.reduce((a, b) => a + b, 0)) }) }
   };
-  const itemDetail = (s) => s.kind === 'tax_loss_harvesting' ? 'Unrealized loss of $' + s.value.toLocaleString('en-US')
-    : s.kind === 'concentration' ? s.value + '% of equities in one holding'
-    : s.kind === 'allocation_drift' ? s.value + ' points from target' : 'About $' + (s.value / 1e6).toFixed(1) + 'M in cash';
+  /* The platform's own prose about a household's position, and it was the one line on the
+     signals list still composed in English with an en-US number in it. Visible on a French
+     screen the moment aRCHi drew the same list beside a French article. */
+  const itemDetail = (s) => s.kind === 'tax_loss_harvesting' ? T('Unrealised loss of {amount}', { amount: usd(s.value) })
+    : s.kind === 'concentration' ? T('{n}% of equities in one holding', { n: s.value })
+    : s.kind === 'allocation_drift' ? T('{n} points from target', { n: new Intl.NumberFormat(intlLocale()).format(s.value) })
+    : T('About {amount} in cash', { amount: usd(s.value) });
+
+  /* ---- the article library (aRCHi: GP-06, GP-07, GP-10, TM-02) -----------------------------
+   * Educational pieces the firm has approved for sending to clients. Four things make this a
+   * library rather than a folder of PDFs, and every one of them exists because of the single
+   * question anyone asks about it afterwards — which version of what did this client receive,
+   * and was it approved at the time:
+   *   a version    articles get revised, and the client has the one they were sent
+   *   a state      draft, in review, approved, restricted
+   *   an expiry    a tax article past its date is not stale, it is wrong
+   *   a language   the portal is localised, so an untranslated article cannot go to a client
+   *                reading French — and saying so beats sending the English one
+   *
+   * Title and summary are firm content and are held per language here rather than run through
+   * the translator. Translating a published article on the fly would produce a version nobody
+   * approved, which is the whole thing this library exists to prevent.
+   */
+  const ARTICLES = [
+    { id: 'ar1', topics: ['tax_loss_harvesting'], version: '3', status: 'approved', readingMinutes: 6,
+      approvedBy: 'Compliance', approvedAt: dayISO(-120, 9), expiresAt: dateOnly(280),
+      text: {
+        en: { title: 'Selling at a loss on purpose',
+              summary: 'Why an adviser sometimes sells a holding that has fallen, where the proceeds go, and the rule that stops you buying the same thing straight back.' },
+        fr: { title: 'Vendre \u00e0 perte, d\u00e9lib\u00e9r\u00e9ment',
+              summary: 'Pourquoi un conseiller vend parfois un titre qui a baiss\u00e9, o\u00f9 le produit de la vente est replac\u00e9, et la r\u00e8gle qui interdit de racheter le m\u00eame titre imm\u00e9diatement.' } },
+      versions: [
+        { version: '3', publishedAt: dayISO(-120, 9), status: 'approved', note: 'Rewritten against this year\u2019s thresholds.' },
+        { version: '2', publishedAt: dayISO(-430, 9), status: 'expired', note: 'Prior-year thresholds.' },
+        { version: '1', publishedAt: dayISO(-800, 9), status: 'expired', note: null }] },
+
+    { id: 'ar2', topics: ['concentration'], version: '2', status: 'approved', readingMinutes: 5,
+      approvedBy: 'Compliance', approvedAt: dayISO(-64, 10), expiresAt: dateOnly(400),
+      text: {
+        en: { title: 'When one holding becomes most of what you own',
+              summary: 'How a position grows into a risk without anyone deciding it should, and the ways of reducing one without taking the whole tax bill in a single year.' },
+        fr: { title: 'Quand un seul titre repr\u00e9sente l\u2019essentiel de votre patrimoine',
+              summary: 'Comment une position devient un risque sans que personne ne l\u2019ait d\u00e9cid\u00e9, et les fa\u00e7ons de la r\u00e9duire sans supporter toute l\u2019imposition sur une seule ann\u00e9e.' } },
+      versions: [
+        { version: '2', publishedAt: dayISO(-64, 10), status: 'approved', note: 'Added the charitable-gift route.' },
+        { version: '1', publishedAt: dayISO(-390, 10), status: 'expired', note: null }] },
+
+    { id: 'ar3', topics: ['allocation_drift'], version: '1', status: 'approved', readingMinutes: 4,
+      approvedBy: 'Compliance', approvedAt: dayISO(-31, 14), expiresAt: dateOnly(500),
+      text: {
+        en: { title: 'Why a portfolio drifts, and when to put it back',
+              summary: 'A portfolio left alone stops being the one you chose. What rebalancing is, what it costs, and why it follows a rule rather than a feeling.' },
+        fr: { title: 'Pourquoi un portefeuille d\u00e9rive, et quand le ramener \u00e0 sa cible',
+              summary: 'Un portefeuille laiss\u00e9 tel quel cesse d\u2019\u00eatre celui que vous avez choisi. Ce qu\u2019est le r\u00e9\u00e9quilibrage, ce qu\u2019il co\u00fbte, et pourquoi il suit une r\u00e8gle plut\u00f4t qu\u2019une impression.' } },
+      versions: [{ version: '1', publishedAt: dayISO(-31, 14), status: 'approved', note: null }] },
+
+    /* English only, and left that way on purpose: it is what a missing translation looks like
+       from the picker, and the picker has to be able to say so rather than send the English. */
+    { id: 'ar4', topics: ['idle_cash'], version: '2', status: 'approved', readingMinutes: 5,
+      approvedBy: 'Compliance', approvedAt: dayISO(-88, 11), expiresAt: dateOnly(330),
+      text: {
+        en: { title: 'Cash that is waiting for a job',
+              summary: 'Holding cash is a decision rather than the absence of one. What it protects you from, what it costs while it sits there, and how much is usually enough.' } },
+      versions: [
+        { version: '2', publishedAt: dayISO(-88, 11), status: 'approved', note: 'Current money-market rates removed; they dated the piece within a month.' },
+        { version: '1', publishedAt: dayISO(-300, 11), status: 'expired', note: null }] },
+
+    /* Approved once and left to run out. Stored as approved with a date in the past, so the
+       expiry is a rule the code applies rather than a status somebody remembered to change. */
+    { id: 'ar5', topics: ['roth_conversion', 'tax'], version: '4', status: 'approved', readingMinutes: 7,
+      approvedBy: 'Compliance', approvedAt: dayISO(-400, 9), expiresAt: dateOnly(-40),
+      text: {
+        en: { title: 'What a Roth conversion would mean for you',
+              summary: 'The trade a conversion makes: tax now against tax later. Written against last year\u2019s thresholds.' },
+        fr: { title: 'Ce qu\u2019une conversion Roth impliquerait pour vous',
+              summary: 'L\u2019arbitrage d\u2019une conversion : l\u2019imp\u00f4t aujourd\u2019hui contre l\u2019imp\u00f4t plus tard. R\u00e9dig\u00e9 selon les seuils de l\u2019an dernier.' } },
+      versions: [{ version: '4', publishedAt: dayISO(-400, 9), status: 'expired', note: null }] },
+
+    { id: 'ar6', topics: ['statements', 'onboarding'], version: '1', status: 'in_review', readingMinutes: 4,
+      approvedBy: null, approvedAt: null, expiresAt: null,
+      text: {
+        en: { title: 'Reading your quarterly statement',
+              summary: 'What each section of the statement is telling you, and the three numbers worth looking at first.' },
+        fr: { title: 'Lire votre relev\u00e9 trimestriel',
+              summary: 'Ce que vous dit chaque partie du relev\u00e9, et les trois chiffres \u00e0 regarder en premier.' } },
+      versions: [{ version: '1', publishedAt: dayISO(-9, 16), status: 'in_review', note: 'First draft, with compliance.' }] },
+
+    { id: 'ar7', topics: ['concentration', 'equity_compensation'], version: '2', status: 'restricted', readingMinutes: 6,
+      approvedBy: 'Compliance', approvedAt: dayISO(-520, 9), expiresAt: dateOnly(120),
+      text: {
+        en: { title: 'Concentration risk after a public listing',
+              summary: 'Withdrawn: it describes a lock-up arrangement that no longer matches the firm\u2019s standard advice.' },
+        fr: { title: 'Le risque de concentration apr\u00e8s une introduction en bourse',
+              summary: 'Retir\u00e9 : il d\u00e9crit une p\u00e9riode de blocage qui ne correspond plus \u00e0 la doctrine du cabinet.' } },
+      versions: [{ version: '2', publishedAt: dayISO(-520, 9), status: 'restricted', note: 'Withdrawn by compliance.' }] }
+  ];
+
+  /* What from the library answers a message the advisor is writing (GP-06, COMM-01).
+   *
+   * Two matches, and both are a fact already on the advisor's own record:
+   *   the subject line   names a topic — "Following up on your Roth conversion"
+   *   an open signal     the household has something an article is written for
+   *
+   * Deterministic, and that is the design rather than a shortcut. A model asked to pick would
+   * have to carry provenance for the choice (X-04), and the advisor would have no way to check
+   * it; a rule carries its reason with it, and "your subject line mentions Roth conversion" is
+   * a claim they can agree or disagree with at a glance.
+   *
+   * The subject is matched and the body is not. The body wanders — cm2's mentions a capital
+   * gain while the message is about concentration — and a suggestion drawn from a sentence the
+   * advisor has half rewritten is one they cannot place.
+   */
+  const SUGGEST_MAX = 3;
+  /* What a topic id is called in prose. The four signal kinds have a phrase in SIGNAL_META
+     already; these are the rest. Without this the reason line reads "the subject line mentions
+     roth conversion" — an id with its underscores taken out, which on a French screen is an
+     English fragment in the middle of a French sentence. A topic with no name here falls back
+     to exactly that, which is visible rather than blank. */
+  const TOPIC_WORDS = {
+    tax_loss_harvesting: 'tax-loss harvesting', concentration: 'concentration',
+    allocation_drift: 'allocation drift', idle_cash: 'idle cash',
+    roth_conversion: 'Roth conversions', tax: 'tax', statements: 'statements',
+    onboarding: 'opening an account', equity_compensation: 'equity compensation'
+  };
+  const topicWords = (id) => T(TOPIC_WORDS[id] || id.split('_').join(' '));
+  const subjectMatch = (a, subject) => {
+    const text = String(subject || '').toLowerCase();
+    /* Words of three letters or fewer are dropped: "tax" alone would match every message with
+       "tax" in it, which is most of them, and a suggestion that always fires says nothing. */
+    return a.topics.find(t => {
+      const words = t.split('_').filter(w => w.length >= 4);
+      return words.length && words.every(w => text.includes(w));
+    }) || null;
+  };
+  function suggestArticles(c) {
+    const lang = langOf();
+    const h = c.householdId ? hhById(c.householdId) : null;
+    const open = h ? Object.keys(SIGNAL_META).filter(k => SIGNAL_ROWS.some(r => r.kind === k && r.householdId === h.id)) : [];
+    const found = new Map();
+    /* Subject first: it is what the advisor is actually writing about, and it outranks a
+       standing fact about the household that they may not be writing about at all. */
+    for (const a of ARTICLES) {
+      const hit = subjectMatch(a, c.subject);
+      if (hit) found.set(a.id, { a, matchedOn: 'subject', topic: null,
+        because: T('The subject line mentions {words}.', { words: topicWords(hit) }) });
+    }
+    for (const a of ARTICLES) {
+      if (found.has(a.id)) continue;
+      const k = a.topics.find(t => open.includes(t));
+      if (k) found.set(a.id, { a, matchedOn: 'signal', topic: T(SIGNAL_META[k].topic),
+        because: T('{name} has {topic} on the record.', { name: h.name, topic: T(SIGNAL_META[k].topic) }) });
+    }
+    const out = [...found.values()].map(x => ({ ...articleOut(x.a, lang), because: x.because, matchedOn: x.matchedOn, topic: x.topic }));
+    return {
+      items: out.filter(x => x.sendable).slice(0, SUGGEST_MAX),
+      /* Only the subject-line ones. "The household has drifting allocation and the piece about
+         it is in review" is a fact about the library; "you are writing about Roth conversions
+         and that piece is out of date" is a fact about what they are doing right now. */
+      unavailable: out.filter(x => !x.sendable && x.matchedOn === 'subject').slice(0, 2)
+    };
+  }
+
+  /* Expiry is applied rather than stored. An article approved with a date that has since passed
+     is expired whether or not anyone went back and changed the field, which is the only version
+     of this rule that survives a weekend. */
+  const articleStatus = (a) => (a.status === 'approved' && a.expiresAt && a.expiresAt < dateOnly(0)) ? 'expired' : a.status;
+  const articleById = (id) => ARTICLES.find(a => a.id === id);
+  const articleOut = (a, lang) => {
+    const L = a.text[lang] || a.text.en, st = articleStatus(a);
+    return { id: a.id, title: L.title, summary: L.summary, topics: a.topics, version: a.version,
+      status: st, languages: Object.keys(a.text), readingMinutes: a.readingMinutes,
+      approvedBy: a.approvedBy, approvedAt: a.approvedAt, expiresAt: a.expiresAt,
+      /* A placeholder, and the contract says so: a real build hands back a signed, expiring link
+         into content storage, which has retention and disposal rules of its own. */
+      contentUrl: 'https://content.example.com/articles/' + a.id + '/v' + a.version + '.pdf',
+      sendable: st === 'approved' };
+  };
 
   // id, title, category, advisor, household, due offset, status
   const COMPLIANCE = [
@@ -180,6 +354,15 @@ function createMock() {
     ['c8', 'Disclosure delivery, Santoro', 'disclosure', 'adv4', 'h26', 15, 'open'],
     ['c9', 'Agreement renewal, Tanaka', 'agreement', 'adv4', 'h27', -20, 'done']
   ].map(([id, title, category, advisorId, householdId, off, status]) => ({ id, title, category, advisorId, advisorName: advName(advisorId), householdId, dueDate: dateOnly(off), status }));
+
+  /* An article waiting on review joins the queue that already exists (COMM-03) rather than
+     getting a second one of its own. Derived from the library instead of written out beside it,
+     so an article put into review cannot fail to turn up here. Left untranslated like every
+     other row in this table: a real build would compose the title through src/i18n.js, the way
+     nextActions() does, and then all of them would be translated rather than one. */
+  for (const a of ARTICLES.filter(x => x.status === 'in_review'))
+    COMPLIANCE.push({ id: 'c_' + a.id, title: 'Content review: ' + a.text.en.title, category: 'content_review',
+      advisorId: 'adv1', advisorName: advName('adv1'), householdId: null, dueDate: dateOnly(4), status: 'open' });
 
   const DOCS = [
     ['d1', 'Quarterly statement, Q2', 'statement', -85], ['d2', 'Quarterly statement, Q1', 'statement', -175],
@@ -830,11 +1013,75 @@ function createMock() {
       if (!isRole('principal') && h.advisorId !== user().advisorId) return notFound('Household');
       return ok({ ...hhSummary(h), accounts: h.accounts });
     }],
+    /* ---- the article library (aRCHi) ----------------------------------------------------
+     * Read by an advisor choosing something to send and by a principal reviewing what goes out;
+     * it is the firm's shelf and both of them are looking at the same one.
+     */
+    ['GET', /^\/articles$/, (m, q) => {
+      if (!isRole('advisor') && !isRole('principal')) return forbid();
+      const lang = q.language || langOf();
+      let list = ARTICLES;
+      if (q.language) list = list.filter(a => a.text[q.language]);
+      if (q.topic) list = list.filter(a => a.topics.includes(q.topic));
+      /* Approved unless something asks otherwise. The picker gets the right answer by saying
+         nothing, so a forgotten filter cannot be what offers an expired tax article. */
+      const want = q.status || 'approved';
+      if (want !== 'all') list = list.filter(a => articleStatus(a) === want);
+      return ok(paged(list.map(a => articleOut(a, lang)), q, 'title,asc'));
+    }],
+    ['GET', /^\/articles\/([^/]+)$/, (m, q) => {
+      if (!isRole('advisor') && !isRole('principal')) return forbid();
+      const a = articleById(m[1]); if (!a) return notFound('Article');
+      const mine = isRole('advisor') ? myHH().map(h => h.id) : HH.map(h => h.id);
+      return ok({ ...articleOut(a, q.language || langOf()), versions: a.versions,
+        sharedCount: SHARED.filter(x => x.articleId === a.id && mine.includes(x.householdId)).length });
+    }],
+    /* The covering note (TM-07: the article is the firm's, the note is the adviser's). It takes
+       no household id, and that is the design rather than an omission — see the prompt. */
+    ['POST', /^\/articles\/([^/]+)\/note$/, (m, q, b) => {
+      if (!isRole('advisor')) return forbid();
+      const a = articleById(m[1]); if (!a) return notFound('Article');
+      /* No reason is a legitimate request, not a bad one: a match made on a subject line has no
+         tally-free phrase to offer, and an invented one would be the thing this feature must
+         not do. The note falls back to being about the article itself. */
+      const lang = langOf(), L = a.text[lang] || a.text.en;
+      return { status: 201, async: 'draftArticleNote', context: {
+        title: L.title, summary: L.summary, reason: (b && b.reason) || null, tone: (b && b.tone) || 'Warm and direct',
+        readingMinutes: a.readingMinutes,
+        readFrom: [{ source: 'platform', id: a.id, label: L.title + ' (v' + a.version + ')' }] } };
+    }],
+
+    ['GET', /^\/communications\/([^/]+)\/suggested-articles$/, (m) => {
+      if (!isRole('advisor')) return forbid();
+      const c = COMMS.find(x => x.id === m[1] && x.advisorId === user().advisorId);
+      if (!c) return notFound('Communication');
+      return ok(suggestArticles(c));
+    }],
+
     ['POST', /^\/households\/([^/]+)\/shares$/, (m, q, b) => {
       if (!isRole('advisor')) return forbid();
       const h = hhById(m[1]); if (!h || h.advisorId !== user().advisorId) return notFound('Household');
       if (!b || !b.type || !b.sourceId || !b.title) return fail(400, 'bad_request', 'Type, sourceId and title are required.');
-      const s = { id: 'sh' + (++seq), householdId: h.id, type: b.type, title: b.title, message: b.message || null, sharedAt: NOW(), sharedBy: user().name, contentUrl: null };
+      /* An article is a seventh kind of thing going through the one door, not a second door.
+         Everything below it — the record, the activity entry, the client portal — is unchanged. */
+      let extra = { articleId: null, articleVersion: null, language: null }, contentUrl = null;
+      if (b.type === 'article') {
+        const a = articleById(b.sourceId); if (!a) return notFound('Article');
+        const st = articleStatus(a);
+        /* Checked here rather than trusted from the caller. The picker offers only sendable
+           articles, but the picker is not what the client-safe boundary rests on. */
+        if (st !== 'approved') return fail(409, 'article_not_sendable',
+          'This article is ' + st.replace('_', ' ') + ' and cannot be sent.');
+        const lang = b.language || 'en';
+        if (!a.text[lang]) return fail(409, 'article_not_translated',
+          'This article is not published in ' + lang + '.');
+        /* The version is stamped here and never sent by the caller: it is the answer to the one
+           question asked about a share afterwards, and a caller could get it wrong or stale.
+           Revising the article later does not change what this client was given. */
+        extra = { articleId: a.id, articleVersion: a.version, language: lang };
+        contentUrl = articleOut(a, lang).contentUrl;
+      }
+      const s = { id: 'sh' + (++seq), householdId: h.id, type: b.type, title: b.title, message: b.message || null, sharedAt: NOW(), sharedBy: user().name, contentUrl, ...extra };
       SHARED.unshift(s);
       logActivity(user().advisorId, { actor: 'advisor', subjectType: 'household', subjectId: h.id,
         summary: 'Shared "{title}" with {name}', vars: { title: s.title, name: h.name },
@@ -962,7 +1209,14 @@ function createMock() {
       const items = Object.keys(SIGNAL_META).map(kind => {
         const rows = mine.filter(s => s.kind === kind); if (!rows.length) return null;
         return { id: 'sig_' + kind, kind, count: rows.length, label: T(SIGNAL_META[kind].label),
-          detail: SIGNAL_META[kind].detail(rows.map(r => r.value)), source: 'greenmeadows', dataAsOf: NOW() };
+          detail: SIGNAL_META[kind].detail(rows.map(r => r.value)),
+          /* The sayable half. label and detail count the advisor's households and add up their
+             losses; topic is the subject on its own, which is what can be put in front of a
+             client. It was already composed for the rehearsal prompt and is now named in the
+             contract, because a second caller reaching for label instead is how an internal
+             tally ends up in client copy. */
+          topic: T(SIGNAL_META[kind].topic),
+          source: 'greenmeadows', dataAsOf: NOW() };
       }).filter(Boolean);
       return ok({ items });
     }],

@@ -6,7 +6,8 @@ Which of the 75 planned features each API operation serves, and what sits behind
 carries its requirement IDs in its `description`, and this table is the inverse of those tags.
 If a feature and an operation disagree here, the contract is the thing to fix.
 
-Written 25 September 2026, against contract v0.3 (72 operations).
+Written 25 September 2026, against contract v0.3 (72 operations). The tables are regenerated;
+the prose below them is updated by hand, most recently for aRCHi at v0.6.0-draft (81 operations).
 Shareable version: https://claude.ai/code/artifact/d179b0d4-48da-44e7-bc51-58805d2cd6ac
 
 ## The short version
@@ -15,9 +16,9 @@ Shareable version: https://claude.ai/code/artifact/d179b0d4-48da-44e7-bc51-58805
 
 | | Count |
 | --- | --- |
-| Features with at least one API operation | **47** of 75 |
-| Features with no operation yet | **28** |
-| Operations carrying a requirement ID | **54** of 78 |
+| Features with at least one API operation | **48** of 75 |
+| Features with no operation yet | **27** |
+| Operations carrying a requirement ID | **58** of 82 |
 
 ### Intelligence Platform
 
@@ -52,8 +53,8 @@ Shareable version: https://claude.ai/code/artifact/d179b0d4-48da-44e7-bc51-58805
 
 | Feature | API operation | Source |
 | --- | --- | --- |
-| **COMM-01** AI email drafting | `GET /communications`<br>`PATCH /communications/{communicationId}`<br>`POST /communications/{communicationId}/redraft` | Model, Platform |
-| **COMM-02** Tone personalisation | `GET /communications`<br>`PATCH /communications/{communicationId}`<br>`POST /communications/{communicationId}/redraft` | Model, Platform |
+| **COMM-01** AI email drafting | `GET /communications`<br>`GET /communications/{communicationId}/suggested-articles`<br>`PATCH /communications/{communicationId}`<br>`POST /communications/{communicationId}/redraft` | Model, Platform |
+| **COMM-02** Tone personalisation | `GET /communications`<br>`GET /communications/{communicationId}/suggested-articles`<br>`PATCH /communications/{communicationId}`<br>`POST /articles/{articleId}/note`<br>`POST /communications/{communicationId}/redraft` | Model, Platform |
 | **COMM-03** Communication tracker | `GET /communications` | Platform |
 | **COMM-04** Client monitoring | `GET /alerts` | Green Meadows |
 | **COMM-05** Client Sentiment Index | — *Regulatory review* | — |
@@ -116,11 +117,11 @@ Shareable version: https://claude.ai/code/artifact/d179b0d4-48da-44e7-bc51-58805
 | **GP-03** Proposal generation | — *Not started* | — |
 | **GP-04** Portfolio proposals | — *Not started* | — |
 | **GP-05** Pitch decks | — *Not started* | — |
-| **GP-06** Content for social, blogs, newsletters | — *Regulatory review* | — |
-| **GP-07** Branded content | `GET /firm/branding`<br>`PATCH /firm/branding` | Platform |
+| **GP-06** Content for social, blogs, newsletters | `GET /articles`<br>`GET /articles/{articleId}`<br>`GET /communications/{communicationId}/suggested-articles`<br>`POST /articles/{articleId}/note` | Platform |
+| **GP-07** Branded content | `GET /articles`<br>`GET /articles/{articleId}`<br>`GET /firm/branding`<br>`PATCH /firm/branding` | Platform |
 | **GP-08** Podcasts | — *Regulatory review* | — |
 | **GP-09** Presentations | — *Regulatory review* | — |
-| **GP-10** Branded materials | `GET /firm/branding`<br>`PATCH /firm/branding` | Platform |
+| **GP-10** Branded materials | `GET /articles`<br>`GET /firm/branding`<br>`PATCH /firm/branding` | Platform |
 
 ### Advisor and Client Experience
 
@@ -145,19 +146,23 @@ Shareable version: https://claude.ai/code/artifact/d179b0d4-48da-44e7-bc51-58805
 
 ## What the gaps are actually waiting on
 
-The 31 features without an operation are not 31 separate pieces of work. They cluster:
+The 27 features without an operation are not 27 separate pieces of work. They cluster:
 
 | Blocked on | Features | Count |
 | --- | --- | --- |
-| **Compliance review before build** | COMM-05, PM-04, RTI-01, RTI-03, RTI-09, GP-06, GP-08, GP-09 | 8 |
+| **Compliance review before build** | COMM-05, PM-04, RTI-01, RTI-03, RTI-09, GP-08, GP-09 | 7 |
 | **Something that reads a document** | IP-05, RTI-02, AX-03 | 3 |
 | **A CRM provider** | IP-02, MEET-08 | 2 |
 | **An inbox** | IP-03 | 1 |
 | **Market and research sources** | IP-06, IP-07 | 2 |
 | **Structurally out of scope for one custodian** | PO-09 | 1 |
 | **Scope undefined** | PO-05 | 1 |
-| **Buildable now, simply not started** | PL-01, RTI-06, RTI-07, GP-03, GP-04, GP-05, AX-05, AX-06, AX-07 | 9 |
+| **Buildable now, simply not started** | PL-01, RTI-06, RTI-07, GP-03, GP-04, GP-05 | 6 |
 | **Composed in the UI rather than by one operation** | PO-01, IP-04, IP-10 | 3 |
+
+**GP-06 has left the compliance row, and it is the only one that has.** Its review has happened;
+the others have not been reviewed and cannot be estimated until they are. AX-05 to AX-07 have
+left the bottom row because SimGPT built them.
 
 Two things follow from that shape:
 
@@ -165,7 +170,7 @@ Two things follow from that shape:
 three features from impossible to buildable, and it is the only entry in the table where that
 is true.
 
-**Nine features need a conversation, not a sprint.** The compliance set is larger than any
+**Seven features need a conversation, not a sprint.** The compliance set is still larger than any
 other blocker, and none of it can be estimated until it has been reviewed.
 
 ## Three features where the mapping is worth a second look

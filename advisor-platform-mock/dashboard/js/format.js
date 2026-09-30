@@ -89,8 +89,8 @@ const lookup = (o) => new Proxy(o, { get: (x, k) => (k in x ? t(x[k]) : undefine
 
 export const HH_STATUS = { on_track: ['On track', 'ok'], needs_review: ['Needs review', 'warn'], overdue_contact: ['Overdue contact', 'crit'], onboarding: ['Onboarding', 'plain'], forms_incomplete: ['Forms incomplete', 'warn'] };
 export const statusBadge = (s) => { const [label, c] = HH_STATUS[s] || [s, 'plain']; return `<span class="badge ${c}">${esc(t(label))}</span>`; };
-export const SHARE_TYPES = lookup({ plan: 'Plan', tax_explanation: 'Tax explanation', report: 'Report', proposal: 'Proposal', message: 'Message', document: 'Document' });
-export const CATEGORY = lookup({ communications_review: 'Communications review', annual_review: 'Annual review', disclosure: 'Disclosure', restriction: 'Restriction', agreement: 'Agreement' });
+export const SHARE_TYPES = lookup({ plan: 'Plan', tax_explanation: 'Tax explanation', report: 'Report', proposal: 'Proposal', message: 'Message', document: 'Document', article: 'Article' });
+export const CATEGORY = lookup({ communications_review: 'Communications review', annual_review: 'Annual review', disclosure: 'Disclosure', restriction: 'Restriction', agreement: 'Agreement', content_review: 'Content review' });
 
 /* The CRM is the system of record (docs/system-of-record.md). While none is connected, a badge
    on every row would be pure noise, so the state shows per record only when it needs attention

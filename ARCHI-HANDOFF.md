@@ -1,5 +1,14 @@
 # aRCHi — handoff
 
+> **Status, 30 September 2026: two of the six primary placements built.** The content model, the
+> portfolio signals card and the message-draft strip are done — contract v0.7.0-draft, 164 tests
+> passing. The full account is the top two entries in `advisor-platform-mock/docs/design.md`;
+> read those before this. Still open from the plan below: **the share dialog's picker**
+> (section 4, first row), **the meeting invitation** (third row), **onboarding** and **the
+> client's own words on Request a meeting** — plus two decisions the build ran into and could not
+> settle on its own: the advisor voice setting (section 5, question 2) and a `language` field on
+> the household (question 3). Sections 5 and 8 are now history rather than instructions.
+
 **For whoever picks this up next.** This is everything needed to add aRCHi to the advisor
 dashboard without reading the rest of the history. It assumes you have the repo and nothing else.
 

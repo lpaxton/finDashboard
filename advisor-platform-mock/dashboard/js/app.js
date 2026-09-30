@@ -5,6 +5,7 @@ import { $, esc } from './format.js';
 import { state, applyBranding, applyTheme, getTheme } from './state.js';
 import { openAsk, closeAsk, openActivity, closeActivity, setAskContext, openSettings, closeSettings } from './ui.js';
 import { closeSim } from './sim.js';
+import { closeArchi } from './archi.js';
 import { t, setLang, getLang, locale, onLangChange } from './i18n.js';
 import { advisorView } from './advisor.js';
 import { firmView } from './firm.js';
@@ -43,7 +44,7 @@ function showView(v) {
   const ask = $('askBtn');
   ask.hidden = v === 'client';
   $('actBtn').hidden = v !== 'advisor';
-  closeAsk(); closeActivity(); closeSim();
+  closeAsk(); closeActivity(); closeSim(); closeArchi();
   // The section nav is mounted outside #view so it can move above the header on a phone, which
   // means replacing the view does not remove it. A view that has no sections must therefore not
   // inherit the last one's: the client portal was showing the firm spine, Ownership and all.
@@ -82,9 +83,9 @@ async function boot() {
 onLangChange(() => { closeAsk(); closeActivity(); if (state.view) showView(state.view); });
 
 document.addEventListener('click', (e) => {
-  if (e.target.closest('#askBtn')) { closeActivity(); closeSettings(); closeSim(); openAsk(state.session.roles.includes('principal')); return; }
-  if (e.target.closest('#actBtn')) { closeAsk(); closeSettings(); closeSim(); openActivity(); return; }
-  if (e.target.closest('[data-settings]')) { closeAsk(); closeActivity(); closeSim(); openSettings(); return; }
+  if (e.target.closest('#askBtn')) { closeActivity(); closeSettings(); closeSim(); closeArchi(); openAsk(state.session.roles.includes('principal')); return; }
+  if (e.target.closest('#actBtn')) { closeAsk(); closeSettings(); closeSim(); closeArchi(); openActivity(); return; }
+  if (e.target.closest('[data-settings]')) { closeAsk(); closeActivity(); closeSim(); closeArchi(); openSettings(); return; }
   const t = e.target.closest('[data-view]'); if (t) showView(t.dataset.view);
   const p = e.target.closest('[data-persona]');
   if (p) { setPersona(p.dataset.persona); document.querySelectorAll('[data-persona]').forEach(b => b.setAttribute('aria-pressed', String(b === p))); boot(); }

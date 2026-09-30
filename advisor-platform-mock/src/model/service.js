@@ -60,4 +60,7 @@ export async function rehearseMeeting(ctx) {
 export const summariseMeeting = (ctx) => run('meeting_summary', ctx);
 export const draftAgenda = (ctx) => run('meeting_agenda', ctx);
 export const draftEmail = (ctx) => run('email_draft', ctx);
+/* aRCHi. It drafts the covering note and nothing else: choosing the article is the advisor's,
+   the article itself is the firm's, and sending it is an action no capability here may take. */
+export const draftArticleNote = (ctx) => run('article_note', ctx);
 export { modelStatus };

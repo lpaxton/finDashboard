@@ -9,7 +9,12 @@ import { THEMES, getTheme, applyTheme } from './state.js';
    that is really data — a person's name, a household's — is passed through raw(). */
 import { t, raw, locale, setLang } from './i18n.js';
 /* SHARE_TYPES reads through t(), so Object.entries on it would translate the keys too. The
-   keys are contract values and must stay as they are. */
+   keys are contract values and must stay as they are.
+
+   `article` is deliberately not among them, and the gap is the point: an article share carries
+   an article id and a version, and this form has neither — it invents a sourceId. The portal
+   still has to be able to name one when it arrives, so SHARE_TYPES does have it and this does
+   not. Articles are sent from the aRCHi panel until this dialog grows a picker of its own. */
 const SHARE_TYPE_KEYS = { plan: 1, tax_explanation: 1, report: 1, proposal: 1, message: 1, document: 1 };
 import { isOpen, setOpen } from './viewstate.js';
 

@@ -27,6 +27,239 @@ Entries are newest first.
 
 ## Log
 
+### 30 September 2026 · aRCHi beside a message — Suggested reading (GP-06, COMM-01, COMM-02)
+
+**Asked for.** Luke asked where aRCHi could be reached from, and specifically about adding an
+article to a client communication. It could not: the only door was the portfolio signals card.
+Then: *"yes, build it with the Suggested reading strip."*
+
+**Built.** `GET /communications/{id}/suggested-articles`, and a strip under the message draft
+that shows what the library has for it, why, and what can be done about it.
+
+**The decision the whole thing rests on: a message and an article are two acts.** There is no
+attach. Folding the article into *Approve* would make one press stand for two things reaching a
+client by two routes under two approvals, which is the thing X-03 is about. So the strip opens
+the same aRCHi panel the signals open, with the same approval and the same receipt — and the
+message's own send sheet still reads **Attached: Nothing**, which stays true, because nothing is
+attached to the email. A test asserts the strip never calls `/shares` itself and that approving a
+message has not grown an article step.
+
+**What does connect them is a sentence.** An article sitting in the portal that the email never
+mentions is an article the client will not find. So once one has gone, the row offers **Mention
+it in the message** — which appends one line through the same save the advisor's own typing goes
+through. It is therefore undoable, it updates the receipt to *edited by Dana Whitfield*, and it
+lands in the activity log. An edit they make, not one made for them.
+
+**The match is deterministic, and that is the design rather than a shortcut.** Two ways in, both
+facts already on the advisor's own record:
+
+| | |
+| --- | --- |
+| the subject line | names a topic — *"Following up on your Roth conversion"* |
+| an open signal | the household has something an article is written for |
+
+A model asked to pick would need provenance for the choice (X-04) and would still leave the
+advisor no way to check it. A rule carries its reason: *"the subject line mentions Roth
+conversions"* is a claim they can agree or disagree with at a glance, and every row shows it.
+
+Subject outranks signal, because it is what they are writing about rather than a standing fact
+about the household they may not be writing about at all.
+
+**The body is read and the subject is not — no, the other way round, and it matters.** Only the
+subject. The body wanders: cm2's mentions a capital gain while the message is about
+concentration, and a suggestion drawn from a sentence the advisor has half rewritten is one they
+cannot place. The first version of that test passed either way — no fixture happened to
+distinguish them — so it now edits a draft's body, asserts nothing appears, moves the same words
+into the subject, and asserts one does.
+
+**Words of three letters or fewer are dropped from a match.** `tax` is a topic id. Left in, it
+would fire on any subject with "tax" in it, which is most of them, and a suggestion that always
+fires says nothing.
+
+**The most useful thing the strip does is say what it cannot send.** cm1 is *"Following up on
+your Roth conversion"*, and the one piece in the library about Roth conversions is expired. The
+obvious implementation drops it and shows three unrelated articles the household happens to
+qualify for. Instead it comes back under `unavailable`, dimmed, with no button and with the
+reason: *"Cannot be sent: the approval ran out on 21 August 2026."* The advisor can chase the
+review rather than wonder why nothing matched the thing they are actually writing about. Only
+subject-line matches are reported this way — *"the household has drifting allocation and the
+piece about it is in review"* is a fact about the library, not about what they are doing now.
+
+**Two panels became one entry point with two ways in**, rather than a second send path. A caller
+that already knows the households — a message goes to one named client — hands them over instead
+of sending the panel to fetch a signal's list. The panel reports back what went, so the strip can
+mark the row *"Sent to Okafor household · version 3"*; it is told after the fact and never asked
+first, because nothing a caller returns may stop or alter a send.
+
+**`ArticleNoteRequest.reason` is now optional**, and that is the honest answer rather than a
+loosening. A subject-line match has no phrase free of counts and figures to offer — the topic id
+is not one — and the note falls back to being about the piece itself. Inventing a reason is the
+failure this whole feature is arranged around.
+
+**A French screen listing an English article.** `ar4` is published in English only, so the
+strip on a French screen showed one English title among French ones with nothing said about it.
+The row now reads *"publié en English uniquement"*, and the panel says it again before anything
+is sent. Named in the language itself, from the list the interface already uses.
+
+**Implications.** Contract **0.7.0-draft**: one operation, two schemas, one field made optional.
+`advisor.js` grows the strip; `archi.js` gains an options object in place of four positional
+arguments. Seven tests, three verified by injecting the matching fault — unsendable matches
+dropped, the body matched as well as the subject, short words left in — plus two from the first
+entry re-verified against the new code path. 164 tests, all passing.
+
+**Not built.** The household dialog's *Share with client* picker, still. And the strip is drawn
+only on a message that has not gone: attaching reading to a message already sent is a follow-up,
+which is a different feature with a different sentence on it.
+
+---
+
+### 30 September 2026 · aRCHi — an approved article, sent to a client (GP-06, GP-07, GP-10, TM-02)
+
+**Asked for.** Luke, after the handoff was written: *"let's start to work aRCHi into the
+dashboard."* The handoff said where to start — the content model first, then the portfolio
+signals — and that the regulatory review is done. **It is done.** GP-06 has left the "compliance
+review before build" row in the feature map; GP-08 and GP-09 have not, and nothing here touched
+them.
+
+**Built.** An article library with versions, states, expiries and languages; three operations
+over it; a seventh value on `ShareType`; and a panel beside the portfolio signals that chooses
+an article, chooses who gets it, drafts the note that goes with it, and sends.
+
+| | |
+| --- | --- |
+| `GET /articles` | the shelf. Approved unless asked otherwise |
+| `GET /articles/{id}` | one article and its version history |
+| `POST /articles/{id}/note` | the covering note, drafted. Sends nothing |
+| `POST /households/{id}/shares` | unchanged, except that `article` is now a type it takes |
+
+**The content model came first, and that was the whole point of the instruction.** A picker
+built before a library produces a product that cannot answer the only question ever asked about
+it. Four fields carry that question:
+
+- **a version**, because articles get revised and the client has the one they were sent;
+- **a state** — draft, in review, approved, restricted;
+- **an expiry**, because a tax article past its date is not stale, it is wrong;
+- **a language**, because the portal is localised and an untranslated article cannot go to a
+  client reading French.
+
+**Expiry is applied, not stored.** `ar5` is in the fixtures as *approved* with a date forty days
+gone, and it reports back expired. If the status field were the answer, every article would stay
+sendable until somebody remembered to go and change it — which is the exact mechanism by which a
+stale tax piece goes out. A test holds the computed form, and reverting it to `a.status` fails
+three tests, not one.
+
+**The version is stamped by the server and the caller cannot set it.** It is the one field a
+regulator asks about and the one party that could have it stale is the caller. Sending
+`articleVersion: '99'` in the body changes nothing. It is also what makes the record a snapshot:
+revising the article afterwards cannot rewrite what a client was given.
+
+**One door, and it did not need widening.** `POST /households/{id}/shares` already described
+itself as the only way advisor-side content reaches the client portal. An article is a seventh
+enum value on it; everything downstream — the approval record, the activity entry, *From your
+advisor*, the client-safe boundary — was already there and is untouched. A test counts the
+operations in the contract that return a `SharedItem` and fails at two.
+
+Sending to five households is five calls to that one operation rather than one bulk call. Each
+send is its own record and its own line in the activity log, which is what makes *who was sent
+this* answerable at all; a bulk endpoint would be one approval standing for five acts.
+
+**The state is checked at the door, not at the picker.** The picker offers only sendable
+articles, but the picker is not what the client-safe claim rests on. Going straight at the
+endpoint with an expired, restricted or in-review article gets a 409 and files nothing — not a
+share, and not an activity entry either, because an entry for a refusal reads as though
+something went out.
+
+**A bug the tests would not have found, and the browser did.** The panel drafted a covering note
+and it came back:
+
+> Sending it because **5 households** have losses worth harvesting. About **$61,200** in
+> unrealised losses.
+
+That note goes to all five of those households. Each of them would have been told the aggregate
+position of the other four. The cause was one word: the panel passed the signal row's own
+sentence through as the reason, and that sentence is a description of *the advisor's book*.
+
+So `Signal` gains **`topic`** — the same signal with the arithmetic taken out ("losses worth
+harvesting"). `label` and `detail` count households and add up losses and stay on the advisor's
+screen; `topic` is the half that can be said to a client, and it is what an article is chosen
+and introduced by. It already existed inside the rehearsal prompt's context; it is named in the
+contract now, because a second caller reaching for `label` instead is exactly how an internal
+tally ends up in client copy. Two tests: one that no signal's topic contains a digit, one that
+the panel sends `subject` and not `meaning`.
+
+**The note knows nothing about the household, and the context is where that is enforced.** Not
+the prompt's good intentions — the context block handed to the model carries no household name,
+no assets, no balance, nothing. A test asserts no key of it matches `/household|aum|balance|
+holding|account|client/i` and that no household name survives into the rendered prompt. The
+note is three sentences, always editable, and the advisor's edit is what is sent (X-03), with
+the same provenance line every other model output in this product carries (X-04).
+
+**TM-07 is half-answered and should be recorded as half-answered.** The article is the firm's;
+the note is the advisor's. But there is still no advisor voice setting in the product — the
+three tones borrowed from the email drafter are the nearest thing that exists. aRCHi is now the
+second feature to want one. **Needs a decision.**
+
+**The language question is answered honestly rather than well.** An article is published in the
+languages it is published in; `ar4` is English only, on purpose, so the picker has to be able to
+say so. The share records which language version went. What the platform *cannot* do is match
+that to the client: the household record has no language field, and the client's own portal
+setting is theirs. So the panel says *"the platform cannot see which language a client reads, so
+this is your call"* and leaves it to the advisor. A real build wants `language` on the household,
+which is a contract change nobody has made. **Needs a decision.**
+
+**A review joins the queue that exists.** An in-review article appears in Firm → Compliance under
+a new `content_review` category, derived from the library rather than written out beside it — so
+an article put into review cannot fail to turn up. COMM-03's queue was the right home; a second
+queue for content would have been a second place to forget to look. A test asserts the two counts
+agree in both directions, and that the contract has no article review path.
+
+**What the client sees, and does not.** The portal names the type ("Article"), shows the
+advisor's note, and links the PDF. It does not get the article's **summary** — that is written
+for an advisor choosing between pieces, has not been reviewed as client copy, and a test asserts
+no field of the shared item carries it.
+
+**The PDF is honestly out of scope.** `contentUrl` is a placeholder and the contract says so: a
+real build hands back a signed, expiring link into content storage, which has retention and
+disposal rules of its own. Building a file server here would have implied those rules exist.
+
+**Two things fixed on the way past.**
+
+*The alignment rule from the SimGPT entry now belongs to both lists.* The signal row has the same
+shape as a meeting row — a disclosure beside an ordinary button — and would have rediscovered the
+same bug. `.meet-actions` and `.row-actions` share the four rules rather than the second list
+copying them. Measured: both controls 31.5px, same top, 8px apart.
+
+*A French screen with English money on it.* `itemDetail` — "Unrealized loss of $12,400" — was the
+last line on the signals list composed in English with an en-US number glued to it. It is drawn
+twice now, under the signal and beside the article offered for it, so a French reader met it
+twice. Through `T()` and the locale it reads "Moins-value latente de 12 400 $US", and drift reads
+"7,2 points" rather than "7.2". While fixing it: "unrealized" was the odd spelling out in a file
+that says "unrealised" everywhere else, and two spellings on one card is worse than either.
+
+**Tests.** Eighteen, across `test/archi.test.js` and one in `test/i18n.test.js`. Ten verified by
+injecting the matching fault and watching the right test fail: expiry read off the status field,
+the caller's version trusted, the household handed to the note context, the language check
+dropped, the portal unable to name the type, a second `SharedItem` door added, the review queue
+entry removed, the client allowed to read the library, the panel sending the row's tally, and the
+signal detail composed in English.
+
+**Implications.** Contract **0.6.0-draft**: three operations, six schemas, one enum value, three
+fields on existing schemas, no breaking change. New `dashboard/js/archi.js` and a fifth side
+panel. 157 tests, all passing.
+
+**Not built, deliberately.** The other two primary placements from the touchpoint map: the
+household dialog's *Share with client* form, and the meeting invitation. The share form is
+untouched and `article` is deliberately **not** in its type list — that form invents a `sourceId`
+and has no article picker, so offering the type there would produce a 404 from a control that
+looked like it worked. The gap is commented at the call site. The client's own words on
+*Request a meeting* — the best topic signal in the product — still nothing reads.
+
+**Still to build:** the share dialog's picker, the meeting invitation, and a decision on the
+advisor voice setting that both TM-07 and this feature now want. *(The message draft placement
+was built straight after — the entry above.)*
+
+---
+
 ### 30 September 2026 · SimGPT — rehearsing a conversation (AX-05, AX-06, AX-07)
 
 **Asked for.** Luke, after the touchpoint map: build the two products, aRCHi's regulatory review is
@@ -160,7 +393,7 @@ existed. New `dashboard/js/sim.js` and a fourth side panel. Eight tests, five ve
 the matching fault.
 
 **Still to build:** aRCHi. Its socket is one enum value on `POST /households/{id}/shares` — see the
-touchpoint map.
+touchpoint map. *(Built, 30 September 2026 — the entry above.)*
 
 ---
 

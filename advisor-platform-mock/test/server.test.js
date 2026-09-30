@@ -201,9 +201,9 @@ test('every operation in openapi.yaml is served', async () => {
     const p = l.match(/^  (\/[^\s:]+):\s*$/); if (p) { cur = p[1]; continue; }
     const m = l.match(/^    (get|post|patch|put|delete):\s*$/); if (m && cur) ops.push([m[1].toUpperCase(), cur]);
   }
-  assert.equal(ops.length, 78, 'spec should list 78 operations');
+  assert.equal(ops.length, 82, 'spec should list 82 operations');
   const params = { householdId: 'h3', meetingId: 'm1', taskId: 't1', alertId: 'a1', signalId: 'sig_idle_cash', advisorId: 'adv2', documentId: 'd1',
-    communicationId: 'cm1', prospectId: 'p1', onboardingId: 'ob1', stepId: 'intake_form', invoiceId: 'inv1', queryId: 'q1', teamShareId: 'ts1', playbookId: 'pb1' };
+    communicationId: 'cm1', prospectId: 'p1', onboardingId: 'ob1', stepId: 'intake_form', invoiceId: 'inv1', queryId: 'q1', teamShareId: 'ts1', playbookId: 'pb1', articleId: 'ar1' };
   const missing = [];
   for (const [method, p] of ops) {
     const url = p.replace(/\{(\w+)\}/g, (_, k) => params[k]);

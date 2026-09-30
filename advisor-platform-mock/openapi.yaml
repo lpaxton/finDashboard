@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Advisor Platform API (dashboard domains)
-  version: 0.5.0-draft
+  version: 0.7.0-draft
   description: |
     Draft contract for the advisor dashboard. Not built yet: this spec is the design.
     The backend service aggregates Green Meadows (custodial data) and other sources
@@ -29,6 +29,36 @@ info:
     - `sort` is `field,direction`. A field may have an order of its own rather than an
       alphabetical one, in which case the operation says so and lists the order; ascending always
       means the least urgent first, so `,desc` leads with what needs attention.
+
+    Changes in 0.7.0-draft
+    - `GET /communications/{communicationId}/suggested-articles` (aRCHi, second placement). What
+      from the library answers the message an advisor is writing, matched on the subject line and
+      on the household's own open signals — deterministically, so the reason can be shown and
+      checked, and no model picks. It returns matches that cannot be sent as well, under
+      `unavailable`: an article that answers the subject but is expired or still in review is the
+      most useful thing the library can say at that moment, and hiding it leaves the advisor
+      wondering why nothing matched. Nothing here sends; the send is still the one door.
+      `ArticleNoteRequest.reason` becomes optional, because a subject-line match has no
+      tally-free phrase to give it and inventing one would be worse than leaving it out.
+      Requirement GP-06, COMM-01, COMM-02, TM-02.
+
+    Changes in 0.6.0-draft
+    - The article library (aRCHi). `GET /articles` and `GET /articles/{articleId}`: educational
+      pieces the firm has approved, each one versioned, with an approval state and an expiry.
+      `ShareType` gains `article`, so an article reaches a client through the same
+      `POST /households/{householdId}/shares` as everything else — there is no second door to
+      the client portal. The share records which version was sent and in which language, at
+      send time, because that is the question a regulator asks and it cannot be reconstructed
+      afterwards. An article that is expired, restricted or still in review cannot be shared:
+      the share is refused rather than silently sending a stale tax piece.
+      `ComplianceItem.category` gains `content_review`, so an article waiting on review joins the
+      queue that already exists (COMM-03) instead of getting one of its own.
+      Requirement GP-06, GP-07, GP-10, TM-02, X-03, RTI-08, AX-12.
+      `Signal` gains `topic`: what a signal is about with no count and no figure in it. `label`
+      and `detail` are a description of the advisor's own book, and a covering note introducing
+      an article to five clients at once must not be built out of them.
+      The PDF itself is out of scope here: `contentUrl` is where a real build would put a signed,
+      time-limited link into content storage, which needs its own retention and disposal rules.
 
     Changes in 0.5.0-draft
     - `POST /meetings/{meetingId}/rehearsal` (SimGPT). One exchange in a rehearsal of an upcoming
@@ -72,6 +102,7 @@ tags:
   - name: Reporting
   - name: Playbooks
   - name: Sharing
+  - name: Content library
   - name: Communications
   - name: Prospects
   - name: Onboarding
@@ -418,6 +449,64 @@ paths:
         '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/CompliancePage' } } } }
         '403': { $ref: '#/components/responses/Error' }
 
+  /articles:
+    get:
+      tags: [Content library]
+      operationId: listArticles
+      summary: The firm's approved article library
+      description: "Educational pieces the firm has approved for sending to clients (aRCHi). Advisor and principal. Every article is versioned and carries an approval state and an expiry: only an `approved` article that has not expired can be shared. `topic` matches the topics an article is written for, which include the four portfolio signal kinds, so a signal can be answered with a piece about it. Requirement: GP-06, GP-07, GP-10, TM-02."
+      parameters:
+        - { name: topic, in: query, description: "One topic id. The four portfolio signal kinds are topics, so `tax_loss_harvesting` finds the pieces written for that signal.", schema: { type: string } }
+        - { name: status, in: query, description: "Defaults to approved. The library screen asks for all of them; the picker does not.", schema: { $ref: '#/components/schemas/ArticleStatus' } }
+        - { name: language, in: query, description: "Only articles published in this language.", schema: { type: string } }
+        - { $ref: '#/components/parameters/page' }
+        - { $ref: '#/components/parameters/size' }
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/ArticlePage' } } } }
+        '403': { $ref: '#/components/responses/Error' }
+
+  /articles/{articleId}:
+    get:
+      tags: [Content library]
+      operationId: getArticle
+      summary: One article and its version history
+      description: "The versions matter: a share records the version the client was sent, and this is where that version is looked up afterwards. Requirement: GP-06, GP-07, TM-02."
+      parameters:
+        - { name: articleId, in: path, required: true, schema: { type: string } }
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/ArticleDetail' } } } }
+        '403': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+
+  /articles/{articleId}/note:
+    post:
+      tags: [Content library]
+      operationId: draftArticleNote
+      summary: Draft the covering note that goes with an article
+      description: "A draft for the advisor to edit and approve; nothing is sent here (X-03). The note is about the topic, never about the household's own figures: an educational article with a personalised number attached to it stops being educational. Carries provenance (X-04). Requirement: GP-06, TM-07, COMM-02."
+      parameters:
+        - { name: articleId, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/ArticleNoteRequest' } } }
+      responses:
+        '201': { description: Drafted, content: { application/json: { schema: { $ref: '#/components/schemas/Draft' } } } }
+        '403': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+
+  /communications/{communicationId}/suggested-articles:
+    get:
+      tags: [Content library]
+      operationId: suggestArticlesForCommunication
+      summary: What from the library answers this message
+      description: "Matched two ways, both of them the advisor's own record rather than a guess: the subject line names a topic, or the household has an open signal an article is written for. Deterministic on purpose — the match carries the reason it was made, which an advisor can check, and no model is asked to choose. Nothing is sent here. Requirement: GP-06, COMM-01, COMM-02, TM-02."
+      parameters:
+        - { name: communicationId, in: path, required: true, schema: { type: string } }
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/SuggestedArticleList' } } } }
+        '403': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+
   /households/{householdId}/shares:
     post:
       tags: [Sharing]
@@ -433,6 +522,7 @@ paths:
         '201': { description: Shared, content: { application/json: { schema: { $ref: '#/components/schemas/SharedItem' } } } }
         '400': { $ref: '#/components/responses/Error' }
         '404': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error', description: "The article is expired, restricted, still in review, or not published in the language asked for." }
 
   /me/household:
     get:
@@ -1494,7 +1584,8 @@ components:
         kind: { $ref: '#/components/schemas/SignalKind' }
         count: { type: integer }
         label: { type: string }
-        detail: { type: string, example: 'About $61,200 in unrealized losses' }
+        detail: { type: string, example: 'About $61,200 in unrealised losses' }
+        topic: { type: string, example: 'losses worth harvesting', description: "What the signal is about, with no count and no figure in it. `label` and `detail` describe the advisor's book — how many households, how much in total — and are for the advisor's screen. This is the half that can be said to a client, and it is what an article is chosen and introduced by." }
         source: { $ref: '#/components/schemas/Source' }
         dataAsOf: { type: string, format: date-time }
 
@@ -1563,7 +1654,7 @@ components:
       properties:
         id: { type: string }
         title: { type: string }
-        category: { type: string, enum: [communications_review, annual_review, disclosure, restriction, agreement] }
+        category: { type: string, enum: [communications_review, annual_review, disclosure, restriction, agreement, content_review] }
         advisorId: { type: string }
         advisorName: { type: string }
         householdId: { type: string, nullable: true }
@@ -1579,18 +1670,94 @@ components:
         size: { type: integer }
         totalItems: { type: integer }
 
+    ArticleStatus:
+      type: string
+      description: "`approved` is the only state that can be shared. `draft` has not been through review; `in_review` is waiting for it and appears in the compliance queue; `expired` was approved once and its approval has run out; `restricted` was withdrawn and must not go out again."
+      enum: [draft, in_review, approved, expired, restricted]
+
+    Article:
+      type: object
+      required: [id, title, summary, topics, version, status, languages, readingMinutes]
+      properties:
+        id: { type: string }
+        title: { type: string }
+        summary: { type: string, description: "One or two sentences, shown to the advisor when choosing. Not shown to the client." }
+        topics: { type: array, items: { type: string }, description: "What the piece is written for. The four portfolio signal kinds are topics." }
+        version: { type: string, description: "The current version, e.g. 3. A share records the version as it stood when it was sent." }
+        status: { $ref: '#/components/schemas/ArticleStatus' }
+        languages: { type: array, items: { type: string }, description: "The languages this article is published in. An article cannot be sent in a language it does not have." }
+        readingMinutes: { type: integer }
+        approvedBy: { type: string, nullable: true }
+        approvedAt: { type: string, format: date-time, nullable: true }
+        expiresAt: { type: string, format: date, nullable: true, description: "The date the approval runs out. A tax article past its expiry is not stale, it is wrong, so an expired article cannot be shared." }
+        contentUrl: { type: string, nullable: true, description: "Where the PDF is. A real build returns a signed, time-limited link into content storage; storage, retention and disposal are out of scope for this contract." }
+        sendable: { type: boolean, description: "Computed: approved, not expired, not restricted. The picker offers only these, and the share endpoint enforces it rather than trusting the UI." }
+
+    ArticleVersion:
+      type: object
+      required: [version, publishedAt, status]
+      properties:
+        version: { type: string }
+        publishedAt: { type: string, format: date-time }
+        status: { $ref: '#/components/schemas/ArticleStatus' }
+        note: { type: string, nullable: true, description: "What changed in this version." }
+
+    ArticleDetail:
+      allOf:
+        - $ref: '#/components/schemas/Article'
+        - type: object
+          required: [versions]
+          properties:
+            versions: { type: array, items: { $ref: '#/components/schemas/ArticleVersion' } }
+            sharedCount: { type: integer, description: "How many times this article has been sent, across this advisor's households." }
+
+    ArticlePage:
+      type: object
+      required: [items, page, size, totalItems]
+      properties:
+        items: { type: array, items: { $ref: '#/components/schemas/Article' } }
+        page: { type: integer }
+        size: { type: integer }
+        totalItems: { type: integer }
+
+    ArticleNoteRequest:
+      type: object
+      description: "No household id, and deliberately: the note goes to several households at once and is about the topic, not about anyone's holdings."
+      properties:
+        reason: { type: string, description: "Why the advisor is sending it, as a phrase with no count and no figure in it — usually the topic of the signal it answers. Optional: a match made on a subject line has no such phrase to give, and leaving it out is better than inventing one." }
+        tone: { type: string, description: "Warm and direct, Formal, or Brief. Same three as an email draft." }
+
+    SuggestedArticle:
+      allOf:
+        - $ref: '#/components/schemas/Article'
+        - type: object
+          required: [because, matchedOn]
+          properties:
+            because: { type: string, description: "Why this one was suggested, in words, for the advisor to agree or disagree with. Advisor-facing: it may name the household." }
+            matchedOn: { type: string, enum: [subject, signal], description: "`subject` means the message's own subject line named the topic; `signal` means the household has an open signal this article is written for." }
+            topic: { type: string, nullable: true, description: "The sayable phrase the covering note is built from — the same field, and the same rule, as `Signal.topic`: no count and no figure in it. Null for a subject-line match, which has no such phrase. Not to be confused with `Article.topics`, which are ids." }
+
+    SuggestedArticleList:
+      type: object
+      required: [items, unavailable]
+      properties:
+        items: { type: array, items: { $ref: '#/components/schemas/SuggestedArticle' }, description: "Matches that can be sent, best first." }
+        unavailable: { type: array, items: { $ref: '#/components/schemas/SuggestedArticle' }, description: "Matches on the subject line that cannot be sent, each carrying the state that stops it. Returned rather than dropped: an advisor writing about Roth conversions is better served by 'the piece on that is out of date' than by silence." }
+
     ShareType:
       type: string
-      enum: [plan, tax_explanation, report, proposal, message, document]
+      description: "`article` is a piece from the library (aRCHi); `sourceId` is then the article id."
+      enum: [plan, tax_explanation, report, proposal, message, document, article]
 
     ShareCreate:
       type: object
       required: [type, sourceId, title]
       properties:
         type: { $ref: '#/components/schemas/ShareType' }
-        sourceId: { type: string, description: The advisor-side item being shared. }
+        sourceId: { type: string, description: "The advisor-side item being shared. For type=article, the article id." }
         title: { type: string }
         message: { type: string, description: Optional note shown to the client. }
+        language: { type: string, description: "For type=article: which language version to send. Defaults to the article's primary language. The version actually sent is recorded on the share." }
 
     SharedItem:
       type: object
@@ -1603,6 +1770,9 @@ components:
         sharedAt: { type: string, format: date-time }
         sharedBy: { type: string, description: Advisor who approved the share. }
         contentUrl: { type: string, nullable: true }
+        articleId: { type: string, nullable: true }
+        articleVersion: { type: string, nullable: true, description: "The version as it stood when this client was sent it. Stamped by the backend at send time and never updated afterwards — a later revision of the article does not change what this client received." }
+        language: { type: string, nullable: true, description: The language version sent. }
 
     SharedItemList:
       type: object

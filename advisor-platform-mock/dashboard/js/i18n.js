@@ -156,6 +156,7 @@ const FR = {
   'Proposal': 'Proposition',
   'Message': 'Message',
   'Document': 'Document',
+  'Article': 'Article',
 
   // ---- compliance categories
   'Communications review': 'Revue des communications',
@@ -163,6 +164,7 @@ const FR = {
   'Disclosure': 'Information réglementaire',
   'Restriction': 'Restriction',
   'Agreement': 'Convention',
+  'Content review': 'Revue de contenu',
 
   // ---- CRM sync
   'Not yet in CRM': 'Pas encore dans le CRM',
@@ -769,7 +771,58 @@ const FR = {
   'Hide the next one': 'Masquer le suivant',
   'was {value}': 'auparavant {value}',
   'firm median {value}': 'médiane du cabinet {value}',
-  '#{rank} of {total}': 'n° {rank} sur {total}'
+  '#{rank} of {total}': 'n° {rank} sur {total}',
+
+  // ---- aRCHi: sending an approved article (GP-06, GP-07, GP-10, TM-02, TM-07)
+  'Send an article': 'Envoyer un article',
+  'The article is the firm’s and has been through review. The note you add is yours. Nothing reaches a client until you approve it below.':
+    'L’article appartient au cabinet et a été validé. Le mot que vous ajoutez est le vôtre. Rien ne parvient à un client tant que vous ne l’avez pas approuvé ci-dessous.',
+  'Nothing in the library covers this topic yet.': 'Aucun document de la bibliothèque ne traite encore ce sujet.',
+  'The article': 'L’article',
+  'Version {v} · approved {date} · {n} min read': 'Version {v} · validée le {date} · {n} min de lecture',
+  ' · approval runs out {date}': ' · validation expirant le {date}',
+  'Published in {lang} only.': 'Publié en {lang} uniquement.',
+  'The platform cannot see which language a client reads, so this is your call.':
+    'La plateforme ne sait pas dans quelle langue lit un client : ce choix vous revient.',
+  'Who it goes to': 'Destinataires',
+  'Your note': 'Votre mot d’accompagnement',
+  'The same note goes to everyone on the list, so it says nothing about any one household’s holdings.':
+    'Le même mot part à tous les destinataires : il ne dit donc rien des avoirs d’un foyer en particulier.',
+  'Optional. A line saying why you are sending it.': 'Facultatif. Une ligne expliquant pourquoi vous l’envoyez.',
+  'Draft a note': 'Rédiger un mot',
+  'Approve and send to 1 household': 'Approuver et envoyer à 1 foyer',
+  'Approve and send to {n} households': 'Approuver et envoyer à {n} foyers',
+  'The client sees this in their portal. A share cannot be taken back from here.':
+    'Le client le voit dans son espace. Un partage ne peut pas être annulé d’ici.',
+  'That article is no longer approved for sending.': 'Cet article n’est plus validé pour l’envoi.',
+  'That article is not published in the language you chose.': 'Cet article n’est pas publié dans la langue choisie.',
+  'Sending…': 'Envoi en cours…',
+  'Sent to 1 household': 'Envoyé à 1 foyer',
+  'Sent to {n} households': 'Envoyé à {n} foyers',
+  '{title}, version {v}, in {lang}.': '{title}, version {v}, en {lang}.',
+  'Not sent': 'Non envoyé',
+  'Recorded against each household: the article, the version they were given, and that you approved it. A later revision does not change what they received.':
+    'Consigné pour chaque foyer : l’article, la version reçue, et le fait que vous l’avez approuvé. Une révision ultérieure ne modifie pas ce qu’ils ont reçu.',
+  'Nothing was sent.': 'Rien n’a été envoyé.',
+
+  // ---- aRCHi beside a message draft (GP-06, COMM-01)
+  'Suggested reading': 'Lectures suggérées',
+  'From the firm’s library, matched to this message. Sending one is its own act: it goes to the client’s portal, not with this email.':
+    'Issu de la bibliothèque du cabinet, en rapport avec ce message. L’envoi est un acte distinct : le document va dans l’espace du client, pas avec cet e-mail.',
+  'Send this': 'Envoyer ce document',
+  'Version {v} · {n} min read': 'Version {v} · {n} min de lecture',
+  'Version {v} · {n} min read · published in {lang} only': 'Version {v} · {n} min de lecture · publié en {lang} uniquement',
+  'Cannot be sent: the approval ran out on {date}.': 'Envoi impossible : la validation a expiré le {date}.',
+  'Cannot be sent: it is still with compliance.': 'Envoi impossible : le document est encore en cours de contrôle.',
+  'Cannot be sent: it has been withdrawn.': 'Envoi impossible : le document a été retiré.',
+  'Cannot be sent: it has not been through review.': 'Envoi impossible : le document n’a pas été validé.',
+  'Cannot be sent.': 'Envoi impossible.',
+  'Alongside your message “{subject}” to {name}': 'Avec votre message « {subject} » adressé à {name}',
+  'Sent to {name} · version {v}': 'Envoyé à {name} · version {v}',
+  'Mention it in the message': 'Le mentionner dans le message',
+  'I have also put a short piece in your portal: “{title}”.':
+    'J’ai également déposé un court document dans votre espace : « {title} ».',
+  'Nothing was sent': 'Rien n’a été envoyé'
 };
 
 const DICT = { en: null, fr: FR };

@@ -129,6 +129,24 @@ test('the server composes its own prose in the reader\'s language', async () => 
   assert.ok(act.every(a => !('vars' in a)), 'the interpolation values are internal and must not leak');
 });
 
+test('what a signal says about one household is translated too, numbers included', () => {
+  const call = mk();
+  /* This line is the platform's own prose about a position, and it was the last one on the
+     signals list still composed in English with an en-US number glued to it. It is drawn twice
+     now — under the signal, and beside the article aRCHi offers for it — so a French reader
+     meets it twice. */
+  const en = call('dana', 'GET', '/portfolio-signals/sig_tax_loss_harvesting/items', { size: 1 }).data.items[0];
+  assert.match(en.detail, /Unrealised loss of \$12,400/);
+
+  call('dana', 'PATCH', '/settings', {}, { language: 'fr' });
+  const fr = call('dana', 'GET', '/portfolio-signals/sig_tax_loss_harvesting/items', { size: 1 }).data.items[0];
+  assert.match(fr.detail, /Moins-value latente/);
+  assert.doesNotMatch(fr.detail, /12,400/, 'the figure has to follow the language as well as the words');
+  // Drift is a decimal, and a decimal point left as a point is the same half-translation.
+  const drift = call('dana', 'GET', '/portfolio-signals/sig_allocation_drift/items', { size: 1 }).data.items[0];
+  assert.match(drift.detail, /7,2 points/);
+});
+
 test('language is per person, not per server', () => {
   const call = mk();
   call('marcus', 'PATCH', '/settings', {}, { language: 'fr' });
