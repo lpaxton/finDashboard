@@ -133,6 +133,28 @@ asserts `hasRecord` agrees with whether the record is actually there, for every 
 Both drawn as ordinary buttons rather than quiet ones: they sit side by side doing comparable
 things, and one of them rendered borderless read as the lesser of the two.
 
+**Then Luke, in Chrome: the two buttons are not aligned.** Two causes, and the first is the one
+that would have been hard to see here.
+
+*They were different sizes.* `.disc-toggle` sets 14px against `.btn`'s 13px — right where a
+disclosure stands alone, wrong where it stands beside an ordinary button. That is 1.5px of height,
+invisible in a fallback font and obvious once Plus Jakarta Sans has loaded, which is exactly the
+difference between a preview pane and a real browser.
+
+*And they were never siblings.* The disclosure wraps its toggle in a block, so the flex row held
+one button and one box-containing-a-button; only their tops could be made to agree, never their
+boxes. `display: contents` on the wrapper dissolves it, and both controls become direct children
+of the same row.
+
+Which then broke it differently — with the wrapper gone, the disclosure's panel became a sibling
+too, and in source order it sits *between* the two buttons, so its full-width line pushed Practice
+onto a row of its own whether the brief was open or shut. `order: 1` sends it to the end. Safe to
+reorder because the brief holds no controls: there is nothing inside it that could be tabbed to
+out of sequence.
+
+Measured rather than eyeballed: both 31.5px, same top, 8px apart, and the panel takes its own
+full-width line beneath when open.
+
 **Implications.** Contract **0.5.0-draft**; one operation, two schemas, no change to anything that
 existed. New `dashboard/js/sim.js` and a fourth side panel. Eight tests, five verified by injecting
 the matching fault.
