@@ -68,6 +68,23 @@ information architecture is untouched — same four roles, same ranking, same on
 (FO-01 to FO-04, FO-11) — but the visual weight of Today has dropped a long way. Worth a look
 before the next round of testing. Checked in both themes and at three widths.
 
+**Then, looking at it next to the panels underneath:** *"you see how the cards for Today's
+meetings have a background and that border? add that to the 4 cards above, just have the
+background and borders on the right, left and bottom. keep the colored top of the cards."*
+
+So the sections are panels again — but panels the coloured header **caps** rather than sits
+inside. Surface and hairline on the left, right and bottom; **no top border**, because the
+role's colour is the top edge. Same `--surface` and same `--line` as "Today's meetings" and
+"Portfolio signals" directly below, so Today reads as one family of objects instead of two.
+
+The header is rounded on its top two corners again, having been rounded on all four while there
+was no box for it to cap.
+
+**Where that leaves the three rounds of this.** Not back where it started: the leading section
+is still marked by its chip and its position rather than by a full-bleed gradient, so the eleven
+override rules that gradient required are still gone and the suggestion well is still violet on
+every section. What came back is the container; what did not is the fill.
+
 **Implications.** `styles.css` and one function in `advisor.js`. No contract change, no change
 to what the screen says or does.
 

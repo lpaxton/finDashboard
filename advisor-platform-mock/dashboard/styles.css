@@ -498,27 +498,31 @@ dialog.sheet { max-width: 460px; border: 1px solid var(--line); border-radius: v
    window — opening Ask takes 420px out of the page without changing the viewport, so a media
    query would not notice it. Hence a container query. */
 #section { container-type: inline-size; }
-.rolecards { display: grid; grid-template-columns: 1fr; gap: 28px 32px; align-items: start; }
+.rolecards { display: grid; grid-template-columns: 1fr; gap: 16px; align-items: start; }
 @container (min-width: 620px) {
   .rolecards { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
-.rolesec { display: flex; flex-direction: column; }
+/* The section is a panel that the coloured header caps: background and a hairline on the left,
+   right and bottom, and no top border — the role's colour is the top edge. Same surface and
+   same line as "Today's meetings" below it, so the four sections and the panels under them read
+   as one family rather than two. */
+.rolesec { display: flex; flex-direction: column; overflow: hidden;
+  background: var(--surface); border: 1px solid var(--line); border-top: 0;
+  border-radius: 0 0 var(--radius-2) var(--radius-2); }
 
-/* The coloured header stays: it is how a role is recognised (ST-02), and it was never the part
-   that made these feel like boxes. What went is everything around it — the border, the fill, the
-   gradient behind the body. So the band is now a bar that names the section rather than the lid
-   of a card, rounded on all four corners because there is no longer a box for it to cap. */
-.rolesec-head { display: flex; align-items: center; gap: 9px; margin: 0 0 14px;
-  height: 34px; padding: 0 12px; border-radius: var(--radius-1);
+/* The coloured header stays: it is how a role is recognised (ST-02). Rounded on the top two
+   corners only, because it caps something again. */
+.rolesec-head { display: flex; align-items: center; gap: 9px; margin: 0;
+  height: 34px; padding: 0 12px; border-radius: var(--radius-2) var(--radius-2) 0 0;
   font: 600 14px/1 var(--sans); color: #FBFAF6; }
 .rolesec.role-bd .rolesec-head { background: var(--role-bd-deep); }
 .rolesec.role-ca .rolesec-head { background: var(--role-ca-deep); }
 .rolesec.role-op .rolesec-head { background: var(--role-op-deep); }
 .rolesec.role-pd .rolesec-head { background: var(--role-pd-deep); }
 .rolesec-name { font: inherit; }
-/* The leading section says it leads in words, in the chip. It needs no second treatment: the
-   order already puts it first, and "Why today's order changed" already explains why (ST-03). */
+/* The leading section says it leads in words, in the chip, and by coming first. The order
+   already carries it and "Why today's order changed" already explains it (ST-03). */
 .rolesec-head .rolemark { background: var(--glass-fill); border: 1px solid var(--glass-line); }
 .rolesec-head .chip { margin-left: auto; font: 400 10px/1 var(--mono); text-transform: uppercase;
   letter-spacing: 0.08em; background: var(--glass-fill); border: 1px solid var(--glass-line);
@@ -526,9 +530,9 @@ dialog.sheet { max-width: 460px; border: 1px solid var(--line); border-radius: v
 .rolesec-head .pin { margin-left: auto; background: none; border: 0; color: #FBFAF6;
   font-size: 15px; line-height: 1; padding: 4px; }
 .rolesec-head .chip + .pin { margin-left: 8px; }
-.rolesec-body { flex: 1; }
+.rolesec-body { flex: 1; padding: 14px 16px 6px; }
 .card-meaning { margin: 0 0 12px; font-size: 15px; line-height: 1.45; }
-.cardlink { margin: 10px 0 0; align-self: flex-start; }
+.cardlink { margin: 0 16px 14px; align-self: flex-start; }
 
 /* ---- The suggestion well: the platform's own voice, in violet (CS-03, CS-05) ---- */
 .well { background: var(--ai-soft); border-left: 3px solid var(--ai-deep-edge); border-radius: 0 var(--radius-1) var(--radius-1) 0;
