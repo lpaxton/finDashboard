@@ -509,7 +509,10 @@ dialog.sheet { max-width: 460px; border: 1px solid var(--line); border-radius: v
    as one family rather than two. */
 .rolesec { display: flex; flex-direction: column; overflow: hidden;
   background: var(--surface); border: 1px solid var(--line); border-top: 0;
-  border-radius: 0 0 var(--radius-2) var(--radius-2); }
+  /* Rounded on all four corners even though the top border is gone: with square top corners the
+     left and right borders ran straight up past the header and left two hairline nubs standing
+     beside it. The curve gives them somewhere to end. */
+  border-radius: var(--radius-2); }
 
 /* The coloured header stays: it is how a role is recognised (ST-02). Rounded on the top two
    corners only, because it caps something again. */
