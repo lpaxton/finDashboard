@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Advisor Platform API (dashboard domains)
-  version: 0.7.0-draft
+  version: 0.8.0-draft
   description: |
     Draft contract for the advisor dashboard. Not built yet: this spec is the design.
     The backend service aggregates Green Meadows (custodial data) and other sources
@@ -29,6 +29,20 @@ info:
     - `sort` is `field,direction`. A field may have an order of its own rather than an
       alphabetical one, in which case the operation says so and lists the order; ascending always
       means the least urgent first, so `,desc` leads with what needs attention.
+
+    Changes in 0.8.0-draft
+    - Tethys: the model library grows up. `Model` gains a description, a scope, an owner, the
+      drift and rebalancing rules a model is actually run under, and the ETF holdings it is built
+      from. The asset-class weights that `model-comparison` and `allocation` were already built
+      on are now DERIVED from those holdings rather than stored beside them, so there is one
+      statement of what a model is and the two cannot come apart.
+      `GET /models` takes the same `scope=firm` the rest of this contract uses for the
+      supervisory view, and `advisorId`; `GET /models/{modelId}` adds the holdings and
+      how the model is actually being used. `POST /models` creates one — firm scope for a
+      principal, which puts it in front of every advisor, and advisor scope for an advisor, which
+      does not. `PUT /households/{householdId}/model` assigns one to a household.
+      A model's holdings must total 100%, and the backend enforces it rather than trusting the
+      form that collected them. Requirement PM-02, PM-03, PO-07.
 
     Changes in 0.7.0-draft
     - `GET /communications/{communicationId}/suggested-articles` (aRCHi, second placement). What
@@ -103,6 +117,7 @@ tags:
   - name: Playbooks
   - name: Sharing
   - name: Content library
+  - name: Models
   - name: Communications
   - name: Prospects
   - name: Onboarding
@@ -1123,12 +1138,68 @@ paths:
 
   /models:
     get:
-      tags: [Households]
+      tags: [Models]
       operationId: listModels
-      summary: Model portfolios available to compare against
+      summary: The model library (Tethys)
+      description: "What an advisor may put a household on: every firm model, plus their own, with usage counted over their own book. `scope=firm` widens it to every model in the practice counted over every book, which is a principal's view and needs the role. Requirement: PM-03, PO-07."
+      parameters:
+        - { name: scope, in: query, description: "`firm` is the supervisory view, principal only: every model in the practice, each advisor's own included, with usage counted across every book. Omitted, it is the caller's own shelf — firm models plus theirs — counted over their own households. The same word means the same thing here as everywhere else in this contract.", schema: { type: string, enum: [firm] } }
+        - { name: advisorId, in: query, description: "Principal only, and only with scope=firm: narrow to one advisor's own models.", schema: { type: string } }
       responses:
         '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/ModelList' } } } }
         '403': { $ref: '#/components/responses/Error' }
+    post:
+      tags: [Models]
+      operationId: createModel
+      summary: Create a model
+      description: "A principal creates a firm model, which every advisor can then use; an advisor creates their own, which nobody else does. The scope follows the role rather than being asked for, so a model cannot be published firm-wide by someone who could not publish one. Holdings must total 100% and the backend checks, rather than trusting the form that collected them. Creating a model places no trade (PM-05 is still out of scope). Requirement: PM-03."
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/ModelCreate' } } }
+      responses:
+        '201': { description: Created, content: { application/json: { schema: { $ref: '#/components/schemas/ModelDetail' } } } }
+        '400': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+
+  /instruments:
+    get:
+      tags: [Models]
+      operationId: listInstruments
+      summary: What a model can be built from
+      description: "The ETFs the firm has approved for models, each with the asset class it counts towards. Offered by the backend rather than typed into a form: the asset class is what makes a model's weights derivable, and a ticker nobody has mapped would produce a model whose allocation cannot be computed. Requirement: PM-03."
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { type: object, required: [items], properties: { items: { type: array, items: { $ref: '#/components/schemas/Instrument' } } } } } } }
+        '403': { $ref: '#/components/responses/Error' }
+
+  /models/{modelId}:
+    get:
+      tags: [Models]
+      operationId: getModel
+      summary: One model, its holdings and how it is being used
+      description: "The holdings it is built from, the rules it is run under, and the households on it. A principal also gets the breakdown by advisor. Requirement: PM-03, PO-07."
+      parameters:
+        - { name: modelId, in: path, required: true, schema: { type: string } }
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/ModelDetail' } } } }
+        '403': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+
+  /households/{householdId}/model:
+    put:
+      tags: [Models]
+      operationId: assignModel
+      summary: Put a household on a model
+      description: "Changes what this household's allocation is measured against, and so what counts as drift for it. It is not a trade and moves nothing: the positions stay where they are, the target they are compared with changes (PM-05 is still out of scope). Written to the activity log, because it changes how every later reading of this household is judged. Requirement: PM-03, PM-02."
+      parameters:
+        - { $ref: '#/components/parameters/householdId' }
+      requestBody:
+        required: true
+        content: { application/json: { schema: { type: object, required: [modelId], properties: { modelId: { type: string } } } } }
+      responses:
+        '200': { description: Assigned, content: { application/json: { schema: { $ref: '#/components/schemas/Allocation' } } } }
+        '400': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
 
   /households/{householdId}/model-comparison:
     post:
@@ -2595,14 +2666,95 @@ components:
         updatedBy: { type: string }
         dataAsOf: { type: string, format: date-time }
 
+    ModelVisibility:
+      type: string
+      description: "`firm` is published by a principal and every advisor can use it. `advisor` belongs to the one who made it and nobody else sees it, a principal supervising the firm excepted. Named visibility rather than scope because `scope=firm` already means something else across this contract — the supervisory view — and one word cannot mean both."
+      enum: [firm, advisor]
+
+    DriftMethod:
+      type: string
+      description: "How far from target counts as drift. `absolute` is percentage points (a 40% target at 45% has drifted 5). `relative` is a proportion of the target weight (the same holding has drifted 12.5%), which keeps a small sleeve from being called in tolerance simply for being small. `total` measures the whole portfolio at once, summing the absolute deviations and halving — the turnover a rebalance would cost."
+      enum: [absolute, relative, total]
+
+    RebalanceFrequency:
+      type: string
+      description: "`on_drift` means there is no calendar: it is looked at when it breaches, and never otherwise."
+      enum: [monthly, quarterly, semiannual, annual, on_drift]
+
+    ModelHolding:
+      type: object
+      required: [ticker, weightPct]
+      properties:
+        ticker: { type: string, example: VTI }
+        name: { type: string }
+        assetClass: { type: string, description: "Which of the allocation asset classes this instrument counts towards. Set by the platform from the instrument, never by the caller: it is what makes a model's asset-class weights derivable rather than asserted." }
+        weightPct: { type: number }
+
     Model:
       type: object
-      required: [id, name]
+      required: [id, name, visibility, riskLevel]
       properties:
         id: { type: string }
         name: { type: string }
+        description: { type: string, nullable: true }
         riskLevel: { type: string, enum: [Conservative, Moderate, Aggressive] }
-        target: { type: array, items: { type: number }, description: 'Target weights, in the order of the allocation asset classes.' }
+        visibility: { $ref: '#/components/schemas/ModelVisibility' }
+        ownerAdvisorId: { type: string, nullable: true, description: "Null for a firm model." }
+        ownerName: { type: string, nullable: true, description: "The advisor whose model it is, or the firm." }
+        driftMethod: { $ref: '#/components/schemas/DriftMethod' }
+        driftThresholdPct: { type: number, description: "Where a holding is looked at." }
+        maxDriftPct: { type: number, description: "Where it stops being a matter of judgement. Never below the threshold." }
+        rebalanceFrequency: { $ref: '#/components/schemas/RebalanceFrequency' }
+        cooldownDays: { type: integer, description: "How long after a rebalance the model is left alone, whatever the drift says. Stops a volatile week from being traded twice." }
+        target: { type: array, items: { type: number }, description: "Target weights per allocation asset class, in their order. Derived from the holdings and never stored beside them." }
+        createdAt: { type: string, format: date-time }
+        createdBy: { type: string }
+        usage: { $ref: '#/components/schemas/ModelUsage' }
+
+    ModelUsage:
+      type: object
+      description: "How the model is actually being used, which is the half of a library that tells you whether it earns its place."
+      required: [households, advisors, aum]
+      properties:
+        households: { type: integer }
+        advisors: { type: integer }
+        aum: { type: number }
+        averageDriftPct: { type: number, nullable: true, description: "Across the households on it, measured by this model's own drift method. Null when nobody is on it." }
+        outsideThreshold: { type: integer, description: "Households past this model's own threshold — its threshold, not a number fixed across the firm." }
+        outsideMax: { type: integer, description: "Households past its maximum." }
+
+    ModelDetail:
+      allOf:
+        - $ref: '#/components/schemas/Model'
+        - type: object
+          required: [holdings]
+          properties:
+            holdings: { type: array, items: { $ref: '#/components/schemas/ModelHolding' } }
+            households: { type: array, description: "Who is on it. An advisor sees their own; a principal sees the firm's.", items: { type: object, properties: { householdId: { type: string }, householdName: { type: string }, advisorName: { type: string }, aum: { type: number }, driftPct: { type: number }, state: { type: string, enum: [in_tolerance, over_threshold, over_max] } } } }
+            byAdvisor: { type: array, nullable: true, description: "Principal only. Null for an advisor, who has no business reading a colleague's book.", items: { type: object, properties: { advisorId: { type: string }, advisorName: { type: string }, households: { type: integer }, aum: { type: number } } } }
+
+    ModelCreate:
+      type: object
+      description: "No scope and no owner: both follow from the role of whoever is asking, which is what stops a model being published firm-wide by someone who could not publish one."
+      required: [name, riskLevel, driftMethod, driftThresholdPct, maxDriftPct, rebalanceFrequency, cooldownDays, holdings]
+      properties:
+        name: { type: string }
+        description: { type: string }
+        riskLevel: { type: string, enum: [Conservative, Moderate, Aggressive] }
+        driftMethod: { $ref: '#/components/schemas/DriftMethod' }
+        driftThresholdPct: { type: number }
+        maxDriftPct: { type: number, description: "Must be at or above the threshold." }
+        rebalanceFrequency: { $ref: '#/components/schemas/RebalanceFrequency' }
+        cooldownDays: { type: integer }
+        holdings: { type: array, description: "Ticker and weight. Weights must total 100%.", items: { type: object, required: [ticker, weightPct], properties: { ticker: { type: string }, weightPct: { type: number } } } }
+
+    Instrument:
+      type: object
+      required: [ticker, name, assetClass]
+      properties:
+        ticker: { type: string }
+        name: { type: string }
+        assetClass: { type: string }
 
     ModelList:
       type: object

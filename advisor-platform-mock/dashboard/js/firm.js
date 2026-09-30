@@ -3,6 +3,7 @@
 import { api } from './api.js';
 import { $, esc, money, moneyFull, pct, pctClass, fmtDate, localDate, daysAgo, CATEGORY } from './format.js';
 import { toast, spark, head, panel, load, sortTable, nextSort, alertsList, bookPanel, subnav } from './ui.js';
+import { tethysFirm } from './tethys.js';
 import { applyBranding, state } from './state.js';
 /* The scorecard and the practice report are the same metric shape the advisor's own Reports
    section renders. One renderer, so a firm number and a book number never disagree on form. */
@@ -20,7 +21,10 @@ const INVOICE_STATUS = new Proxy(INVOICE_STATUS_EN, { get: (o, k) => (k in o ? t
    It does not show Dana her own four role cards. She already has those in the Advisor view for
    her own book; repeating them here would answer "how is my book going" twice and "how is the
    firm going" never. */
-export const FIRM_SECTIONS = [['overview', 'Overview'], ['advisors', 'Advisors'],
+/* Tethys follows Advisors because it answers the next question that screen raises — what those
+   advisors are actually putting clients in — and comes before Compliance, which is about what
+   has gone wrong rather than what is in use. */
+export const FIRM_SECTIONS = [['overview', 'Overview'], ['advisors', 'Advisors'], ['tethys', 'Tethys'],
   ['compliance', 'Compliance'], ['reports', 'Reports'], ['billing', 'Billing & fees'],
   ['ownership', 'Ownership'], ['branding', 'Branding']];
 export let firmSection = 'overview';
@@ -345,8 +349,9 @@ export function firmBranding() {
   });
 }
 
-export const FIRM_RENDER = { overview: firmOverview, advisors: firmAdvisors, compliance: firmCompliance,
-  reports: firmReports, billing: firmBilling, ownership: firmOwnership, branding: firmBranding };
+export const FIRM_RENDER = { overview: firmOverview, advisors: firmAdvisors, tethys: tethysFirm,
+  compliance: firmCompliance, reports: firmReports, billing: firmBilling,
+  ownership: firmOwnership, branding: firmBranding };
 
 /* Who owns the practice (PO-12). Principal only, and the API enforces that. */
 export function firmOwnership() {

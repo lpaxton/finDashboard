@@ -18,7 +18,7 @@ Shareable version: https://claude.ai/code/artifact/d179b0d4-48da-44e7-bc51-58805
 | --- | --- |
 | Features with at least one API operation | **48** of 75 |
 | Features with no operation yet | **27** |
-| Operations carrying a requirement ID | **58** of 82 |
+| Operations carrying a requirement ID | **63** of 86 |
 
 ### Intelligence Platform
 
@@ -69,7 +69,7 @@ Shareable version: https://claude.ai/code/artifact/d179b0d4-48da-44e7-bc51-58805
 | **PO-04** Team share | `POST /team-shares` | Platform |
 | **PO-05** Spreadsheet replacement and workflow automation | — *Scope undefined* | — |
 | **PO-06** Advisor performance tracking | `GET /firm/advisors`<br>`GET /firm/advisors/{advisorId}`<br>`GET /firm/advisors/{advisorId}/scorecard` | Platform |
-| **PO-07** Reporting and analytics | `GET /firm/advisors`<br>`GET /firm/summary`<br>`GET /reports/practice` | Platform |
+| **PO-07** Reporting and analytics | `GET /firm/advisors`<br>`GET /firm/summary`<br>`GET /models`<br>`GET /models/{modelId}`<br>`GET /reports/practice` | Green Meadows, Platform |
 | **PO-08** Compliance tracker | `GET /firm/compliance` | Platform |
 | **PO-09** Multi-custodian | — *One custodian only* | — |
 | **PO-10** Business operations management | `GET /firm/billing/subscription`<br>`GET /firm/summary` | Platform |
@@ -81,10 +81,10 @@ Shareable version: https://claude.ai/code/artifact/d179b0d4-48da-44e7-bc51-58805
 | Feature | API operation | Source |
 | --- | --- | --- |
 | **PM-01** Portfolio summaries | `GET /households/{householdId}`<br>`GET /me/household` | Green Meadows |
-| **PM-02** Exposure analysis | `GET /households/{householdId}/allocation`<br>`GET /portfolio-signals` | Green Meadows |
-| **PM-03** Portfolio modeling | `GET /households/{householdId}/allocation`<br>`POST /households/{householdId}/model-comparison` | Green Meadows |
+| **PM-02** Exposure analysis | `GET /households/{householdId}/allocation`<br>`GET /portfolio-signals`<br>`PUT /households/{householdId}/model` | Green Meadows |
+| **PM-03** Portfolio modeling | `GET /households/{householdId}/allocation`<br>`GET /instruments`<br>`GET /models`<br>`GET /models/{modelId}`<br>`POST /households/{householdId}/model-comparison`<br>`POST /models`<br>`PUT /households/{householdId}/model` | Green Meadows, Platform |
 | **PM-04** Robo portfolio | — *Regulatory review* | — |
-| **PM-05** Placing a trade | `POST /households/{householdId}/model-comparison` | Green Meadows |
+| **PM-05** Placing a trade | `POST /households/{householdId}/model-comparison`<br>`POST /models`<br>`PUT /households/{householdId}/model` | Green Meadows |
 
 ### Planning
 

@@ -547,19 +547,229 @@ function createMock() {
   }
 
 
-  // household, model, target and current allocation. Max drift equals that household's drift signal.
-  const MODEL_LIBRARY = {
-    mdl_growth:       { name: 'Growth, 70/30', riskLevel: 'Aggressive', target: [45, 20, 25, 5, 5] },
-    mdl_balanced:     { name: 'Balanced, 60/40', riskLevel: 'Moderate', target: [40, 20, 30, 5, 5] },
-    mdl_conservative: { name: 'Conservative, 40/60', riskLevel: 'Conservative', target: [25, 15, 50, 7, 3] },
-    mdl_income:       { name: 'Income', riskLevel: 'Conservative', target: [20, 10, 60, 8, 2] }
-  };
+  /* ---- Tethys: the model library (PM-02, PM-03, PO-07) --------------------------------------
+   *
+   * A model is what a household's holdings are measured against, so it is also the definition of
+   * what counts as drift for them. It says four things:
+   *   what it holds        ETFs and weights, totalling 100%
+   *   what it tolerates    a drift method, a threshold and a maximum
+   *   when it is touched   a rebalance frequency, and a cooldown that outranks it
+   *   who may use it       firm scope, or the advisor who built it
+   *
+   * The asset-class weights the allocation and comparison screens are built on are DERIVED from
+   * the holdings rather than written down beside them. That is the whole point of this layer: a
+   * model stated twice is a model that can disagree with itself, and it already had — h3 was on
+   * Growth 70/30 while carrying a target of its own that Growth 70/30 has never had.
+   */
   const ALLOC_CLASSES = ['US equity', 'International equity', 'Fixed income', 'Cash', 'Alternatives'];
-  const ALLOCATIONS = {
-    h1: { modelId: 'mdl_growth', modelName: 'Growth, 70/30', target: [45, 20, 25, 5, 5], current: [52.2, 18, 21, 4.8, 4] },
-    h2: { modelId: 'mdl_balanced', modelName: 'Balanced, 60/40', target: [40, 20, 30, 5, 5], current: [45.4, 18.6, 28, 4, 4] },
-    h3: { modelId: 'mdl_growth', modelName: 'Growth, 70/30', target: [50, 15, 25, 7, 3], current: [56.1, 13.9, 22, 5, 3] }
+  /* The asset class lives on the instrument, never on the holding a caller sends. It is what
+     makes a model's weights derivable, so a ticker nobody has mapped cannot enter a model. */
+  const INSTRUMENTS = [
+    ['VTI', 'Vanguard Total Stock Market', 'US equity'],
+    ['ITOT', 'iShares Core S&P Total US Stock Market', 'US equity'],
+    ['VUG', 'Vanguard Growth', 'US equity'],
+    ['VTV', 'Vanguard Value', 'US equity'],
+    ['VXUS', 'Vanguard Total International Stock', 'International equity'],
+    ['IEFA', 'iShares Core MSCI EAFE', 'International equity'],
+    ['VWO', 'Vanguard FTSE Emerging Markets', 'International equity'],
+    ['BND', 'Vanguard Total Bond Market', 'Fixed income'],
+    ['AGG', 'iShares Core US Aggregate Bond', 'Fixed income'],
+    ['TIP', 'iShares TIPS Bond', 'Fixed income'],
+    ['MUB', 'iShares National Muni Bond', 'Fixed income'],
+    ['SGOV', 'iShares 0-3 Month Treasury Bond', 'Cash'],
+    ['BIL', 'SPDR Bloomberg 1-3 Month T-Bill', 'Cash'],
+    ['VNQ', 'Vanguard Real Estate', 'Alternatives'],
+    ['GLD', 'SPDR Gold Shares', 'Alternatives']
+  ].map(([ticker, name, assetClass]) => ({ ticker, name, assetClass }));
+  const instrument = (t) => INSTRUMENTS.find(i => i.ticker === String(t || '').toUpperCase());
+
+  // id, name, risk, drift method, threshold, max, frequency, cooldown, holdings, description
+  const MODEL_ROWS = [
+    ['mdl_growth', 'Growth, 70/30', 'Aggressive', 'absolute', 5, 10, 'quarterly', 30,
+      { VTI: 45, VXUS: 20, BND: 25, SGOV: 5, VNQ: 5 },
+      'Long horizon, no income requirement. Equity-led with a real-asset sleeve for inflation.'],
+    ['mdl_balanced', 'Balanced, 60/40', 'Moderate', 'absolute', 4, 8, 'quarterly', 30,
+      { VTI: 40, VXUS: 20, BND: 30, SGOV: 5, VNQ: 5 },
+      'The default for a household ten to twenty years out. Rebalanced on the calendar, not on the news.'],
+    ['mdl_conservative', 'Conservative, 40/60', 'Conservative', 'relative', 15, 25, 'semiannual', 45,
+      { VTI: 25, VXUS: 15, BND: 35, TIP: 15, SGOV: 7, GLD: 3 },
+      'Capital preservation first. Relative drift, so the small sleeves are not left to wander simply for being small.'],
+    ['mdl_income', 'Income', 'Conservative', 'absolute', 3, 6, 'annual', 60,
+      { VTI: 20, VXUS: 10, BND: 40, TIP: 20, SGOV: 8, VNQ: 2 },
+      'Drawing down. Tight bands and a long cooldown: the cost of trading matters more here than the last point of tracking.']
+  ];
+  const MODELS = MODEL_ROWS.map(([id, name, riskLevel, driftMethod, driftThresholdPct, maxDriftPct, rebalanceFrequency, cooldownDays, holdings, description]) => ({
+    id, name, description, riskLevel, visibility: 'firm', ownerAdvisorId: null,
+    driftMethod, driftThresholdPct, maxDriftPct, rebalanceFrequency, cooldownDays,
+    holdings: Object.entries(holdings).map(([ticker, weightPct]) => ({ ticker, weightPct })),
+    createdAt: dayISO(-300, 9), createdBy: 'Dana Whitfield'
+  }));
+  /* One advisor-scoped model, so the boundary is exercised rather than asserted: Marcus can use
+     it, Dana cannot, and Dana-as-principal can see that it exists. */
+  MODELS.push({
+    id: 'mdl_adv2_tilt', name: 'Global tilt, 65/35', riskLevel: 'Moderate', visibility: 'advisor', ownerAdvisorId: 'adv2',
+    description: 'Balanced with the international sleeve raised. Marcus\u2019s own; not a firm model.',
+    driftMethod: 'absolute', driftThresholdPct: 4, maxDriftPct: 9, rebalanceFrequency: 'quarterly', cooldownDays: 30,
+    holdings: [{ ticker: 'VTI', weightPct: 32 }, { ticker: 'VXUS', weightPct: 28 }, { ticker: 'IEFA', weightPct: 5 },
+      { ticker: 'BND', weightPct: 30 }, { ticker: 'SGOV', weightPct: 5 }],
+    createdAt: dayISO(-64, 15), createdBy: 'Marcus Bell'
+  });
+  const modelById = (id) => MODELS.find(m => m.id === id);
+  /* Derived, every time it is asked for, from the holdings. Never cached and never stored: a
+     copy of this is the thing that went wrong before. */
+  const modelTarget = (mdl) => ALLOC_CLASSES.map(c =>
+    +mdl.holdings.reduce((t, hd) => t + ((instrument(hd.ticker) || {}).assetClass === c ? hd.weightPct : 0), 0).toFixed(2));
+
+  /* Which model a household is on. Only the invested ones: a household still filling in forms
+     is not on a model, and saying it is would put it in the analytics as though it were. */
+  const NO_MODEL_STATUS = ['onboarding', 'forms_incomplete'];
+  const ASSIGNED = {};
+  for (const h of HH_ROWS.map(r => ({ id: r[0], advisorId: r[2], status: r[6] }))) {
+    if (NO_MODEL_STATUS.includes(h.status)) continue;
+    const firm = MODELS.filter(m => m.visibility === 'firm');
+    ASSIGNED[h.id] = { h1: 'mdl_growth', h2: 'mdl_balanced', h3: 'mdl_growth' }[h.id]
+      || (h.advisorId === 'adv2' && hash(h.id) % 5 === 0 ? 'mdl_adv2_tilt' : firm[hash(h.id) % firm.length].id);
+  }
+
+  /* How far a household has actually drifted. Where the portfolio signal already states a
+     number for that household, it IS that number — two places in the product saying different
+     things about the same drift is worse than either of them being wrong. */
+  const driftOf = (id) => {
+    const sig = SIGNAL_ROWS.find(r => r.kind === 'allocation_drift' && r.householdId === id);
+    if (sig) return sig.value;
+    return +(0.4 + (hash('d' + id) % 41) / 10).toFixed(1);       // 0.4 to 4.4: under every threshold
   };
+  /* The current weights, built from the model's own target plus that drift. The largest class
+     carries the whole of it and the rest give it back in proportion, so the weights still total
+     100 and the biggest deviation is exactly the drift the rest of the product reports. */
+  function currentFor(id) {
+    const mdl = modelById(ASSIGNED[id]); if (!mdl) return null;
+    const target = modelTarget(mdl), d = driftOf(id);
+    const lead = target.indexOf(Math.max(...target)), rest = 100 - target[lead];
+    const out = target.map((t, i) => i === lead ? t + d : +(t - d * t / rest).toFixed(1));
+    // Rounding has to land somewhere; it lands on the smallest class, where it cannot be the max.
+    const small = target.indexOf(Math.min(...target.filter((t, i) => i !== lead)));
+    out[small] = +(out[small] + (100 - out.reduce((a, b) => a + b, 0))).toFixed(1);
+    return out;
+  }
+  const ALLOCATIONS = {};
+  for (const id of Object.keys(ASSIGNED)) {
+    const cur = currentFor(id);
+    if (cur) ALLOCATIONS[id] = { modelId: ASSIGNED[id], current: cur };
+  }
+
+  /* One reader, because the allocation screen, the comparison and Tethys's own analytics all
+     ask the same question and must not answer it three ways. The target comes off the model
+     every time rather than out of the household's record. */
+  function allocationOf(h) {
+    const a = ALLOCATIONS[h.id], mdl = a && modelById(a.modelId);
+    if (!mdl) return { householdId: h.id, householdName: h.name, model: null, lines: [], maxDriftPoints: null, dataAsOf: NOW() };
+    const target = modelTarget(mdl);
+    const lines = ALLOC_CLASSES.map((assetClass, i) => ({ assetClass, targetPct: target[i], currentPct: a.current[i],
+      driftPct: +(a.current[i] - target[i]).toFixed(1) }));
+    return { householdId: h.id, householdName: h.name, model: { id: mdl.id, name: mdl.name },
+      lines, maxDriftPoints: Math.max(...lines.map(l => Math.abs(l.driftPct))), source: 'greenmeadows', dataAsOf: NOW() };
+  }
+
+  /* Drift as THIS model measures it, which is not always points. `maxDriftPoints` on the
+     allocation screen is always points and always will be — it is the one number the portfolio
+     signal is stated in. This is the other one, and the two agree only for an absolute model.
+     Worth keeping separate: a conservative model that tolerates 15% of a 3% sleeve is saying
+     something a points threshold cannot say. */
+  function modelDrift(mdl, h) {
+    const a = ALLOCATIONS[h.id]; if (!a) return null;
+    const target = modelTarget(mdl);
+    const diffs = target.map((t, i) => a.current[i] - t);
+    if (mdl.driftMethod === 'total') return +(diffs.reduce((x, d) => x + Math.abs(d), 0) / 2).toFixed(1);
+    if (mdl.driftMethod === 'relative')
+      return +Math.max(...diffs.map((d, i) => target[i] ? Math.abs(d) / target[i] * 100 : 0)).toFixed(1);
+    return +Math.max(...diffs.map(Math.abs)).toFixed(1);
+  }
+  const driftState = (mdl, d) => d == null ? null
+    : d > mdl.maxDriftPct ? 'over_max' : d > mdl.driftThresholdPct ? 'over_threshold' : 'in_tolerance';
+
+  /* What a model is doing in the book. A library without this is a list of things nobody can
+     tell the value of. */
+  function modelUsage(mdl, hhs) {
+    const on = hhs.filter(h => ALLOCATIONS[h.id] && ALLOCATIONS[h.id].modelId === mdl.id);
+    const drifts = on.map(h => modelDrift(mdl, h)).filter(d => d != null);
+    return {
+      households: on.length,
+      advisors: new Set(on.map(h => h.advisorId)).size,
+      aum: +on.reduce((t, h) => t + h.aum, 0).toFixed(1),
+      averageDriftPct: drifts.length ? +(drifts.reduce((a, b) => a + b, 0) / drifts.length).toFixed(1) : null,
+      outsideThreshold: on.filter(h => ['over_threshold', 'over_max'].includes(driftState(mdl, modelDrift(mdl, h)))).length,
+      outsideMax: on.filter(h => driftState(mdl, modelDrift(mdl, h)) === 'over_max').length
+    };
+  }
+
+  const modelOut = (mdl, hhs) => ({
+    id: mdl.id, name: mdl.name, description: mdl.description || null, riskLevel: mdl.riskLevel,
+    visibility: mdl.visibility, ownerAdvisorId: mdl.ownerAdvisorId,
+    ownerName: mdl.ownerAdvisorId ? advName(mdl.ownerAdvisorId) : FIRM.name,
+    driftMethod: mdl.driftMethod, driftThresholdPct: mdl.driftThresholdPct, maxDriftPct: mdl.maxDriftPct,
+    rebalanceFrequency: mdl.rebalanceFrequency, cooldownDays: mdl.cooldownDays,
+    target: modelTarget(mdl), createdAt: mdl.createdAt, createdBy: mdl.createdBy,
+    usage: modelUsage(mdl, hhs)
+  });
+  const modelDetailOut = (mdl, hhs, firmView) => {
+    const on = hhs.filter(h => ALLOCATIONS[h.id] && ALLOCATIONS[h.id].modelId === mdl.id);
+    return { ...modelOut(mdl, hhs),
+      holdings: mdl.holdings.map(hd => ({ ...hd, name: (instrument(hd.ticker) || {}).name || hd.ticker,
+        assetClass: (instrument(hd.ticker) || {}).assetClass || null })),
+      households: on.map(h => { const d = modelDrift(mdl, h);
+        return { householdId: h.id, householdName: h.name, advisorName: advName(h.advisorId),
+          aum: h.aum, driftPct: d, state: driftState(mdl, d) }; })
+        .sort((a, b) => (b.driftPct || 0) - (a.driftPct || 0)),
+      /* Null rather than an empty list for an advisor: nothing to read here is a different
+         statement from no colleagues using it, and the second would be a claim about their
+         books that an advisor has no business being given. */
+      byAdvisor: firmView
+        ? ADVISORS.map(a => ({ advisorId: a.id, advisorName: a.name,
+            households: on.filter(h => h.advisorId === a.id).length,
+            aum: +on.filter(h => h.advisorId === a.id).reduce((t, h) => t + h.aum, 0).toFixed(1) }))
+            .filter(r => r.households)
+        : null };
+  };
+
+  /* Checked here rather than in the form that collected it. A model with weights totalling 98%
+     is not a typo the backend can shrug at: it is a target no household can ever be measured
+     against correctly. */
+  function validateModel(b) {
+    if (!b || !String(b.name || '').trim()) return fail(400, 'bad_request', 'A model needs a name.');
+    if (!['Conservative', 'Moderate', 'Aggressive'].includes(b.riskLevel))
+      return fail(400, 'bad_request', 'riskLevel must be Conservative, Moderate or Aggressive.');
+    if (!['absolute', 'relative', 'total'].includes(b.driftMethod))
+      return fail(400, 'bad_request', 'driftMethod must be absolute, relative or total.');
+    if (!['monthly', 'quarterly', 'semiannual', 'annual', 'on_drift'].includes(b.rebalanceFrequency))
+      return fail(400, 'bad_request', 'rebalanceFrequency is not one this build knows.');
+    const th = +b.driftThresholdPct, mx = +b.maxDriftPct, cd = +b.cooldownDays;
+    if (!(th > 0)) return fail(400, 'bad_request', 'The drift threshold must be above zero.');
+    /* A maximum below the threshold would mean every holding past the point of judgement before
+       it reached the point of looking at it. */
+    if (!(mx >= th)) return fail(400, 'bad_request', 'Max drift cannot be below the drift threshold.');
+    if (!(cd >= 0)) return fail(400, 'bad_request', 'The cooldown cannot be negative.');
+    if (!Array.isArray(b.holdings) || !b.holdings.length) return fail(400, 'bad_request', 'A model needs at least one holding.');
+    const seen = new Set();
+    for (const hd of b.holdings) {
+      const ins = instrument(hd && hd.ticker);
+      if (!ins) return fail(400, 'bad_request', 'Not an instrument this firm has approved: ' + (hd && hd.ticker));
+      if (seen.has(ins.ticker)) return fail(400, 'bad_request', ins.ticker + ' is in the model twice.');
+      seen.add(ins.ticker);
+      if (!(+hd.weightPct > 0)) return fail(400, 'bad_request', 'Every holding needs a weight above zero.');
+    }
+    const total = +b.holdings.reduce((t, hd) => t + +hd.weightPct, 0).toFixed(2);
+    if (total !== 100) return fail(400, 'bad_request', 'Holdings must total 100%. These total ' + total + '%.');
+    return null;
+  }
+
+  /* Who may see a model at all. A firm model is everyone's; an advisor's is theirs, and a
+     principal supervising the firm sees it because supervising what clients are invested in is
+     the point of that screen. */
+  const canSeeModel = (mdl, firmView) => mdl.visibility === 'firm' || mdl.ownerAdvisorId === user().advisorId || (firmView && isRole('principal'));
+  /* Using one is narrower than seeing one: a principal reading a colleague's model is
+     supervision, and supervision is not permission to put a client on it. */
+  const canUseModel = (mdl) => mdl.visibility === 'firm' || mdl.ownerAdvisorId === user().advisorId;
 
   // meeting, kind, author, consent, content
   const RECORDS = [
@@ -1427,12 +1637,7 @@ function createMock() {
       if (!isRole('advisor') && !isRole('principal')) return forbid();
       const h = hhById(m[1]); if (!h) return notFound('Household');
       if (!isRole('principal') && h.advisorId !== user().advisorId) return notFound('Household');
-      const a = ALLOCATIONS[h.id];
-      if (!a) return ok({ householdId: h.id, householdName: h.name, model: null, lines: [], maxDriftPoints: null, dataAsOf: NOW() });
-      const lines = ALLOC_CLASSES.map((assetClass, i) => ({ assetClass, targetPct: a.target[i], currentPct: a.current[i],
-        driftPct: +(a.current[i] - a.target[i]).toFixed(1) }));
-      return ok({ householdId: h.id, householdName: h.name, model: { id: a.modelId, name: a.modelName },
-        lines, maxDriftPoints: Math.max(...lines.map(l => Math.abs(l.driftPct))), source: 'greenmeadows', dataAsOf: NOW() });
+      return ok(allocationOf(h));
     }],
 
     /* ---- what the firm charges its clients (AX-10, AX-11) ---- */
@@ -1590,27 +1795,95 @@ function createMock() {
       return ok({ householdId: h.id, householdName: h.name, overridden: true, scheduleRate: scheduleRate(h.aum), ...FEE_OVERRIDES[h.id] });
     }],
 
-    /* ---- portfolio modeling (PM-03) ---- */
-    ['GET', /^\/models$/, () => {
+    /* ---- Tethys: the model library (PM-02, PM-03, PO-07) ---- */
+    ['GET', /^\/instruments$/, () => {
       if (!isRole('advisor') && !isRole('principal')) return forbid();
-      return ok({ items: Object.entries(MODEL_LIBRARY).map(([id, mdl]) => ({ id, ...mdl })) });
+      return ok({ items: INSTRUMENTS });
+    }],
+    ['GET', /^\/models$/, (m, q) => {
+      if (!isRole('advisor') && !isRole('principal')) return forbid();
+      /* scope=firm is the supervisory view and needs the role; without it this is the caller's
+         own shelf, whatever else they happen to be. Dana is a principal AND an advisor, so the
+         role alone cannot say which screen she is on — asking for it explicitly is why the rest
+         of this contract does the same thing. Usage follows the same line: what an advisor sees
+         a model doing is what it is doing in their book, because a count across colleagues'
+         clients is not theirs to read. */
+      const firmView = q.scope === 'firm';
+      if (firmView && !isRole('principal')) return forbid();
+      if (q.advisorId && !firmView) return fail(400, 'bad_request', 'advisorId needs scope=firm.');
+      const over = firmView ? HH : myHH();
+      let list = MODELS.filter(x => canSeeModel(x, firmView));
+      if (q.advisorId) list = list.filter(x => x.ownerAdvisorId === q.advisorId);
+      return ok({ items: list.map(x => modelOut(x, over)) });
+    }],
+    ['POST', /^\/models$/, (m, q, b) => {
+      if (!isRole('advisor') && !isRole('principal')) return forbid();
+      const bad = validateModel(b); if (bad) return bad;
+      /* The scope follows the role rather than being asked for. A firm model goes in front of
+         every advisor in the practice, and that is a principal's act; asking the caller which
+         one they meant would make it possible to answer wrongly. */
+      const firm = isRole('principal');
+      const mdl = {
+        id: 'mdl_' + (++seq), name: String(b.name).trim(), description: (b.description || '').trim() || null,
+        riskLevel: b.riskLevel, visibility: firm ? 'firm' : 'advisor',
+        ownerAdvisorId: firm ? null : user().advisorId,
+        driftMethod: b.driftMethod, driftThresholdPct: +b.driftThresholdPct, maxDriftPct: +b.maxDriftPct,
+        rebalanceFrequency: b.rebalanceFrequency, cooldownDays: +b.cooldownDays,
+        holdings: b.holdings.map(hd => ({ ticker: instrument(hd.ticker).ticker, weightPct: +hd.weightPct })),
+        createdAt: NOW(), createdBy: user().name
+      };
+      MODELS.push(mdl);
+      logActivity(user().advisorId, { actor: firm ? 'principal' : 'advisor', subjectType: 'model', subjectId: mdl.id,
+        summary: firm ? 'Published "{name}" to every advisor' : 'Created the model "{name}"', vars: { name: mdl.name },
+        detail: firm ? 'A firm model. Every advisor can put a household on it.'
+          : 'Your own model. Nobody else can use it.', undoable: false });
+      return created(modelDetailOut(mdl, firm ? HH : myHH(), firm));
+    }],
+    ['GET', /^\/models\/([^/]+)$/, (m, q) => {
+      if (!isRole('advisor') && !isRole('principal')) return forbid();
+      const firmView = q.scope === 'firm';
+      if (firmView && !isRole('principal')) return forbid();
+      const mdl = modelById(m[1]);
+      if (!mdl || !canSeeModel(mdl, firmView)) return notFound('Model');
+      return ok(modelDetailOut(mdl, firmView ? HH : myHH(), firmView));
+    }],
+    ['PUT', /^\/households\/([^/]+)\/model$/, (m, q, b) => {
+      if (!isRole('advisor')) return forbid();
+      const h = hhById(m[1]); if (!h || h.advisorId !== user().advisorId) return notFound('Household');
+      const mdl = modelById(b && b.modelId);
+      if (!mdl || !canUseModel(mdl)) return fail(400, 'bad_request', 'modelId must be a model you can use.');
+      const was = ALLOCATIONS[h.id] && modelById(ALLOCATIONS[h.id].modelId);
+      if (was && was.id === mdl.id) return ok(allocationOf(h));
+      /* The positions do not move — this is not a trade (PM-05). What moves is what they are
+         measured against, so the drift the advisor was looking at a moment ago is now a
+         different number, and the current weights are kept exactly as they were to make that
+         visible rather than quietly re-based. */
+      ALLOCATIONS[h.id] = { modelId: mdl.id, current: (ALLOCATIONS[h.id] || { current: modelTarget(mdl) }).current };
+      logActivity(user().advisorId, { actor: 'advisor', subjectType: 'household', subjectId: h.id,
+        summary: was ? 'Moved {name} from {from} to {to}' : 'Put {name} on {to}',
+        vars: { name: h.name, from: was ? was.name : '', to: mdl.name },
+        detail: 'No trade has been placed. What changed is the target their holdings are measured against.',
+        undoable: Boolean(was),
+        undoWith: was ? { method: 'PUT', path: '/households/' + h.id + '/model', body: { modelId: was.id } } : undefined });
+      return ok(allocationOf(h));
     }],
     ['POST', /^\/households\/([^/]+)\/model-comparison$/, (m, q, b) => {
       if (!isRole('advisor')) return forbid();
       const h = hhById(m[1]);
       if (!h || h.advisorId !== user().advisorId) return notFound('Household');
-      const target = MODEL_LIBRARY[b && b.modelId];
-      if (!target) return fail(400, 'bad_request', 'modelId must be one of: ' + Object.keys(MODEL_LIBRARY).join(', ') + '.');
+      const to = modelById(b && b.modelId);
+      if (!to || !canUseModel(to)) return fail(400, 'bad_request', 'modelId must be a model you can use.');
       const a = ALLOCATIONS[h.id];
       if (!a) return fail(409, 'conflict', 'This household has no allocation on file, so there is nothing to compare.');
+      const from = modelById(a.modelId), toTarget = modelTarget(to);
       const lines = ALLOC_CLASSES.map((assetClass, i) => {
-        const currentPct = a.current[i], targetPct = target.target[i];
+        const currentPct = a.current[i], targetPct = toTarget[i];
         return { assetClass, currentPct, targetPct, changePct: +(targetPct - currentPct).toFixed(1),
           changeValue: Math.round(h.aum * (targetPct - currentPct) / 100) };
       });
       return created({
         householdId: h.id, householdName: h.name, aum: h.aum,
-        fromModel: { id: a.modelId, name: a.modelName }, toModel: { id: b.modelId, name: target.name },
+        fromModel: { id: from.id, name: from.name }, toModel: { id: to.id, name: to.name },
         lines,
         turnoverPct: +(lines.reduce((t, l) => t + Math.abs(l.changePct), 0) / 2).toFixed(1),
         // A comparison is a draft. Placing a trade is PM-05 and is on the regulatory list.

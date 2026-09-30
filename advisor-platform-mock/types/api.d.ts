@@ -4,7 +4,7 @@
  * GENERATED FROM openapi.yaml. Do not edit by hand: run `npm run types`.
  * `npm test` fails if this file and the contract disagree.
  *
- * Contract version 0.7.0-draft.
+ * Contract version 0.8.0-draft.
  */
 
 export interface Error {
@@ -1204,12 +1204,135 @@ export interface FeePlan {
   dataAsOf: string;
 }
 
+/**
+ * `firm` is published by a principal and every advisor can use it. `advisor` belongs to the
+ * one who made it and nobody else sees it, a principal supervising the firm excepted. Named
+ * visibility rather than scope because `scope=firm` already means something else across this
+ * contract — the supervisory view — and one word cannot mean both.
+ */
+export type ModelVisibility = 'firm' | 'advisor';
+
+/**
+ * How far from target counts as drift. `absolute` is percentage points (a 40% target at 45%
+ * has drifted 5). `relative` is a proportion of the target weight (the same holding has
+ * drifted 12.5%), which keeps a small sleeve from being called in tolerance simply for being
+ * small. `total` measures the whole portfolio at once, summing the absolute deviations and
+ * halving — the turnover a rebalance would cost.
+ */
+export type DriftMethod = 'absolute' | 'relative' | 'total';
+
+/** `on_drift` means there is no calendar: it is looked at when it breaches, and never otherwise. */
+export type RebalanceFrequency = 'monthly' | 'quarterly' | 'semiannual' | 'annual' | 'on_drift';
+
+export interface ModelHolding {
+  /** Example: "VTI". */
+  ticker: string;
+  name?: string;
+  /**
+   * Which of the allocation asset classes this instrument counts towards. Set by the platform
+   * from the instrument, never by the caller: it is what makes a model's asset-class weights
+   * derivable rather than asserted.
+   */
+  assetClass?: string;
+  weightPct: number;
+}
+
 export interface Model {
   id: string;
   name: string;
-  riskLevel?: 'Conservative' | 'Moderate' | 'Aggressive';
-  /** Target weights, in the order of the allocation asset classes. */
+  description?: string | null;
+  riskLevel: 'Conservative' | 'Moderate' | 'Aggressive';
+  visibility: ModelVisibility;
+  /** Null for a firm model. */
+  ownerAdvisorId?: string | null;
+  /** The advisor whose model it is, or the firm. */
+  ownerName?: string | null;
+  driftMethod?: DriftMethod;
+  /** Where a holding is looked at. */
+  driftThresholdPct?: number;
+  /** Where it stops being a matter of judgement. Never below the threshold. */
+  maxDriftPct?: number;
+  rebalanceFrequency?: RebalanceFrequency;
+  /**
+   * How long after a rebalance the model is left alone, whatever the drift says. Stops a
+   * volatile week from being traded twice.
+   */
+  cooldownDays?: number;
+  /**
+   * Target weights per allocation asset class, in their order. Derived from the holdings and
+   * never stored beside them.
+   */
   target?: number[];
+  /** Format: date-time. */
+  createdAt?: string;
+  createdBy?: string;
+  usage?: ModelUsage;
+}
+
+/**
+ * How the model is actually being used, which is the half of a library that tells you whether
+ * it earns its place.
+ */
+export interface ModelUsage {
+  households: number;
+  advisors: number;
+  aum: number;
+  /**
+   * Across the households on it, measured by this model's own drift method. Null when nobody is
+   * on it.
+   */
+  averageDriftPct?: number | null;
+  /** Households past this model's own threshold — its threshold, not a number fixed across the firm. */
+  outsideThreshold?: number;
+  /** Households past its maximum. */
+  outsideMax?: number;
+}
+
+export type ModelDetail = Model & {
+  holdings: ModelHolding[];
+  /** Who is on it. An advisor sees their own; a principal sees the firm's. */
+  households?: Array<{
+    householdId?: string;
+    householdName?: string;
+    advisorName?: string;
+    aum?: number;
+    driftPct?: number;
+    state?: 'in_tolerance' | 'over_threshold' | 'over_max';
+  }>;
+  /** Principal only. Null for an advisor, who has no business reading a colleague's book. */
+  byAdvisor?: Array<{
+    advisorId?: string;
+    advisorName?: string;
+    households?: number;
+    aum?: number;
+  }> | null;
+};
+
+/**
+ * No scope and no owner: both follow from the role of whoever is asking, which is what stops a
+ * model being published firm-wide by someone who could not publish one.
+ */
+export interface ModelCreate {
+  name: string;
+  description?: string;
+  riskLevel: 'Conservative' | 'Moderate' | 'Aggressive';
+  driftMethod: DriftMethod;
+  driftThresholdPct: number;
+  /** Must be at or above the threshold. */
+  maxDriftPct: number;
+  rebalanceFrequency: RebalanceFrequency;
+  cooldownDays: number;
+  /** Ticker and weight. Weights must total 100%. */
+  holdings: Array<{
+    ticker: string;
+    weightPct: number;
+  }>;
+}
+
+export interface Instrument {
+  ticker: string;
+  name: string;
+  assetClass: string;
 }
 
 export interface ModelList {
@@ -1892,6 +2015,34 @@ export interface Operations {
     path: '/models';
     request: never;
     response: ModelList;
+  };
+  createModel: {
+    method: 'POST';
+    path: '/models';
+    request: ModelCreate;
+    response: ModelDetail;
+  };
+  listInstruments: {
+    method: 'GET';
+    path: '/instruments';
+    request: never;
+    response: {
+      items: Instrument[];
+    };
+  };
+  getModel: {
+    method: 'GET';
+    path: '/models/{modelId}';
+    request: never;
+    response: ModelDetail;
+  };
+  assignModel: {
+    method: 'PUT';
+    path: '/households/{householdId}/model';
+    request: {
+      modelId: string;
+    };
+    response: Allocation;
   };
   compareToModel: {
     method: 'POST';

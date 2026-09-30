@@ -27,6 +27,139 @@ Entries are newest first.
 
 ## Log
 
+### 30 September 2026 · Tethys — the model library (PM-02, PM-03, PO-07)
+
+**Asked for.** Luke: a tool in two places. A principal sees every investment model used across
+all advisors, with analytics on each, and can create models that get pushed out to everyone. An
+advisor sees a library, can assign models to clients, and can create their own. Its own spot in
+the left nav, called Tethys. And a named list of what goes into a new model: name, description,
+risk level, drift method, drift threshold, max drift, rebalance frequency, cooldown, and ETF
+holdings with a total.
+
+**The first decision, and everything follows from it: Tethys owns the library that already
+existed.** There was a `/models` endpoint with four models on it, feeding
+`model-comparison` and the allocation screen, and through allocation the drift signal, and
+through the signal aRCHi. Building a second library beside it would have given the product two
+answers to "what is this household invested in". So `Model` grew the new fields instead.
+
+**Which forced the good decision.** The old model carried asset-class target weights. The new one
+carries ETF holdings. Those are the same statement at two grains, and keeping both would be the
+original sin repeated — so the **asset-class weights are derived from the holdings**, computed on
+every read, never stored. Each instrument carries its asset class, set by the platform and never
+by the caller, which is what makes the derivation possible at all.
+
+All four existing models derive to exactly the arrays that were hard-coded before, and a test
+asserts it across every model in the library rather than one. The first version of that test
+checked only Growth 70/30 and passed against a fault that returned Growth's array for
+everything — so it now checks all of them and asserts they do not all derive to the same target.
+
+**It found a real inconsistency on the way.** `h3` was recorded as being on Growth 70/30 while
+carrying a target of `[50, 15, 25, 7, 3]`, which Growth 70/30 has never had. Two screens
+describing the same household differently, quietly, for as long as that fixture has existed.
+With the target coming off the model there is nowhere for that to hide, and a test now holds the
+two together.
+
+**`scope` meant two things, and one word cannot.** The model's own firm-or-advisor field started
+out called `scope` — and `scope=firm` already means something specific across this whole
+contract: the supervisory view, principal only. The collision was not theoretical. Dana is a
+principal **and** an advisor, so deciding the view from her role put a colleague's private model
+on her own advisor shelf and counted the whole firm's households in her own book. Caught in the
+browser, not by a test.
+
+So the model's field is **`visibility`**, and `GET /models` takes the same `scope=firm` every
+other supervisory endpoint takes. The role cannot stand in for it, because for Dana the role does
+not know which of her two screens she is on.
+
+| | Sees | Counted over |
+| --- | --- | --- |
+| `GET /models` | firm models, plus your own | your own households |
+| `GET /models?scope=firm` | every model in the practice | every book |
+
+**Visibility is not permission.** A principal supervising the firm can read an advisor's own
+model; they cannot put a client on it. Seeing what a colleague is doing and being able to do it
+are different rights, and the second does not follow from the first.
+
+**The scope of a new model follows the role and is not a field.** A form offering "publish to
+every advisor" to an advisor is a control that fails on submit; worse, a body carrying the scope
+makes it possible to answer wrongly. A principal's `POST /models` publishes firm-wide whatever
+the body says, and an advisor's does not, whatever the body says. A test sends the wrong value
+deliberately in both directions.
+
+**Holdings must total 100%, and the backend is what says so.** The form runs a live total and
+keeps the button disabled until it reads exactly 100 — that total is the whole reason the
+holdings are a table and not three fields, because otherwise the person filling it in is doing
+the arithmetic in their head. But a form is not what the library rests on: a model at 98% is a
+target no household can ever be measured against correctly, so it is refused at the endpoint,
+along with a duplicate ticker, an unapproved one, and a maximum below the threshold.
+
+**Assigning a model moves the target, not the holdings.** This is the sentence the whole
+assignment flow is built to make true. Nothing is traded — PM-05 is still out of scope — so the
+current weights are left exactly as they were and only what they are compared with changes. The
+gap therefore jumps, sometimes hugely, and that is the honest thing to show rather than something
+to smooth over: putting a Growth household onto Conservative without trading really does leave it
+28 points out. The confirmation says so, the activity entry says *"No trade has been placed"*,
+and the entry is undoable, because putting them back is the whole of the undo.
+
+**Drift is measured the way each model says, and the unit travels with the number.** Three
+methods: percentage points, share of the target, whole-portfolio turnover. A conservative model
+tolerating 15% of a 3% sleeve is saying something a points threshold cannot. Which means two
+models can both report "6" and mean different things — so no bare figure is ever printed. One
+helper owns the wording, and a test reads the source to check no drift field is rendered outside
+it. Form inputs are exempt, and only form inputs: the value being typed is the bare number, with
+its unit in the label.
+
+`maxDriftPoints` on the allocation screen stays in points and always will — it is the unit the
+portfolio signal is stated in. The two agree for an absolute model and differ for the others,
+which is correct and is exactly the sort of thing that reads as a bug, so it is commented where
+it is computed.
+
+**Analytics are the half that makes it a library rather than a list.** Households, advisors,
+assets, average drift and how many are out of tolerance — against each model's own threshold, not
+a number fixed across the firm. A model nobody is on reports `averageDriftPct: null` rather than
+0: an average of zero across nobody reads as a model whose households are all exactly on target,
+which is the most flattering possible lie about a new one. The screen shows an em dash and *Not
+in use*.
+
+**Where it sits.** Advisor spine: with the standing references, below the four roles — an advisor
+reaches for a model while doing client work, but the library is not client work. Firm sections:
+straight after Advisors, which is the screen that raises the question of what those advisors are
+actually putting clients in, and before Compliance, which is about what has gone wrong rather
+than what is in use.
+
+**Fixtures.** Every funded household is now on a model, generated from that model's own target
+plus the drift the rest of the product already states for it — so the analytics have a real book
+underneath them and cannot disagree with the signals. Households still on forms are on no model
+at all: putting them on one would report an allocation for a household that has not funded
+anything.
+
+**A French screen showing 4.2 points.** Caught the same way the `itemDetail` one was, one entry
+above: money went through the locale and the bare numbers beside it did not, which is a screen in
+two languages. Every figure here now goes through `Intl`.
+
+**Implications.** Contract **0.8.0-draft**: four operations, seven schemas, one renamed field, no
+breaking change to what existed. New `dashboard/js/tethys.js`, serving both views from one module
+because the difference between the two screens is which book the server counts over. Thirteen
+tests, nine verified by injecting the matching fault. 177 tests, all passing.
+
+**Needs a decision.**
+
+1. **Does an advisor's own model need sign-off?** Articles go through a review queue before they
+   can be sent (COMM-03, and aRCHi joins it). A model decides what a client's money is actually
+   invested in, which is a larger claim than an article makes — and an advisor can create one and
+   assign it with nobody else involved. This was built as asked rather than gated on a guess, but
+   it is the obvious next question.
+2. **The drift signal still has a fixed 5-point rule.** `allocation_drift` counts households past
+   5 points regardless of what their model tolerates, while Tethys counts them against their own
+   model's threshold. Two rules for the same thing. The signal is a fixture here and computing it
+   from the models is a real change to what Today shows, so it was left alone deliberately — but
+   it should not stay that way.
+
+**Not built.** Editing or retiring a model. Both matter once a library is in use — a model
+nobody can withdraw is the same problem aRCHi's `restricted` state exists to solve — and neither
+was asked for.
+
+---
+
 ### 30 September 2026 · aRCHi beside a message — Suggested reading (GP-06, COMM-01, COMM-02)
 
 **Asked for.** Luke asked where aRCHi could be reached from, and specifically about adding an

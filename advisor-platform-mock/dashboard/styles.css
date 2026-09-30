@@ -701,6 +701,37 @@ dialog.sheet { max-width: 460px; border: 1px solid var(--line); border-radius: v
 .ar-opt .source { display: block; margin-top: 5px; }
 .ar-lang { margin-bottom: 0; }
 .ar-lang .hint { margin: 6px 0 0; }
+/* ---- Tethys: the model library ------------------------------------------------------------
+   A library screen is read by scanning, not by reading, so the work here is information design:
+   what a model is doing sits in the same row as its name, and the thing that needs attention
+   carries a badge as well as a number. */
+.pagehint { margin: -8px 0 18px; max-width: 72ch; }
+/* The way out of a panel, set apart from the work in it by a rule — the same shape the role
+   cards already use for the same reason, and named separately because a panel is not a card. */
+.panel-foot { display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  border-top: 1px solid var(--line); margin-top: 16px; padding-top: 14px; }
+.ty-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 2px 0 10px; }
+.ty-desc { margin: 0 0 4px; font-size: 14.5px; line-height: 1.55; color: var(--muted); max-width: 66ch; }
+/* The rules a model runs under are pairs, so they are a definition list and not a table: there
+   is one value for each, and nothing to compare across rows. */
+.ty-rules { margin: 0; }
+.ty-rules dd .meta { display: block; margin-top: 2px; font-size: 13px; line-height: 1.5;
+  white-space: normal; max-width: 52ch; }
+td.mono, .mono { font-family: var(--mono); font-size: 13px; }
+/* A holdings total is arithmetic the person filling the form in would otherwise be doing in
+   their head, so it is shown against 100 the whole time and coloured by whether it is there. */
+.ty-holdings tfoot th { font-size: 14px; color: var(--ink); border-bottom: 0; padding-top: 12px; }
+.ty-ok { color: var(--ok); font-weight: 600; }
+.ty-off { color: var(--warn); font-weight: 600; }
+.ty-form { display: flex; flex-direction: column; gap: 2px; }
+.ty-form .ar-h:first-of-type { margin-top: 18px; }
+.ty-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 0 16px; }
+.ty-grid .hint { margin: 2px 0 0; font-size: 12.5px; line-height: 1.45; }
+.ty-holdings select { width: 100%; min-width: 210px; }
+.ty-holdings input { width: 96px; text-align: right; }
+.ty-holdings td { white-space: normal; }
+@media (max-width: 560px) { .ty-holdings select { min-width: 0; } }
+
 /* Suggested reading, under a message draft. It is an aside to the message rather than part of
    it, so it sits outside the message frame with a rule over it — the frame is what the client
    will receive, and nothing that is not going to them belongs inside it. */

@@ -7,6 +7,7 @@ import { ROLES, ROLE, collectRoleWork, rankRoles } from './roles.js';
 import { PANELS, cardId, arrange, leadWith, move, nudge, pinsFor } from './cards.js';
 import { openSim, closeSim } from './sim.js';
 import { openArchi, closeArchi } from './archi.js';
+import { tethysAdvisor } from './tethys.js';
 import { state } from './state.js';
 /* head(), load(), toast(), sortTable() and the nav helpers translate what they are given, so
    panel titles, column headings and confirmations here need no wrapping. What is wrapped below
@@ -29,7 +30,7 @@ const weekdayNames = () => {
    whatever Today does. Systems sits at the bottom. */
 export const ADV_SECTIONS = [['today', 'Today'], ['inbox', 'Inbox'], ['calendar', 'Calendar'],
   ['role:bd', 'Prospecting'], ['role:ca', 'Clients'], ['role:op', 'Operations'], ['role:pd', 'Development'],
-  ['glance', 'Book at a glance'], ['systems', 'Systems']];
+  ['tethys', 'Tethys'], ['glance', 'Book at a glance'], ['systems', 'Systems']];
 export let advSection = 'today';
 
 /* Tabs inside each role home (UX_IA §3). One level below the spine and no deeper (FO-07).
@@ -82,7 +83,9 @@ function drawSpine(go) {
     /* ROLES.name is already in the reader's language, so it is passed as data rather than as
        a key: translating a translation loses it and fills the missing-key list with French. */
     { label: 'Your roles', items: ROLES.map(r => ['role:' + r.key, raw(r.name), r.mark]) },
-    { items: [['glance', 'Book at a glance'], ['systems', 'Systems']] }
+    /* Tethys sits with the standing references rather than under a role: an advisor reaches for
+       a model while doing client work, but the library itself is not client work. */
+    { items: [['tethys', 'Tethys'], ['glance', 'Book at a glance'], ['systems', 'Systems']] }
   ], advSection, go);
 }
 
@@ -1218,7 +1221,7 @@ export function advSystems() {
 const SYSTEM_KIND = lookup({ custodian: 'Custodian', crm: 'CRM', email: 'Email', calendar: 'Calendar', documents: 'Documents' });
 
 export const ADV_RENDER = {
-  today: advToday, inbox: advInbox, calendar: advCalendar, glance: advGlance, systems: advSystems,
+  today: advToday, inbox: advInbox, calendar: advCalendar, tethys: tethysAdvisor, glance: advGlance, systems: advSystems,
   'role:bd': () => advRoleHome('bd'), 'role:ca': () => advRoleHome('ca'),
   'role:op': () => advRoleHome('op'), 'role:pd': () => advRoleHome('pd')
 };
