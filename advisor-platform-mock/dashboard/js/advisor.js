@@ -320,7 +320,7 @@ function roleCard(key, items, isLead) {
       ${isLead ? `<span class="chip">${esc(t('Leading today'))}</span>` : ''}
       </h3>
     <div class="rolesec-body">${body}</div>
-    <button class="link cardlink" data-open-role="${esc(key)}">${esc(t('Open {what}', { what: r.name.toLowerCase() }))}</button>
+    <div class="rolesec-foot"><button class="link cardlink" data-open-role="${esc(key)}">${esc(t('Open {what}', { what: r.name.toLowerCase() }))}</button></div>
   </section>`;
 }
 

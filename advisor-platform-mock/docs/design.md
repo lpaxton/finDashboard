@@ -57,9 +57,17 @@ narrower and less true claim.
 directly: both are used outside a well elsewhere in the product and should not inherit a layout
 they are not in.
 
-**Implications.** `advisor.js` (one template) and `styles.css` (three rules). No contract change,
-nothing new said or done, and the empty case — *"Nothing pressing in development today"* — still
-has no well at all, because there is no suggestion to put in one.
+**And a footer under it.** Luke: *"add a border above that so the card has a footer for that
+action and move that link to the right side."* The *Open clients* link was the last thing in the
+same column as the work; it is now a footer with a hairline over it, right-aligned. The work is
+what you read and the footer is where you leave from, and the eye finishes a card on the left and
+goes on from the right. The empty card gets one too — *"Nothing pressing in development today"*
+is still an answer, and the way out of it should not move about depending on whether there was
+anything in it.
+
+**Implications.** `advisor.js` (one template) and `styles.css` (five rules). No contract change,
+nothing new said or done, and the empty case still has no well at all, because there is no
+suggestion to put in one.
 
 ---
 
