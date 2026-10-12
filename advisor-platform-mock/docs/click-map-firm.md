@@ -4,8 +4,7 @@ Every control a principal can press, what it does, and what comes back.
 Mapped 12 October 2026 from `dashboard/js/firm.js`, `ui.js` and `app.js` at contract v0.7.0-draft.
 Shareable version: https://claude.ai/code/artifact/1e0fdbec-72f1-4e4a-a53d-a59386ea978b
 
-**First of three.** The Advisor and Client click maps are separate files — the Advisor view has
-ten spine entries and four role homes and does not fit beside this one.
+**First of three.** `docs/click-map-advisor.md` is written. The client portal is still to map.
 
 **Who sees this view.** Only a session whose `views` include `firm` — Dana (`principal`,
 `advisor`). Marcus has no firm tab at all; the tab strip is hidden entirely when a person has
