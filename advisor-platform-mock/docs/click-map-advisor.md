@@ -5,8 +5,8 @@ Mapped 12 October 2026 from `dashboard/js/advisor.js`, `ui.js`, `sim.js`, `archi
 `tethys.js`, `roles.js` and `cards.js` at contract v0.7.0-draft.
 Shareable version: https://claude.ai/code/artifact/34facd00-9a93-44ee-9300-2b2add1e99e9
 
-**Second of three.** `docs/click-map-firm.md` covers the principal. The client portal is still
-to map.
+**Second of three.** `docs/click-map-firm.md` covers the principal, `docs/click-map-client.md`
+the portal — and compares all three views side by side.
 
 **Who sees this view.** Marcus (`advisor`), and Dana — who has both views and reaches this one
 for her own book. One tab inside it, Operations → Compliance, appears only for a principal.
@@ -362,6 +362,6 @@ open together would stack rather than tile. Each is in the same place on every s
 
 ---
 
-## Still to map
+## The other two
 
-`docs/click-map-client.md` — one screen, six panels.
+`docs/click-map-firm.md` · `docs/click-map-client.md`
