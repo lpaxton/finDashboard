@@ -1,0 +1,326 @@
+From e1df8049d17a950cfce810910939e896fde4c6f1 Mon Sep 17 00:00:00 2001
+From: Leila Mitchell <leilamitchell@llmdesign.com>
+Date: Wed, 14 Oct 2026 15:29:22 -0400
+Subject: [PATCH] UX-016: the quantity leads, the sentence supports
+
+A 44px glyph carries each role item's figure (days quiet, dollars at stake, a
+limit breached, steps outstanding) coloured by the kind of signal; the sentence
+sits beside it. Kind-of-source marks in front of every source line (TR-10).
+Today's role cards, the next-two rows, and the four role overviews.
+
+Where an item comes from a NextAction or Alert the figure is read back out of
+the server's sentence, because the contract carries no structured figure. The
+right fix is a lead field on NextAction and Alert; logged in UX_REQUESTS.
+
+Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01FmS2Xf24PRauDWoxnZ4nf2
+---
+ advisor-platform-mock/dashboard/js/advisor.js | 19 ++++---
+ advisor-platform-mock/dashboard/js/format.js  | 36 +++++++++++++
+ advisor-platform-mock/dashboard/js/i18n.js    | 23 ++++++++-
+ advisor-platform-mock/dashboard/js/roles.js   | 51 +++++++++++++++----
+ advisor-platform-mock/dashboard/styles.css    | 29 +++++++++++
+ 5 files changed, 140 insertions(+), 18 deletions(-)
+
+diff --git a/advisor-platform-mock/dashboard/js/advisor.js b/advisor-platform-mock/dashboard/js/advisor.js
+index 730973b..30d8c0c 100644
+--- a/advisor-platform-mock/dashboard/js/advisor.js
++++ b/advisor-platform-mock/dashboard/js/advisor.js
+@@ -1,6 +1,6 @@
+ /* The advisor's own sections. Everything here is internal: none of it may reach a client. */
+ import { api } from './api.js';
+-import { $, esc, money, moneyFull, pct, pctClass, fmtTime, fmtDate, localDate, daysAgo, daysBetween, dueLabel, syncBadge, syncNotice, sourceLine, sourceKind, CATEGORY } from './format.js';
++import { $, esc, money, moneyFull, pct, pctClass, fmtTime, fmtDate, localDate, daysAgo, daysBetween, dueLabel, syncBadge, syncNotice, sourceLine, sourceKind, CATEGORY, leadGlyph, sourceMarks } from './format.js';
+ import { toast, spark, head, panel, load, alertsList, openHousehold, bookPanel, spine, roleMark, roleTabs, disclosure, wireDisclosures, snoozeChoices, SNOOZE_CHOICES, loadActivity, onUndo } from './ui.js';
+ import { snooze, unsnooze, unsnoozeAll, dropExpiredSnoozes, get as vsGet, set as vsSet, isSnoozed } from './viewstate.js';
+ import { ROLES, ROLE, collectRoleWork, rankRoles } from './roles.js';
+@@ -305,20 +305,25 @@ function roleCard(key, items, isLead) {
+        three buttons and no subject, and made the top item read as a different kind of thing
+        from the ones under "Show the next two" — which have always kept their meaning, their
+        source and their action together. Now they match. */
+-    : `<div class="well">
++    : `<div class="well${top.lead ? ' has-lead' : ''}">
+          <span class="well-label">${esc(t('Suggested'))}</span>
++         <div class="well-row">
++         ${leadGlyph(top.lead)}
++         <div class="well-main">
+          <p class="card-meaning">${esc(top.meaning)}</p>
+          <div class="well-actions">
+            <button class="btn primary" data-do="${esc(itemKey(top))}">${esc(t(top.action.label))}</button>
+            <button class="btn" data-later="${esc(itemKey(top))}">${esc(t('Not now'))}</button>
+            <button class="btn quiet" data-notthis="${esc(itemKey(top))}">${esc(t('Not this'))}</button>
+          </div>
+-         <p class="source">${esc(sourceLine(top.source.kinds, top.source.at))}</p>
++         <p class="source">${sourceMarks(top.source.kinds)}${esc(sourceLine(top.source.kinds, top.source.at))}</p>
++         </div>
++         </div>
+        </div>
+        ${rest.length ? disclosure('role:' + key, rest.length === 1 ? t('Show the next one') : t('Show the next {n}', { n: rest.length }),
+          { openLabel: rest.length === 1 ? t('Hide the next one') : t('Hide the next {n}', { n: rest.length }),
+-           body: `<ul class="rows">${rest.map(w => `<li><div class="grow"><div class="title">${esc(w.meaning)}</div>
+-             <div class="source">${esc(sourceLine(w.source.kinds, w.source.at))}</div></div>
++           body: `<ul class="rows items">${rest.map(w => `<li>${leadGlyph(w.lead)}<div class="grow"><div class="title">${esc(w.meaning)}</div>
++             <div class="source">${sourceMarks(w.source.kinds)}${esc(sourceLine(w.source.kinds, w.source.at))}</div></div>
+              <button class="btn" data-do="${esc(itemKey(w))}">${esc(t(w.action.label))}</button></li>`).join('')}</ul>` }) : ''}`;
+   return `<section class="rolesec${isLead ? ' lead' : ''} role-${esc(key)}" data-role="${esc(key)}">
+     <h3 class="rolesec-head">${roleMark(r.mark, key)}<span class="rolesec-name">${esc(r.name)}</span>
+@@ -1114,8 +1119,8 @@ function roleOverview(key) {
+     try {
+       const work = (await collectRoleWork(state.session && state.session.advisorId)).filter(w => w.role === key);
+       host.innerHTML = head(title, work.length ? raw(t('{n} to answer', { n: work.length })) : '')
+-        + (work.length ? `<ul class="rows">${work.map(w => `<li><div class="grow"><div class="title">${esc(w.meaning)}</div>
+-            <div class="source">${esc(sourceLine(w.source.kinds, w.source.at))}</div></div>
++        + (work.length ? `<ul class="rows items">${work.map(w => `<li>${leadGlyph(w.lead)}<div class="grow"><div class="title">${esc(w.meaning)}</div>
++            <div class="source">${sourceMarks(w.source.kinds)}${esc(sourceLine(w.source.kinds, w.source.at))}</div></div>
+             <button class="btn" data-ritem="${esc(itemKey(w))}">${esc(t(w.action.label))}</button></li>`).join('')}</ul>`
+           : `<p class="empty serif">${esc(t('Nothing pressing in {role} today.', { role: ROLE[key].name.toLowerCase() }))}</p>`);
+       host.querySelectorAll('[data-ritem]').forEach(b => b.onclick = () =>
+diff --git a/advisor-platform-mock/dashboard/js/format.js b/advisor-platform-mock/dashboard/js/format.js
+index 977a7ba..ed5d142 100644
+--- a/advisor-platform-mock/dashboard/js/format.js
++++ b/advisor-platform-mock/dashboard/js/format.js
+@@ -60,6 +60,42 @@ export const sourceKind = (s) => {
+   return t('another connected system');
+ };
+ 
++/* ---- UX-016: the quantity leads, the sentence supports ------------------------------------
++   Every item on a role card is a number about a person — days quiet, dollars at stake, a limit
++   breached, steps outstanding. The glyph pulls that number out as the lead so the item can be
++   scanned before it is read, and its colour says what KIND of number it is (ST-04: every element
++   carries meaning, the same everywhere). Four kinds, plus a trend for the scorecard:
++     time     something has gone quiet, and days are the cost
++     money    an amount at stake
++     limit    a threshold breached
++     process  a thing stalled part-way (a draft, a form, steps)
++     trend    moved for or against, from the scorecard
++   The kinds reuse the status tints on purpose (tint + word, never a solid fill): a separate
++   signal-kind palette is a design-system call, not something to invent in a patch. */
++export function leadGlyph(lead) {
++  if (!lead) return '';
++  const unit = lead.unit ? `<small>${esc(lead.unit)}</small>` : '';
++  const title = lead.title ? ` title="${esc(lead.title)}"` : '';
++  return `<span class="qty qty-${esc(lead.kind)}" aria-hidden="true"${title}>${esc(lead.figure)}${unit}</span>`;
++}
++
++/* A kind-of-source mark in front of the source line (TR-10): the kind is already in the words,
++   so the mark only makes it scannable. Stroke icons inherit the line's colour. */
++const MARK = {
++  greenmeadows: '<path d="M3 10h18M5 10v9M19 10v9M9 10v9M15 10v9M3 19h18M12 3l9 6H3z"/>',
++  crm: '<circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/>',
++  calendar: '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/>',
++  notes: '<path d="M6 3h9l5 5v13H6z M14 3v6h6M9 13h6M9 17h6"/>',
++  market: '<path d="M3 17l5-6 4 3 5-7 4 4"/>',
++  platform: '<circle cx="12" cy="12" r="9"/><path d="M8 12l3 3 5-6"/>'
++};
++export function sourceMarks(sources) {
++  const kinds = [...new Set([].concat(sources ?? []).filter(Boolean))].filter(k => MARK[k]);
++  if (!kinds.length) return '';
++  return `<span class="srcmarks" aria-hidden="true">${kinds.map(k =>
++    `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">${MARK[k]}</svg>`).join('')}</span>`;
++}
++
+ /* "From custodian records, your CRM and your calendar \u00b7 updated 2 hrs ago".
+    Takes one source or a list; the age is optional, because not every source carries one. */
+ export function sourceLine(sources, at) {
+diff --git a/advisor-platform-mock/dashboard/js/i18n.js b/advisor-platform-mock/dashboard/js/i18n.js
+index b735a54..fdeaac7 100644
+--- a/advisor-platform-mock/dashboard/js/i18n.js
++++ b/advisor-platform-mock/dashboard/js/i18n.js
+@@ -400,6 +400,28 @@ const FR = {
+   'Nobody is onboarding right now.': 'Aucune intégration en cours.',
+   'Not covered by this answer': 'Non couvert par cette réponse',
+   'Not now': 'Pas maintenant',
++  /* UX-016: the glyph's tooltips and the short words it shows */
++  'steps outstanding': 'étapes restantes',
++  'at stake': 'en jeu',
++  'stalled': 'bloqué',
++  'form': 'form.',
++  'a form is incomplete': 'un formulaire est incomplet',
++  'docs': 'docs',
++  'documents needed': 'documents requis',
++  'past due': 'en retard',
++  'held': 'bloqué',
++  'account restricted': 'compte restreint',
++  'over the limit': 'au-delà de la limite',
++  'days': 'jours',
++  'days in proposal': 'jours en proposition',
++  'days without a reply': 'jours sans réponse',
++  'days quiet': 'jours sans contact',
++  'needs preparing': 'à préparer',
++  'prep': 'prép.',
++  'days since contact': 'jours depuis le dernier contact',
++  'draft': 'brouillon',
++  'awaiting your approval': 'en attente de votre accord',
++  'drafts waiting': 'brouillons en attente',
+   'Not now: {what}': 'Pas maintenant : {what}',
+   'Not started yet. Nothing has been captured for this step.': 'Pas encore commencé. Rien n’a été saisi pour cette étape.',
+   'Not this': 'Pas celui-ci',
+@@ -607,7 +629,6 @@ const FR = {
+   'on file, {how}': 'enregistré, {how}',
+   'on the day': 'le jour même',
+   'one': 'un',
+-  'open': 'ouvert',
+   'overdue': 'en retard',
+   'overdue first': 'en retard d’abord',
+   'paid': 'payé',
+diff --git a/advisor-platform-mock/dashboard/js/roles.js b/advisor-platform-mock/dashboard/js/roles.js
+index 40718a1..8e2c73b 100644
+--- a/advisor-platform-mock/dashboard/js/roles.js
++++ b/advisor-platform-mock/dashboard/js/roles.js
+@@ -45,6 +45,32 @@ export const SLIPPING = {
+ const item = (role, weight, meaning, action, source, extra = {}) =>
+   ({ role, weight, meaning, action, source, ...extra });
+ 
++/* UX-016: the figure that leads the item. `kind` is one of time · money · limit · process ·
++   trend (format.js leadGlyph). The figure is short enough to sit in a 44px square: days as
++   "92d", money as "$12k", a limit as "24%", steps as "2/6", a draft as the word.
++   Where an item comes from a NextAction or an Alert the number is read back out of the sentence
++   the server composed, because the contract carries no structured figure. That is the honest
++   limit of this patch: the right fix is a `lead` on NextAction and Alert, decided server-side,
++   so the glyph can never disagree with the sentence. Logged for the contract. */
++const lead = (kind, figure, unit, title) => ({ kind, figure: String(figure), unit, title });
++const shortMoney = (n) => n >= 1e6 ? '$' + (n / 1e6).toFixed(1).replace(/\.0$/, '') + 'M'
++  : n >= 1e3 ? '$' + Math.round(n / 1e3) + 'k' : '$' + Math.round(n);
++function leadFromText(text, fallbackKind) {
++  const days = /(\d+)\s*days?/i.exec(text);
++  const money = /\$([\d,]+)/.exec(text);
++  const pctm = /(\d+(?:\.\d+)?)%/.exec(text);
++  const steps = /(\d+)\s*of\s*(\d+)\s*steps?/i.exec(text);
++  if (steps) return lead('process', steps[1] + '/' + steps[2], '', t('steps outstanding'));
++  if (money) return lead('money', shortMoney(Number(money[1].replace(/,/g, ''))), '', t('at stake'));
++  if (pctm) return lead('limit', pctm[1] + '%', '', t('over the limit'));
++  if (days) return lead('time', days[1], 'd', t('days'));
++  if (/\bform\b/i.test(text)) return lead('process', t('form'), '', t('a form is incomplete'));
++  if (/document/i.test(text)) return lead('process', t('docs'), '', t('documents needed'));
++  if (/margin/i.test(text)) return lead('limit', t('due'), '', t('past due'));
++  if (/restrict/i.test(text)) return lead('limit', t('held'), '', t('account restricted'));
++  return lead(fallbackKind, fallbackKind === 'process' ? t('stalled') : '!', '', '');
++}
++
+ /* FO-04: time-critical means activity that has gone dormant and is about to cost something, or
+    anything that could affect the business itself. Both are expressed as weight. */
+ const PRIORITY_WEIGHT = { high: 60, medium: 30, low: 10 };
+@@ -71,15 +97,15 @@ export async function collectRoleWork(advisorId) {
+     if (p.stage === 'proposal' && inStage >= SLIPPING.proposalWaitingDays) {
+       out.push(item('bd', 40 + inStage, t('The {name} proposal has been out for {n} days.', { name: p.name, n: inStage }),
+         { label: 'Open the proposal', kind: 'prospect', id: p.id },
+-        { kinds: ['crm'], at: p.stageChangedAt }, { subject: p.name }));
++        { kinds: ['crm'], at: p.stageChangedAt }, { subject: p.name, lead: lead('time', inStage, 'd', t('days in proposal')) }));
+     } else if (p.stage === 'lead' && sinceContact === null && inStage >= SLIPPING.leadNoReplyDays) {
+       out.push(item('bd', 35 + inStage, t('{name} came in {n} days ago and has had no reply.', { name: p.name, n: inStage }),
+         { label: 'Open the lead', kind: 'prospect', id: p.id },
+-        { kinds: ['crm'], at: p.createdAt }, { subject: p.name }));
++        { kinds: ['crm'], at: p.createdAt }, { subject: p.name, lead: lead('time', inStage, 'd', t('days without a reply')) }));
+     } else if (sinceContact !== null && sinceContact >= SLIPPING.prospectQuietDays && p.stage !== 'converted') {
+       out.push(item('bd', 30 + sinceContact / 2, t('{name} has been quiet for {n} days.', { name: p.name, n: sinceContact }),
+         { label: 'Open the prospect', kind: 'prospect', id: p.id },
+-        { kinds: ['crm'], at: p.lastContactAt }, { subject: p.name }));
++        { kinds: ['crm'], at: p.lastContactAt }, { subject: p.name, lead: lead('time', sinceContact, 'd', t('days quiet')) }));
+     }
+   }
+ 
+@@ -98,20 +124,24 @@ export async function collectRoleWork(advisorId) {
+         ? { label: 'Practice with SimGPT', kind: 'rehearsal', id: prep.id, subject: a.householdName }
+         : { label: 'Add as a follow-up', kind: 'next-action', id: a.id, nextAction: a },
+       { kinds: a.citations.map(c => c.source), at: a.citations.map(c => c.dataAsOf).sort().pop() },
+-      { subject: a.householdName, drafted: true }));
++      { subject: a.householdName, drafted: true,
++        lead: a.kind === 'prep' ? lead('process', t('prep'), '', t('needs preparing'))
++          : a.kind === 'contact' ? leadFromText(a.reason, 'time')
++          : a.kind === 'tax' ? leadFromText(a.reason, 'money')
++          : leadFromText(a.reason, 'process') }));
+   }
+   for (const a of (alerts && alerts.items) || []) {
+     if (!a.householdId) continue;
+     out.push(item('ca', PRIORITY_WEIGHT[a.severity], a.householdName ? t('{what} — {who}.', { what: a.title, who: a.householdName }) : a.title + '.',
+       { label: 'Open the household', kind: 'household', id: a.householdId },
+-      { kinds: [a.source], at: a.createdAt }, { subject: a.householdName, alertId: a.id }));
++      { kinds: [a.source], at: a.createdAt }, { subject: a.householdName, alertId: a.id, lead: leadFromText(a.title, 'limit') }));
+   }
+   for (const h of (households && households.items) || []) {
+     const quiet = h.lastContactAt ? daysBetween(h.lastContactAt) : null;
+     if (quiet !== null && quiet >= SLIPPING.clientQuietDays) {
+       out.push(item('ca', 25 + quiet / 4, t('{name} has not been contacted in {n} days.', { name: h.name, n: quiet }),
+         { label: 'Open the household', kind: 'household', id: h.id },
+-        { kinds: ['crm'], at: h.lastContactAt }, { subject: h.name }));
++        { kinds: ['crm'], at: h.lastContactAt }, { subject: h.name, lead: lead('time', quiet, 'd', t('days since contact')) }));
+     }
+   }
+ 
+@@ -121,7 +151,7 @@ export async function collectRoleWork(advisorId) {
+     out.push(item('op', PRIORITY_WEIGHT[a.priority] + 15, a.title + '. ' + a.reason,
+       { label: 'Open the message', kind: 'communication', id: a.citations[0] && a.citations[0].id },
+       { kinds: a.citations.map(c => c.source), at: a.citations.map(c => c.dataAsOf).sort().pop() },
+-      { subject: a.householdName, drafted: true }));
++      { subject: a.householdName, drafted: true, lead: lead('process', t('draft'), '', t('awaiting your approval')) }));
+   }
+   const waiting = ((comms && comms.items) || []).filter(c => !c.complianceReview);
+   if (waiting.length) {
+@@ -129,12 +159,12 @@ export async function collectRoleWork(advisorId) {
+       ? t('One message is drafted and waiting for your yes.')
+       : t('{n} messages are drafted and waiting for your yes.', { n: waiting.length }),
+       { label: 'Open the inbox', kind: 'inbox' },
+-      { kinds: ['platform'], at: waiting.map(c => c.createdAt).sort().pop() }, { drafted: true }));
++      { kinds: ['platform'], at: waiting.map(c => c.createdAt).sort().pop() }, { drafted: true, lead: lead('process', waiting.length, '', t('drafts waiting')) }));
+   }
+   for (const a of (alerts && alerts.items) || []) {
+     if (a.householdId) continue;
+     out.push(item('op', PRIORITY_WEIGHT[a.severity] + 10, a.title + '.',
+-      { label: 'Open the inbox', kind: 'inbox' }, { kinds: [a.source], at: a.createdAt }, { alertId: a.id }));
++      { label: 'Open the inbox', kind: 'inbox' }, { kinds: [a.source], at: a.createdAt }, { alertId: a.id, lead: leadFromText(a.title, 'limit') }));
+   }
+ 
+   /* ---- Development: the advisor's own practice. Never a shortfall (CS-08). ---- */
+@@ -146,7 +176,8 @@ export async function collectRoleWork(advisorId) {
+       const better = moved.lowerIsBetter ? moved.change < 0 : moved.change > 0;
+       out.push(item('pd', 12, t(better ? '{metric} moved in your favour this period.' : '{metric} moved against you this period.', { metric: moved.label }),
+         { label: 'Open your scorecard', kind: 'role', id: 'pd' },
+-        { kinds: ['platform'], at: scorecard.dataAsOf }, { optional: true }));
++        { kinds: ['platform'], at: scorecard.dataAsOf }, { optional: true,
++          lead: { kind: better ? 'trend-up' : 'trend-down', figure: (moved.change > 0 ? '+' : '') + moved.change, unit: '', title: moved.label } }));
+     }
+   }
+ 
+diff --git a/advisor-platform-mock/dashboard/styles.css b/advisor-platform-mock/dashboard/styles.css
+index 86b9374..3281380 100644
+--- a/advisor-platform-mock/dashboard/styles.css
++++ b/advisor-platform-mock/dashboard/styles.css
+@@ -633,6 +633,35 @@ dialog.sheet { max-width: 460px; border: 1px solid var(--line); border-radius: v
+   font: 500 10px/1 var(--mono); text-transform: uppercase; letter-spacing: 0.08em; padding: 4px 8px; margin-bottom: 8px; }
+ .well-actions { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+ 
++/* ---- UX-016: the quantity leads, the sentence supports --------------------------------------
++   A 44px glyph carries the item's figure in the serif, coloured by the KIND of signal; the
++   sentence sits beside it as support. Tint + figure, never a solid fill, so it reads as meaning
++   rather than as a button. In a row the glyph is the first column; in the well it sits beside
++   the whole item, label and all. */
++/* Class is .qty, not .lead: .lead is already the leading role section on Today. */
++.qty { flex: 0 0 auto; width: 44px; height: 44px; border-radius: 10px; display: inline-flex; align-items: center; justify-content: center;
++  font: 600 16px/1 var(--serif); letter-spacing: -0.01em; font-variant-numeric: tabular-nums; white-space: nowrap; }
++.qty small { font: 500 10px/1 var(--mono); margin-left: 1px; align-self: flex-end; padding-bottom: 1px; }
++.qty-time    { background: var(--warn-soft); color: var(--warn); }
++.qty-money   { background: var(--ok-soft);   color: var(--ok); }
++.qty-limit   { background: var(--crit-soft); color: var(--crit); }
++.qty-process { background: var(--mist);      color: var(--ink); font-family: var(--mono); font-size: 11px; font-weight: 500; letter-spacing: 0.02em; }
++.qty-trend-up   { background: var(--ok-soft);   color: var(--ok); }
++.qty-trend-down { background: var(--warn-soft); color: var(--warn); }
++/* Rows that carry a glyph: glyph · text · action, the text column never pushing the page wider. */
++.rows.items > li { flex-wrap: nowrap; align-items: center; }
++.rows.items > li > .grow { min-width: 0; }
++.rows.items .title { line-height: 1.35; }
++/* The well: the label stays on top; under it the glyph sits beside the item. Flex rather than
++   grid, because Today's cards sit in CSS columns and Chromium will split a grid across a column
++   break even with break-inside: avoid on the card. */
++.well-row { display: flex; gap: 14px; align-items: flex-start; }
++.well-row > .qty { margin-top: 2px; }
++.well-row > .well-main { flex: 1 1 auto; min-width: 0; }
++/* Kind-of-source marks in front of the source line (TR-10), the line's own colour. */
++.srcmarks { display: inline-flex; gap: 3px; vertical-align: -2px; margin-right: 6px; }
++.srcmarks svg { width: 12px; height: 12px; }
++
+ /* ---- SimGPT: rehearsing a conversation (AX-05, AX-06, AX-07) ------------------------------ *
+    A wider panel than Ask, because this is a conversation with turns rather than a question with
+    an answer, and a 420px column turns every reply into a narrow stack. */
+-- 
+2.43.0
+

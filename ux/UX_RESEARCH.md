@@ -1,6 +1,14 @@
 # UX research — what we know, and how well we know it
 
-*Draft — not yet reviewed by Leila · v0.1 · 26 September 2026 · Owner: Leila Mitchell*
+*v0.2 · 13 October 2026 · Owner: Leila Mitchell · v0.1 drafted 26 September from the directional
+study and the April–August material; v0.2 adds the second study (S17, prospecting) as its own
+section, §2b, and touches F1, §7 and §9 where the second study changes them. Nothing in §2 was
+rewritten: the two studies are kept apart so a finding can always be traced to the study that
+produced it.*
+
+**Changes in v0.2 at a glance:** §1 now lists two pieces of primary research · new §2b, findings
+F10–F14 from S17 · F1 gains a cross-reference · §7 gains five rows · §9 question 1 is answered in
+part and four questions are added · S17 added to the sources.
 
 This is the evidence the experience is designed on. It gathers the September advisor study,
 the published sources we lean on, and everything the team worked out between April and
@@ -16,7 +24,7 @@ Read §1 first. It is short and it changes how you read the rest.
 
 | Tag | Means | Treat it as |
 | --- | --- | --- |
-| **HEARD** | Practising RIAs told us this directly (S1) | Evidence. Design on it |
+| **HEARD** | Practising RIAs told us this directly. Always with its study: **(S1)** the September directional study, **(S17)** the October prospecting study | Evidence. Design on it. Both studies are small and directional; a finding heard in both is stronger than one heard in either |
 | **SOURCED** | A published source we can cite | Evidence, with the source's limits |
 | **UNSOURCED** | A number or claim in circulation with no citation behind it | A hypothesis wearing a statistic's clothes. Don't present it as fact |
 | **OURS** | The team's own framing, principle or idea | A hypothesis to test in interviews |
@@ -28,9 +36,14 @@ Source codes (S1, S2…) are listed at the end.
 
 ## 1. The honest state of the evidence
 
-- **One piece of primary research exists:** the directional study of seven practising RIAs,
-  September 2026 (S1). It is small and directional, but it is the only place advisors speak
-  for themselves.
+- **Two pieces of primary research exist, and they are kept apart in this file.**
+  - **S1**, the directional study of seven practising RIAs, September 2026. Broad: the week,
+    AI, trust, signals. Findings F1–F9 (§2).
+  - **S17**, a follow-up with four of the same respondents, October 2026, on one topic only:
+    prospecting and new-client acquisition. Five-minute unmoderated interviews, ten questions,
+    all from firms under ten people. Findings F10–F14 (§2b). It is narrower and shallower than
+    S1, so it confirms shape and direction, not thresholds; where it and S1 agree, that is the
+    strongest evidence this file holds.
 - **One industry figure is properly sourced:** Cerulli Associates, 2025, on where an
   advisor's week goes (S2).
 - **Everything from April to August is the team's own framing.** Personas, pain clusters,
@@ -72,6 +85,9 @@ person.
 
 **For design:** growth work needs a place in the structure that matches its importance, and
 the time the platform returns should visibly point somewhere — ideally at a prospect.
+
+*v0.2 cross-reference:* S17 went into this finding in depth. Where the leads come from (F10),
+what wastes the time (F12, F13) and what advisors would hand to software (F14) are in §2b.
 
 ### F2 · The week is lost in the work around the meeting
 
@@ -206,6 +222,152 @@ view as much as the advisor's.
 
 ---
 
+## 2b. Findings from the second study — prospecting (S17, October 2026)
+
+*Four practising RIAs, all respondents from S1, all from firms under ten people. Five-minute
+unmoderated interviews. Ten questions: where leads come from · what they personally do to
+generate business · which parts take the most time · the last prospect they closed and what
+moved it along · the hardest part and where they get stuck · what they should do but don't have
+time for · where a tool should help, what it should do for them and what they keep · how they
+know prospecting is working and what they track · how they decide which prospects are worth
+continuing to invest in.*
+
+*Read these with S1's F1 open. S1 said winning clients is the constraint; S17 says what the
+constraint is made of.*
+
+### F10 · Referrals are the primary and highest-converting source
+
+- **HEARD (S17).** Advisors rank word-of-mouth referrals as their top channel, and the
+  conversion evidence is consistent: referrals arrive pre-qualified, need less persuasion and
+  close faster.
+  - One advisor's most recent close was a referral made through Salesforce by a colleague
+    inside their own firm. Having information on the person beforehand built rapport in
+    advance; the quality of the referral, and the relationship with the firm already in place,
+    were "big in building trust."
+  - Another converted a referral from an existing client — a friend going through a divorce —
+    within a single week: a Zoom intro call one day, an engagement agreement signed the
+    following Monday. What moved it was "a really glowing review from the referral source. The
+    woman very much came into the meeting wanting to work with me."
+  - A third uses a newsletter as a long-cycle nurture channel: prospects occasionally respond
+    months or years later, then convert through a coffee meeting and eventually an account
+    transfer. The same advisor cold-calls targeted professional groups (nurses, lawyers,
+    paralegals) and leaves business cards everywhere, but referrals and newsletter responses
+    produce the warmest leads.
+- **The pattern across all three:** a pre-existing relationship with the firm, or a warm human
+  introduction, dramatically lowers the trust barrier and shortens the sales cycle.
+- **OURS, now confirmed:** the referral moment at peak satisfaction (§4, moment 11) and
+  CS-01's "pay yourself first." **OURS, now sharpened:** CS-09's "referral window after a
+  strong review" is the right signal, and the build cannot produce it — the contract records
+  that a prospect came from a referral but not who referred them (`UX_REQUESTS.md`, 28 Sept).
+
+**For design:** the Prospecting role should lead with warm things — a referral in, a reply to
+the newsletter — before anything stalled or cold. A prospect's record needs to carry *who*
+referred them, how that person is connected to the firm, and how strong the introduction was,
+because that is the information the advisor used to build rapport before the first call.
+
+### F11 · Free AI and online information are a perceived competitor
+
+- **HEARD (S17), raised unprompted** as one of the core difficulties in converting prospects.
+  - *"Especially with ChatGPT nowadays, they think that you're not needed. 'I can do all this
+    myself for free.' The hardest thing is really convincing them of the value of working with
+    a person instead of ChatGPT."*
+  - *"The biggest obstacle is people doing it on their own. The abundance of information online.
+    People think they know investing by reading online. There's an abundance of providers.
+    There's an abundance of everything. Even AI can advise you, right, for free."*
+  - *"An advisor will advise you. Discipline is more important than investment rules. And for
+    that, you need a person that's not yourself, because naturally you're biased."*
+- **Read:** a shared *perception* problem, not a skills gap. Advisors know their value and
+  struggle to communicate it against free, accessible alternatives.
+- **Connected to S1 F3 and to the Trust commitment (TM-01):** a platform whose own voice
+  replaced the advisor's would be feeding the thing they are losing prospects to. The
+  platform's job is to make the person visibly more valuable, never to speak in their place.
+
+**For design:** anything a prospect or client sees should demonstrate the advisor, not the
+software. RTI-09 (quantifying advisor value) and the client-facing explanations (RTI-08,
+aRCHi) are the features that answer this; none of them were in any finding before S17. The
+third quote is close to a product thesis and worth keeping verbatim.
+
+### F12 · Unserious prospects are the biggest time drain, and the instinct for them is unreliable
+
+- **HEARD (S17).** The most emotionally charged pain point: free consultations used to extract
+  information by people with no intention of signing on.
+  - *"Most of my time is just wasted time on those free consultations with prospective clients
+    that really have no interest at all in signing on and are just trying to pump me for free
+    information. More questions, more questions, more questions, with no intention of ever
+    turning into a client."*
+  - The same advisor framed the cost personally: a full-time job, a family, children, a husband,
+    elderly parents. Every hour lost to an unserious prospect is acutely costly.
+  - **The inverse, from another advisor:** prospects they were sure were only kicking the tires
+    sometimes became great clients — which makes any reliable screening instinct hard to form.
+- **Read:** the pain is real and the cure is not obvious. A tool that hides "unserious" prospects
+  would also hide the ones who convert.
+
+**For design:** reduce the cost of a wrong guess rather than promise a right one. Show the
+advisor what they have already spent on a prospect and what the prospect has done in return,
+and let the advisor decide. See F13.
+
+### F13 · Prospect qualification is unsolved; every method is intuitive or a proxy
+
+- **HEARD (S17).** No one described a reliable, systematic way to decide which prospects are
+  worth more time.
+  - *"I'm terrible at it. Whatever I'm doing to decide on that is not working, and I don't have
+    anything else to replace it."*
+  - One qualifies by whether they agree to a meeting: *"If they agree to meet, usually they're
+    worth it."*
+  - One targets by net worth and number of outside accounts: *"I decide who I'm going to target
+    based on net worth, dollar amount, et cetera, and the number of outside accounts."*
+- **Connected to F10:** the one qualifier that worked in every closing story was the source of
+  the introduction.
+
+**For design:** the honest product is a *ledger of evidence*, not a score — agreed to meet,
+replied within a day, referred by a client vs. walked in cold, outside accounts named, time
+already spent — each with its source (TR-10). A number that rates a person collides with CS-02
+(about the situation, never the person), with TR-08 and TR-10 (never present something from an
+unverified source as insight), and with the decision already taken for John Adams in the
+scenario spine (a 0.38 hunch barred from any "why now" line). It would also be a cousin of
+COMM-05, which is on the regulatory review list.
+
+### F14 · Automate the top of the funnel; keep the conversation
+
+- **HEARD (S17), consistent across the group.** What a tool should do for them: lead
+  generation and identification · social media content and engagement (*"I would love for it to
+  create my social media. I would love for it to handle all my engagement on my social media —
+  commenting and responding"*) · a prospect-seriousness rating (*"I would love for it to come up
+  with some sort of rating system about how serious is this person and is it going to be worth
+  my time to invest into them"*) · trigger-based alerts on readiness (*"find the moment when
+  people who have some money want to transfer it… when exactly a person is unhappy with their
+  previous provider, like they're paying too high a management fee, or the person just received
+  an inheritance… be alerted when money is available"*) · routine follow-up communications and
+  outreach (three advisors).
+- **What they keep:** the conversation (*"I'd want to generate the lead and find the lead, but I
+  would want to still have that conversation with that prospect"*) and anything personalised
+  (*"Anything that really, really needs to be personalized and customized, I want to handle
+  myself"*).
+- **S1 F3, confirmed from the growth side.** The internal/external line holds for prospecting
+  exactly as it did for client work: prepare the ground, hand over the conversation. This is the
+  first *user* evidence for the Trust promise's "never signs for you," which until now rested on
+  stakeholder enthusiasm (`UX_RULES.md` §5, evidence note).
+- **Two cautions inside the wish list.** The seriousness rating is F13's collision. The
+  inheritance alert is exactly the record the scenario spine *suppresses* (David Kim's expected
+  inheritance, never surfaced while his mother is alive): the demand is real, and the restraint
+  rule from F4 applies to it unchanged.
+
+**For design:** build the top of the funnel (lead capture, referral tracking, nurture content
+within compliance, follow-up drafts) as drafts and lists the advisor works from. Never let the
+platform hold the conversation. Where it alerts on money in motion, the restraint rule travels
+with the alert.
+
+### What S17 does and does not settle
+
+- **Settled enough to design on:** referrals lead (F10) · internal/external holds for growth
+  (F14) · qualification needs evidence, not a verdict (F12, F13).
+- **Still open:** thresholds of any kind (how quiet is too quiet, what counts as a reply) ·
+  the four roles on Today (§9 q9 — S17 did not ask) · anything from a principal's or client's
+  seat (still none) · whether newsletter-style nurture is one advisor's habit or a pattern.
+- **Weight:** four people, five minutes each, unmoderated, no firm over ten. Directional.
+
+---
+
 ## 3. Who we're designing for (all OURS unless marked)
 
 - **The firm.** Small independent RIA, fee-only, often solo or two-to-three people; 80–150
@@ -297,11 +459,17 @@ a map of where the evidence is strong, thin, or silent.
 | F6 Attention | IP-09 unified dashboard · PO-01 digest | Mostly a UX question, not a feature |
 | F7 Predictability and undo | X-15 view switcher · audit trail | A UX question. See F3 gap |
 | F8 Onboarding | AX-01 intake · AX-02 tracker · AX-04 · AX-03 document intelligence | Tracker exists; AX-03 has no operation |
+| F10 Referrals lead (S17) | GP-02 referral tracking · Prospecting › Referrals tab · CS-09 referral window | **Gap at the data:** the contract has no referrer on a prospect, so the warmest signal in both studies cannot be shown |
+| F11 Free AI as competitor (S17) | RTI-09 advisor value · RTI-08 client-facing explanations · GP-06/07 content · aRCHi | First evidence touching RTI-09, which §7 previously listed as "no finding touches" |
+| F12 Unserious prospects (S17) | Prospects section · `stageChangedAt` · the Pipeline | Nothing shows time spent against response. A Room change, not Plumbing |
+| F13 Qualification unsolved (S17) | GP-01 advisor–client matching · COMM-05 sentiment index (regulatory list) | **Design decision needed:** evidence ledger, not a score. See `UX_RULES.md` CS-10 (proposed) |
+| F14 Top of funnel automated, conversation kept (S17) | GP-01 · GP-06 to GP-10 · COMM-01 drafting · PO-03 alerts · life events (UX-012) | Confirms TR-01 from the growth side. Money-in-motion alerts inherit F4's restraint rule |
 
 **Features no finding touches yet** — validate in interviews before investing design time:
-PO-12 cap table and ownership · PM-04 robo portfolio · RTI-01 credit risk · RTI-09 advisor
-value quantification · GP-08 podcasts · COMM-05 sentiment index · AX-05 to AX-07 practice
-conversations and coaching (the earlier "coaches the advisor" idea is OURS, not HEARD).
+PO-12 cap table and ownership · PM-04 robo portfolio · RTI-01 credit risk · GP-08 podcasts ·
+AX-05 to AX-07 practice conversations and coaching (the earlier "coaches the advisor" idea is
+OURS, not HEARD). *v0.2: RTI-09 and COMM-05 left this list — F11 touches the first, F13 the
+second, and not in the way the feature list imagined.*
 **PM-05 placing a trade** is squarely in S1's human-sign-off list: allowed only as a
 deliberate advisor action, never a suggestion that completes itself.
 
@@ -325,8 +493,9 @@ deliberate advisor action, never a suggestion that completes itself.
 
 ## 9. What the interviews should test next
 
-1. **F1.** What does prospecting actually involve for them, week to week? Which part would
-   they hand to software, and which must stay theirs?
+1. ~~**F1.** What does prospecting actually involve for them, week to week? Which part would
+   they hand to software, and which must stay theirs?~~ **Answered in part by S17** (F10, F14).
+   Still to ask: the week-to-week rhythm, and whether the newsletter pattern generalises.
 2. **F3.** Where exactly is the internal/external line — is a drafted client email "internal"
    until sent? What would make approving feel fast *and* safe?
 3. **F4.** Which life events do they learn about too late, and from where? What would a good
@@ -342,6 +511,14 @@ deliberate advisor action, never a suggestion that completes itself.
 9. **The four roles on Today.** Do advisors recognise their week in prospecting, client work, business operations and professional development? Would they pin the order, or let it change daily?
 10. **Navigation A/B test (parked, 26 Sept).** Show advisors both navigation options from the wireframe canvas: A — roles as tabs across the top; B — roles in the spine with tabs inside each role (the one being built). Which one tells them where they are? Which gets them to a prospect fastest?
 11. **Pinned items.** Would advisors rather choose what's pinned, or have the platform suggest pins from their habits?
+12. **F13 (new, from S17).** Show two prospect records: one with a seriousness score, one with the
+    same facts as a ledger with sources. Which would they trust, and which would they act on?
+13. **F12 (new, from S17).** What would have told them, earlier, that a prospect was not serious —
+    and what would have stopped them writing off one who later converted?
+14. **F10 (new, from S17).** When a referral comes in, what do they want to know about the
+    referrer and the introduction before the first call? Who should the thank-you go to, and when?
+15. **F11 (new, from S17).** What do they say to a prospect who thinks free AI is enough? Which
+    of those arguments could the platform help them show rather than say?
 
 ## 10. Retired — don't reuse
 
@@ -374,3 +551,4 @@ deliberate advisor action, never a suggestion that completes itself.
 | S14 | Competitor feature matrix, AI-layer tab, August 2026 | MARKET |
 | S15 | Onboarding deep dive, May 2026 | OURS |
 | S16 | Requirements inventory — `advisor-platform-mock/docs/feature-api-map.md` and `HANDOFF.md` §5 | Build |
+| S17 | Prospecting follow-up study, October 2026 — five-minute unmoderated interviews with four practising RIAs from the S1 cohort, firms under ten people, ten questions on new-client acquisition | HEARD (narrow) |

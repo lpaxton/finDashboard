@@ -2,7 +2,9 @@
 
 *v0.3 · 26 September 2026 · Owner: Leila Mitchell · v0.1 drafted by Claude from Leila's
 decisions and notes; v0.2 carries Leila's review (keep / change / cut, and her answers to the
-open decisions). v0.3: every rule and all five promises confirmed by Leila, 26 Sept.*
+open decisions). v0.3: every rule and all five promises confirmed by Leila, 26 Sept. v0.4,
+13 Oct: evidence column updated from the second study (S17, prospecting — `UX_RESEARCH.md`
+§2b, F10–F14); one new rule **proposed**, CS-10, awaiting Leila's call; no decided rule changed.*
 
 **Scope.** This file covers the **Advisor** view (Dana and Marcus as advisors). Many of these
 rules will reach the Client view later, and the Firm view needs its own pass. Neither is
@@ -23,6 +25,10 @@ visible focus, reduced motion respected).
 | **Decided** | Leila made this call, or kept it in her review (26 Sept) |
 | **Decided, changed** | Leila kept it with a change; the wording now follows her edit |
 | **Research** | Follows directly from `UX_RESEARCH.md` |
+| **Proposed** | Drafted from research after v0.3; not a rule until Leila decides |
+
+*Evidence codes: F1–F9 are from the September study (S1) and the April–August material; F10–F14
+are from the October prospecting study (S17). A rule citing both has been heard twice.*
 
 Rule numbers are permanent. A cut or merged rule keeps its number in the *Retired* list at the
 end so references never point at the wrong rule.
@@ -66,7 +72,7 @@ about whether its suggested actions and insights come from a trusted source.
 
 | # | Rule | Status | Tag | Evidence |
 | --- | --- | --- | --- | --- |
-| TR-01 | **The line is internal vs. external.** The platform may prepare anything for the advisor. Anything that leaves the firm — a client message, a trade, an account change, advice, a compliance decision — needs the advisor's explicit yes. | Decided | [UX] | F3 |
+| TR-01 | **The line is internal vs. external.** The platform may prepare anything for the advisor. Anything that leaves the firm — a client message, a trade, an account change, advice, a compliance decision — needs the advisor's explicit yes. | Decided | [UX] | F3, **F14** (heard again, from the growth side) |
 | TR-02 | **What you edit is what they get.** A draft is shown exactly as it will arrive, so there is no separate preview. Anything leaving the firm gets one confirmation: who it goes to, from whom, what's attached, and whether it can be recalled. A separate "as they'll see it" view is added only where the recipient sees something different from what the advisor edits (a report in the client's portal, one message to many people, attachments). *(Revised 26 Sept, from Leila's review of the draft wireframe.)* | Decided, changed | [UX] | F3, F7 |
 | TR-03 | **One activity log, always in the same place.** Everything the platform did — drafted, ranked, flagged, reordered, sent on the advisor's yes — is recorded there, including what can't be reversed. | Decided | [UX] | F3, F7 |
 | TR-04 | **Every prepared item carries a one-line receipt** saying what the platform did ("Drafted the reply from Tuesday's notes"). Show, don't tell. | Decided | [UX] | F7 |
@@ -130,15 +136,22 @@ announces.*
 
 | # | Rule | Status | Tag | Evidence |
 | --- | --- | --- | --- | --- |
-| CS-01 | **Pay yourself first.** Growth work always has its own place: the prospecting and business development card is always on Today, so a busy client day never pushes it off. | Decided | [PO] | F1 |
-| CS-02 | **About the situation, never the advisor.** "Nadia Constantin's proposal has been with her accountant for two weeks," never "you haven't prospected this week." | Decided | [UX] | F4 |
+| CS-01 | **Pay yourself first.** Growth work always has its own place: the prospecting and business development card is always on Today, so a busy client day never pushes it off. | Decided | [PO] | F1, **F10** |
+| CS-02 | **About the situation, never the advisor.** "Nadia Constantin's proposal has been with her accountant for two weeks," never "you haven't prospected this week." | Decided | [UX] | F4, **F13** (a seriousness *score* would break this rule) |
 | CS-03 | **A signal arrives with its next step.** Every signal says what happened, how the platform knows, and one suggested action. If automation is available for that task, the next step comes already drafted. *(TR-09 merged in — see note.)* | Decided, changed | [UX] | F4 |
 | CS-04 | **Say it once.** A suggestion waits in its place and comes back only when something changes (a new signal, a real deadline), not because a day passed. | Decided | [UX] | F6 |
 | CS-05 | **Always answerable:** Do it · Not now (the advisor picks when) · Not this (optional reason, which teaches the ranking). **The advisor decides how their tasks and to-do list are organised.** | Decided, changed | [UX] | F7 |
 | CS-06 | **Planning moments by default.** Suggestions surface in the morning and between meetings — never mid-task, never during a client meeting. **Two exceptions, both chosen by the advisor:** practice sessions (simulated client conversations), and live suggestions while writing, when switched on. | Decided, changed | [UX] | F6 |
 | CS-07 | **Quiet.** No red badges, no piling-up counts, no streaks, no guilt words. Red is only for the truly time-critical. | Decided | [UX] | F6, product rule 5 |
 | CS-08 | **The advisor's goals, and the firm goals they connect to, rank the list.** The advisor states what matters ("four new clients this quarter"); a suggestion may cite that goal as its reason, and never reports a shortfall. | Decided, changed | [PO] | F1 |
-| CS-09 | **What counts as slipping** (starting list, and it grows as research comes in): unanswered prospect replies · prospects quiet 45+ days · the referral window after a strong review · clients quiet 60+ days · life events · stalled onboarding. | Decided | [PO] | F1, F4 |
+| CS-09 | **What counts as slipping** (starting list, and it grows as research comes in): unanswered prospect replies · prospects quiet 45+ days · the referral window after a strong review · clients quiet 60+ days · life events · stalled onboarding. *v0.4, from S17, proposed additions:* a referral in with no first contact · a newsletter reply unanswered. | Decided (list open) | [PO] | F1, F4, **F10** |
+
+| CS-10 | **Evidence, never a verdict, about a prospect.** The platform shows what a prospect has done and what the advisor has spent — agreed to meet · replied within a day · referred by a client or walked in cold · outside accounts named · hours already given — each with its source, and never a number that rates the person. The advisor decides who is worth more time. | **Proposed** | [UX] | F12, F13 (S17); CS-02, TR-08, TR-10 |
+
+*On CS-10 — proposed, not decided.* S17's most-wanted feature is a seriousness rating. The same
+study says the advisor's own instinct for it is unreliable in both directions, and a score would
+collide with CS-02, TR-10 and the John Adams decision in the scenario spine. The rule as drafted
+gives the advisor the rating's job back with better bookkeeping. Leila to confirm, reword, or cut.
 
 *On TR-09 — you asked whether it belongs under Focused.* I'd put it here, merged into CS-03.
 "A signal arrives with its next step" and "it arrives half-done" were the same rule written
@@ -174,6 +187,12 @@ untested with advisors. It has, though, drawn strong enthusiasm from stakeholder
 was presented. That's worth recording, and it's worth being clear that it is a stakeholder
 signal, not user evidence. **Leila: bring this back when the next round of user testing and interviews is planned.**
 
+*v0.4, from S17:* the "never signs for you" half of this promise now has user evidence — advisors
+want the lead found and the follow-ups drafted, and want to keep the conversation themselves
+(F14). The *voice* half (drafts sound like the advisor) is still untested; §9 q8 in
+`UX_RESEARCH.md` stands. F11 adds a reason the promise matters: prospects already see free AI as
+the advisor's competitor, so a platform that spoke for the advisor would be feeding that.
+
 ---
 
 ## Open decisions
@@ -185,9 +204,11 @@ signal, not user evidence. **Leila: bring this back when the next round of user 
 | 3 | What counts as time-critical? | [UX] | **Answered** → FO-04 |
 | 4 | Whose voice in a multi-advisor firm? | [PO] | **Firm brand, personal voice** → TM-07 |
 | 5 | The mirror: in this POC or later? | [PO] | **Later** (parked) |
-| 6 | Does the Firm view show Dana her own four role cards, or the firm's operations? | [UX] | Next pass |
+| 6 | Does the Firm view show Dana her own four role cards, or the firm's operations? | [UX] | **The firm's operations** — built 29 Sept. See `UX_IA.md` §1 |
 | 7 | Where does *Next best action* go? | [UX] | **Inside the role cards** → FO-11 |
 | 8 | TR-10 (insight names its source) — keep? | [UX] | **Kept** |
+| 9 | CS-10 (evidence, never a verdict, about a prospect) — confirm, reword, or cut? | [UX] | **Open** (v0.4) |
+| 10 | CS-09 additions from S17 (referral in with no first contact · newsletter reply unanswered) — add? | [PO] | **Open** (v0.4) |
 
 ## Retired rule numbers
 
