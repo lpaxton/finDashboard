@@ -1,0 +1,205 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Demo Path Story Map</title>
+</head>
+<body>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,400;6..72,500;6..72,600&family=Plus+Jakarta+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: a user story map — three beats as columns, the backbone of steps down each, stories stacked under the step they unblock. */
+:root{
+  --bg:#EEF1F0; --surface:#FBFCFB; --ink:#16262D; --muted:#5B6B71; --line:#D5DCDA;
+  --brand:#0E5A57; --brand-soft:#DCEBE9; --warn:#9A4A06; --warn-soft:#F3E6D6; --crit:#A3282F; --crit-soft:#F6DEDF; --ok:#2E7D4F; --ok-soft:#DDEFE3;
+  --violet:#3B3A6E; --violet-soft:#E7E6F4;
+  --serif:"Newsreader",Georgia,serif; --sans:"Plus Jakarta Sans",system-ui,sans-serif; --mono:"JetBrains Mono",ui-monospace,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0F1A1E; --surface:#16252A; --ink:#E6EEEC; --muted:#93A4A9; --line:#263A40;
+  --brand:#5CC0B8; --brand-soft:#1B3A3B; --warn:#E0A15B; --warn-soft:#3A2C18; --crit:#EE8A8F; --crit-soft:#3D2022; --ok:#6CC494; --ok-soft:#1E3A2A;
+  --violet:#B9B6EA; --violet-soft:#26264A; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0F1A1E; --surface:#16252A; --ink:#E6EEEC; --muted:#93A4A9; --line:#263A40;
+  --brand:#5CC0B8; --brand-soft:#1B3A3B; --warn:#E0A15B; --warn-soft:#3A2C18; --crit:#EE8A8F; --crit-soft:#3D2022; --ok:#6CC494; --ok-soft:#1E3A2A;
+  --violet:#B9B6EA; --violet-soft:#26264A; color-scheme:dark}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:14px;line-height:1.45;padding-block:32px 72px;padding-inline:16px}
+.wrap{max-width:1280px;margin:0 auto}
+h1{font-family:var(--serif);font-weight:500;font-size:2.2rem;margin:0;line-height:1.1;text-wrap:balance}
+h2{font-family:var(--serif);font-weight:500;font-size:1.25rem;margin:0;line-height:1.2}
+.eyebrow{font-family:var(--mono);font-size:.7rem;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.lede{color:var(--muted);max-width:70ch;margin:10px 0 0;font-size:1rem}
+.legend{display:flex;flex-wrap:wrap;gap:8px 14px;margin:18px 0 0;align-items:center;font-size:.8rem;color:var(--muted)}
+.chip{display:inline-block;font-family:var(--mono);font-size:.64rem;letter-spacing:.04em;padding:2px 7px;border-radius:999px;white-space:nowrap}
+.paint{background:var(--brand-soft);color:var(--brand)} .furn{background:var(--violet-soft);color:var(--violet)} .room{background:var(--warn-soft);color:var(--warn)} .plumb{background:var(--crit-soft);color:var(--crit)} .dec{background:var(--line);color:var(--ink)}
+.tot{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin:22px 0 6px}
+.tot div{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:12px 14px}
+.tot b{font-family:var(--serif);font-size:1.6rem;font-weight:500;display:block;line-height:1}
+.tot span{font-size:.78rem;color:var(--muted)}
+
+.map{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px;margin-top:28px}
+@media (max-width:900px){.map{grid-template-columns:1fr}}
+.beat{min-width:0}
+.beathead{background:var(--ink);color:var(--bg);border-radius:8px;padding:12px 14px;margin-bottom:12px}
+.beathead .eyebrow{color:var(--bg);opacity:.7}
+.beathead h2{color:var(--bg)}
+.beathead p{margin:6px 0 0;font-size:.82rem;opacity:.85}
+.step{border-top:2px solid var(--ink);padding:10px 0 6px;margin-top:10px}
+.step .n{font-family:var(--mono);font-size:.68rem;color:var(--muted)}
+.step .t{font-weight:600;margin-top:2px}
+.step .has{font-size:.78rem;color:var(--ok);margin-top:4px}
+.step .has::before{content:"✔ ";}
+.plays{font-family:var(--mono);font-size:.66rem;color:var(--ok);margin-top:6px;letter-spacing:.04em}
+.story{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:10px 12px;margin-top:8px;position:relative}
+.story.crit{border-left:3px solid var(--crit)}
+.story .id{font-family:var(--mono);font-size:.66rem;color:var(--muted)}
+.story .name{font-weight:600;margin:1px 0 3px}
+.story p{margin:0;font-size:.8rem;color:var(--muted)}
+.story .row{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:8px;flex-wrap:wrap}
+.story .crittag{font-family:var(--mono);font-size:.62rem;letter-spacing:.06em;text-transform:uppercase;color:var(--crit)}
+.story .nicetag{font-family:var(--mono);font-size:.62rem;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.story.decision{background:var(--bg);border-style:dashed}
+.xc{margin-top:36px;border-top:1px solid var(--line);padding-top:20px}
+.xc .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:10px;margin-top:12px}
+.note{background:var(--surface);border:1px solid var(--line);border-left:3px solid var(--brand);border-radius:8px;padding:12px 16px;margin-top:28px;max-width:80ch}
+.note p{margin:6px 0;font-size:.9rem}
+.src{font-family:var(--mono);font-size:.7rem;color:var(--muted)}
+</style>
+
+<div class="wrap">
+<p class="eyebrow">Canopy open-lane build · demo path · v0.2 · 14 Oct 2026</p>
+<h1>One day, three beats, twenty-four stories</h1>
+<p class="lede">The demo script is the backbone across the top. Under each step: what the build already does (from Luke's click maps) and the story that makes the step play. Stories are tagged by what they change so they can be sized, and marked critical or nice so they can be cut.</p>
+<div class="legend">
+  <span><span class="chip paint">Copy &amp; style</span> words, labels, colour, motion</span>
+  <span><span class="chip furn">Front-end</span> browser behaviour the API already supports</span>
+  <span><span class="chip room">Screen redesign</span> one section rebuilt, API unchanged</span>
+  <span><span class="chip plumb">API &amp; data</span> contract, mock, data model or model capability</span>
+  <span><span class="chip dec">Decision</span> costs nothing, blocks things</span>
+  <span style="border-left:3px solid var(--crit);padding-left:6px">critical to the demo</span>
+</div>
+<div class="tot">
+  <div><b>24</b><span>stories on the path</span></div>
+  <div><b>13</b><span>demo-critical</span></div>
+  <div><b>4</b><span>critical API &amp; data</span></div>
+  <div><b>9</b><span>steps that already play</span></div>
+  <div><b>0</b><span>decisions open · path confirmed 14 Oct</span></div>
+</div>
+
+<div class="map">
+
+<!-- BEAT 1 -->
+<section class="beat">
+  <div class="beathead"><div class="eyebrow">Beat 1 · Episodes 1–2</div><h2>Dana's morning: client work</h2><p>Today → the Okafors' 9:30 review → approve the Roth draft → rehearse → meet → follow-ups → compare models.</p></div>
+
+  <div class="step"><div class="n">1.1</div><div class="t">Opens Today. Clients leads, and says why.</div><div class="has">Top-priority pill, reason line, role sections, Show the next 2</div>
+    <div class="story crit"><div class="id">S-01 · UX-015</div><div class="name">One fact, one item</div><p>Delacroix shows three times with three verbs: alert, next action, role item. One generator.</p><div class="row"><span class="chip furn">Front-end</span><span class="crittag">critical</span></div></div>
+  </div>
+
+  <div class="step"><div class="n">1.2</div><div class="t">Opens the 9:30 meeting to prepare.</div><div class="has">Prep brief with receipt; SimGPT; meeting record</div>
+    <div class="story crit"><div class="id">S-02 · UX-014</div><div class="name">The household page</div><p>The brief is two sentences in a modal with no household around it. Header, Needs you, Next with the brief and its doors, the thread, accounts, Shared, Documents.</p><div class="row"><span class="chip room">Screen redesign</span><span class="crittag">critical</span></div></div>
+    <div class="story"><div class="id">S-03 · UX-025</div><div class="name">Prep assembled, honestly</div><p>The brief is a seeded field; the receipt says the platform wrote it. Either a meeting_prep capability or a truthful receipt.</p><div class="row"><span><span class="chip plumb">API &amp; data</span> or <span class="chip paint">Copy &amp; style</span></span><span class="nicetag">nice</span></div></div>
+  </div>
+
+  <div class="step"><div class="n">1.3</div><div class="t">From the household, opens the Roth draft.</div><div class="has">From Today, Open the message lands inside the frame</div>
+    <div class="story crit"><div class="id">S-04 · part of UX-014</div><div class="name">Every item on the household page opens the job</div><p>The draft, the follow-up, the signal's lots: one deliberate step, back to where you were.</p><div class="row"><span class="chip furn">Front-end</span><span class="crittag">critical</span></div></div>
+  </div>
+
+  <div class="step"><div class="n">1.4</div><div class="t">Edits, approves. It's flagged for compliance.</div><div class="has">Frame, save on blur, Approve ("queued, not sent"), Rewrite it for me, the send sheet</div>
+    <div class="story crit"><div class="id">S-05 · UX-026</div><div class="name">Clearing a compliance flag</div><p>Firm › Compliance is a list. No control clears a flag, so this beat can't end in "sent". Verify the contract first; may be screen-only.</p><div class="row"><span class="chip plumb">API &amp; data</span><span class="crittag">critical</span></div></div>
+  </div>
+
+  <div class="step"><div class="n">1.5</div><div class="t">Rehearses the hard part.</div><div class="has">SimGPT beside the page, labelled every turn</div>
+    <div class="story"><div class="id">S-06 · UX-018</div><div class="name">"Rehearse this conversation"</div><p>Product names out of the frame.</p><div class="row"><span class="chip paint">Copy &amp; style</span><span class="nicetag">nice</span></div></div>
+  </div>
+
+  <div class="step"><div class="n">1.6</div><div class="t">After the meeting, outcomes wait as proposed tasks.</div><div class="has">Suggest next steps → drafts → Add as follow-up, From meeting tag</div>
+    <div class="story crit"><div class="id">S-07 · UX-027</div><div class="name">Next steps from the record</div><p>Suggest next steps is a seeded stub (mock-suggestion-v0), and the Okafor meeting has no record. A meeting_next_steps capability plus a seeded record with consent on file. The one model stub on the path.</p><div class="row"><span class="chip plumb">API &amp; data</span><span class="crittag">critical</span></div></div>
+  </div>
+
+  <div class="step"><div class="n">1.7</div><div class="t">Adds two follow-ups; they show on the household and in Inbox.</div><div class="has">Follow-ups tab, origin tag, dims on complete</div><div class="plays">PLAYS AS BUILT</div></div>
+
+  <div class="step"><div class="n">1.8</div><div class="t">The rebalance the Okafors agreed to.</div><div class="has">Compare models: "a comparison, never an instruction". Assign the model: "Nothing was traded"</div>
+    <div class="story decision"><div class="id">D-02 · decided 14 Oct</div><div class="name">The beat ends on compare and assign</div><p>"Assigned. Nothing was traded." is the closing line. The trade action (PM-05) waits for a later demo, after regulatory review.</p><div class="row"><span class="chip dec">Decided</span><span class="nicetag">done</span></div></div>
+  </div>
+</section>
+
+<!-- BEAT 2 -->
+<section class="beat">
+  <div class="beathead"><div class="eyebrow">Beat 2 · Episode 4 · the research beat</div><h2>Dana's new business: a referral to a client</h2><p>A referral arrives → the record shows who vouched → she drafts, keeps the conversation → books → converts.</p></div>
+
+  <div class="step"><div class="n">2.1</div><div class="t">A referral comes in: a message from a prospect, sent by a client.</div><div class="has">Prospects with "came from: a referral"</div>
+    <div class="story crit"><div class="id">S-08 · UX-022 +</div><div class="name">Referrals as data</div><p>No referrer on the record; no message can be addressed to a prospect (27 Aug decision: prospects are addressable). referredBy on a prospect, prospectId on communications, one seeded referral with an inbound message. Nothing in this beat plays without it.</p><div class="row"><span class="chip plumb">API &amp; data</span><span class="crittag">critical</span></div></div>
+  </div>
+
+  <div class="step"><div class="n">2.2</div><div class="t">The Prospecting card on Today leads with it.</div><div class="has">Role card, ranking in roles.js</div>
+    <div class="story crit"><div class="id">S-09 · UX-023 part 1</div><div class="name">Prospecting leads warm</div><p>A referral in or a reply received outranks stalled and cold. CS-09 gains the two additions.</p><div class="row"><span class="chip furn">Front-end</span><span class="crittag">critical</span></div></div>
+  </div>
+
+  <div class="step"><div class="n">2.3</div><div class="t">Opens the prospect: who referred, what they said, what's known.</div><div class="has">Prospect record: stage, assets, came from, intake notes, Which advisor fits?</div>
+    <div class="story crit"><div class="id">S-10 · UX-023 part 2 · CS-10</div><div class="name">The vouch and the evidence</div><p>A referrer block, and a ledger: agreed to meet · replied within · referred by · outside accounts · time spent. Facts with sources; the advisor rates.</p><div class="row"><span class="chip room">Screen redesign</span><span class="crittag">critical</span></div></div>
+  </div>
+
+  <div class="step"><div class="n">2.4</div><div class="t">Drafts the reply in her voice; the platform offers, she edits.</div><div class="has">Message frame, Rewrite it for me + tone, provenance line</div>
+    <div class="story crit"><div class="id">S-11 · UX-028</div><div class="name">Draft to a prospect</div><p>A Draft a message door on the prospect record; the Inbox frame accepts a prospect recipient. After S-08.</p><div class="row"><span class="chip furn">Front-end</span><span class="crittag">critical</span></div></div>
+  </div>
+
+  <div class="step"><div class="n">2.5</div><div class="t">Sends.</div><div class="has">Send sheet: To, From, Attached: Nothing, "cannot be recalled", focus on Not yet</div><div class="plays">PLAYS AS BUILT</div></div>
+
+  <div class="step"><div class="n">2.6</div><div class="t">Books the first meeting.</div><div class="has">Calendar + → new meeting, "which client (or none, for a prospect)"</div><div class="plays">PLAYS AS BUILT</div></div>
+
+  <div class="step"><div class="n">2.7</div><div class="t">After the meeting: move the stage, convert, thank the referrer.</div><div class="has">Move to next stage; Onboarding › Convert to client once ready</div>
+    <div class="story"><div class="id">S-12 · UX-029</div><div class="name">Convert from the record</div><p>"Onboarding" stage and an onboarding record are two things. Move to onboarding creates the record and says so.</p><div class="row"><span class="chip furn">Front-end</span><span class="nicetag">nice</span></div></div>
+    <div class="story"><div class="id">S-13 · UX-030</div><div class="name">The thank-you</div><p>On first deposit, a drafted note to the referrer. Needs S-08. End the beat at "meeting booked" if time is short.</p><div class="row"><span class="chip plumb">API &amp; data</span><span class="nicetag">nice</span></div></div>
+  </div>
+</section>
+
+<!-- BEAT 3 -->
+<section class="beat">
+  <div class="beathead"><div class="eyebrow">Beat 3 · Episode 7, lightly · the portal</div><h2>The firm, and the client</h2><p>Dana in the Firm view: by advisor, one supervision look, two X-ray reads. Then Grace sees what was shared, and what's next.</p></div>
+
+  <div class="step"><div class="n">3.1</div><div class="t">Switches to Firm. "How is the firm going."</div><div class="has">Strip; Needs you (read-only by design); households table</div>
+    <div class="story crit"><div class="id">S-14 · UX-019</div><div class="name">Firm overview by advisor</div><p>Group Needs you by advisor; tag or drop the principal's own items; sourceLine() applied so "greenmeadows" never shows.</p><div class="row"><span class="chip furn">Front-end</span><span class="crittag">critical</span></div></div>
+  </div>
+
+  <div class="step"><div class="n">3.2</div><div class="t">Looks at Marcus's book.</div><div class="has">Scorecard with rank, Open Marcus's book, the notice, "Marcus is told"</div><div class="plays">PLAYS AS BUILT · ONE OF THE BEST MOMENTS, SCRIPT IT AS IS</div></div>
+
+  <div class="step"><div class="n">3.3</div><div class="t">The X-ray: a sentence and a picture each.</div><div class="has">Ingredients scattered: Billing & fees, Reports with lowerIsBetter, compliance counts</div>
+    <div class="story"><div class="id">S-15 · UX-031</div><div class="name">Two reads on Firm › Overview</div><p>Revenue concentration and fee structure, each a sentence plus one bar. Computed, no model. Book-vs-brand and time-returned have no data; cut them.</p><div class="row"><span class="chip room">Screen redesign</span><span class="nicetag">nice — strong if it fits</span></div></div>
+  </div>
+
+  <div class="step"><div class="n">3.4</div><div class="t">Clears the compliance flag on the Roth draft (closes 1.4).</div><div class="has">Compliance leads with what is overdue</div>
+    <div class="story crit"><div class="id">S-05 · UX-026</div><div class="name">Clearing a compliance flag</div><p>Same story as 1.4, seen from the principal's side.</p><div class="row"><span class="chip plumb">API &amp; data</span><span class="crittag">critical</span></div></div>
+  </div>
+
+  <div class="step"><div class="n">3.5</div><div class="t">Grace opens the portal: what's new, what's next.</div><div class="has">Strip, Your accounts, From your advisor (now with articles), Documents, Fees, Preferences. Nothing leaks.</div>
+    <div class="story crit"><div class="id">S-16 · UX-020</div><div class="name">Next, new, done</div><p>The next meeting (/me/meetings, API &amp; data, nice). A new-state and cover on a shared article, and fees as one schedule instead of three identical rows (Copy &amp; style, critical: it's the last thing the audience sees).</p><div class="row"><span><span class="chip plumb">API &amp; data</span> + <span class="chip paint">Copy &amp; style</span></span><span class="crittag">copy half critical</span></div></div>
+  </div>
+
+  <div class="step"><div class="n">3.6</div><div class="t">Grace requests a meeting in her own words; it lands in Dana's follow-ups.</div><div class="has">Required topic, optional time and note; a task on the advisor due tomorrow</div>
+    <div class="story crit"><div class="id">S-17 · UX-032</div><div class="name">Keep what the client typed</div><p>The mock discards the proposed time and the note, so Dana never sees the time Grace offered. Store and show both on the task.</p><div class="row"><span class="chip furn">Front-end (mock)</span><span class="crittag">critical</span></div></div>
+  </div>
+</section>
+</div>
+
+<div class="xc">
+  <div class="eyebrow">Cross-cutting · every beat</div>
+  <div class="grid">
+    <div class="story crit"><div class="id">S-18 · UX-016</div><div class="name">Quantity leads</div><p>Every item leads with its figure in a kind-of-signal glyph; the sentence supports; source lines gain a kind-of-source mark. The visible difference from the September build.</p><div class="row"><span class="chip paint">Copy &amp; style</span><span class="crittag">critical</span></div></div>
+    <div class="story"><div class="id">S-19 · UX-017</div><div class="name">Today layout</div><p>Role cards two across; prep state in the timeline dot; signals as four tiles.</p><div class="row"><span class="chip room">Screen redesign</span><span class="nicetag">nice</span></div></div>
+    <div class="story"><div class="id">S-20 · UX-018</div><div class="name">Product names out of the frame</div><p>Tethys → Models; SimGPT and aRCHi become verbs; names move to tooltips and receipts.</p><div class="row"><span class="chip paint">Copy &amp; style</span><span class="nicetag">nice</span></div></div>
+    <div class="story decision"><div class="id">D-01 · decided 14 Oct</div><div class="name">One cast: the build's names</div><p>Dana, Marcus, Grace and the Okafors, a seeded referral prospect. Scripts use these from here on.</p><div class="row"><span class="chip dec">Decided</span><span class="nicetag">done</span></div></div>
+    <div class="story decision"><div class="id">D-03 · agreed 14 Oct</div><div class="name">Merge archi to main</div><p>Leila asks Luke. The dev lead reads one branch.</p><div class="row"><span class="chip dec">Housekeeping</span><span class="nicetag">asked</span></div></div>
+  </div>
+</div>
+
+<div class="note">
+  <p><b>Reading this with the dev team.</b> The backbone is the script: steps 1.1 → 3.6 in order. A story here is a Jira story in all but the template: the ask becomes <i>as Dana, I can…</i>, "done looks like" becomes the acceptance criteria, the change tag is the first sizing, and the click-map row points at what already exists so nobody re-specifies it. The three beats are the epics.</p>
+  <p><b>Where AI is on this path:</b> one place still to build (S-07, next steps from the meeting record). Everything else the demo shows as the platform's voice already runs, live or offline. Ask is not on the path; keep it off until the connectors exist.</p>
+  <p class="src">Sources: docs/click-map-advisor.md · click-map-firm.md · click-map-client.md · feature-inventory.md (12 Oct, branch archi) · Canopy_Scenario_Spine_v0-3.md · ux/UX_REQUESTS.md. Full table with click-map references: Demo_Path_Story_Map_v0-1.md.</p>
+</div>
+</div>
+
+</body>
+</html>
