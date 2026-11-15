@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Capability map</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,400;6..72,500&family=Plus+Jakarta+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{--sand:#F6F4EF;--mist:#E8E9E3;--fog:#D7DAD3;--stone:#B5B9AE;--graphite:#4C5145;--moss:#3D5440;--ink:#1B1F1D;--elev:#FBFAF6;--coral:#E45D4D;--sage:#5F8F75}
+*{box-sizing:border-box}
+body{margin:0;background:var(--sand);color:var(--ink);font-family:"Plus Jakarta Sans",system-ui,sans-serif;font-size:13px;line-height:1.45}
+main{max-width:1500px;margin:0 auto;padding:36px 32px 48px}
+.eyebrow{font-family:"JetBrains Mono",ui-monospace,monospace;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--graphite)}
+h1{font-family:Newsreader,Georgia,serif;font-weight:400;font-size:34px;line-height:1.15;margin:6px 0 8px;text-wrap:balance}
+.lede{max-width:78ch;color:var(--graphite);font-size:14px;margin:0 0 18px}
+.layer{background:var(--ink);color:var(--sand);border-radius:12px;padding:14px 18px;margin-bottom:14px}
+.layer .eyebrow{color:var(--coral)}
+.layer p{margin:4px 0 0;font-size:15px;font-weight:500}
+.wrap{overflow-x:auto;border:1px solid var(--fog);border-radius:12px;background:var(--elev)}
+table{border-collapse:collapse;width:100%;min-width:1280px;table-layout:fixed}
+col.c0{width:190px} col.after{width:150px}
+thead th{font-family:"JetBrains Mono",ui-monospace,monospace;font-weight:500;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--graphite);text-align:left;padding:10px 8px;border-bottom:1px solid var(--fog);vertical-align:bottom}
+thead .sn{display:block;color:var(--stone);font-size:10px}
+thead .grp{border-bottom:none;padding-bottom:0;color:var(--moss)}
+thead .grp.aft{color:var(--graphite);border-left:1px solid var(--fog)}
+tbody th{text-align:left;padding:12px 12px;vertical-align:top;border-top:1px solid var(--mist);font-weight:400}
+.cap{display:block;font-weight:600;font-size:13.5px}
+.src{display:block;font-family:"JetBrains Mono",ui-monospace,monospace;font-size:10.5px;color:var(--graphite);margin-top:3px}
+td{padding:8px 6px;vertical-align:top;border-top:1px solid var(--mist)}
+td.on{background:#EEF1EA}
+td.after{border-left:1px solid var(--fog);color:var(--graphite);font-size:12.5px;padding:12px 10px}
+thead th.after{border-left:1px solid var(--fog)}
+.chip{display:block;border-radius:8px;padding:5px 7px;margin:0 0 5px;font-size:12px;line-height:1.3;border:1px solid transparent}
+.chip:last-child{margin-bottom:0}
+.chip .n{font-family:"JetBrains Mono",ui-monospace,monospace;font-size:10.5px;font-variant-numeric:tabular-nums;opacity:.8;margin-right:2px}
+.chip.B{background:var(--moss);color:var(--sand)}
+.chip.N{background:var(--elev);color:var(--ink);border-color:var(--moss)}
+.chip.L{background:transparent;color:var(--graphite);border:1px dashed var(--stone)}
+tr.rules th,tr.rules td{background:var(--sand)}
+tr.rules .chip{display:inline-block;margin:0 3px 4px 0;padding:3px 6px}
+tr.rules .cap{font-weight:500;color:var(--graphite)}
+.legend{display:flex;flex-wrap:wrap;gap:8px 18px;align-items:center;margin:14px 0 0;color:var(--graphite);font-size:12.5px}
+.legend .chip{display:inline-block;margin:0 6px 0 0}
+.notes{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px;margin-top:22px}
+.note{background:var(--elev);border:1px solid var(--fog);border-radius:12px;padding:14px 16px}
+.note h2{font-family:Newsreader,Georgia,serif;font-weight:500;font-size:18px;margin:0 0 6px}
+.note p{margin:0;color:var(--graphite)}
+footer{margin-top:22px;font-family:"JetBrains Mono",ui-monospace,monospace;font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--graphite)}
+@media print{@page{size:landscape;margin:10mm} main{padding:0} .wrap{overflow:visible} table{min-width:0} body{font-size:10px} .chip{font-size:9.5px}}
+tr.sec th{font-family:"JetBrains Mono",ui-monospace,monospace;font-size:11px;letter-spacing:.1em;text-transform:uppercase;font-weight:500;color:var(--moss);background:var(--mist);padding:7px 12px;border-top:1px solid var(--fog)}
+</style></head><body><main>
+<div class="eyebrow">Capability map · Pillar 1 · Grow the practice</div>
+<h1>Seven capabilities and four foundations carry a lead to a signed client</h1>
+<p class="lede">Read across a row to see where one capability shows up between first contact and signature. The two columns on the right show the same capability returning in onboarding and in the ongoing relationship. The lower rows are the foundations: components that work without AI. Step numbers match the flow document.</p>
+<div class="layer"><div class="eyebrow">What's different</div><p>Every human moment prepared · the advisor is the author · nothing leaves without a yes</p></div>
+<div class="wrap"><table>
+<colgroup><col class="c0"><col><col><col><col><col><col><col><col><col><col><col class="after"><col class="after"></colgroup>
+<thead>
+<tr><th class="grp"></th><th class="grp" colspan="10">Prospect to signed</th><th class="grp aft" colspan="2">After signing</th></tr>
+<tr><th scope="col">Capability</th><th scope="col"><span class="sn">0</span>Set up</th><th scope="col"><span class="sn">1</span>Intake</th><th scope="col"><span class="sn">2</span>Enrich</th><th scope="col"><span class="sn">3</span>Sort</th><th scope="col"><span class="sn">4</span>Reach out</th><th scope="col"><span class="sn">5</span>Prepare</th><th scope="col"><span class="sn">6</span>Meet</th><th scope="col"><span class="sn">7</span>Follow up</th><th scope="col"><span class="sn">8</span>Propose</th><th scope="col"><span class="sn">9</span>Sign</th><th scope="col" class="after">Onboarding</th><th scope="col" class="after">Ongoing</th></tr>
+</thead>
+<tbody>
+<tr class="sec"><th colspan="13">Capabilities · where the AI does the work</th></tr>
+<tr><th scope="row"><span class="cap">Enrich and flag gaps</span><span class="src">Enrichment service · Platform</span></th><td class=""></td><td class=""></td><td class="on"><span class="chip B"><span class="n">2.1</span> Enrichment data</span><span class="chip B"><span class="n">2.3</span> What&#x27;s missing</span></td><td class=""></td><td class="on"><span class="chip B"><span class="n">4.3</span> Personal page asks goals</span></td><td class=""></td><td class=""></td><td class="on"><span class="chip B"><span class="n">7.3</span> Gaps list updates</span></td><td class=""></td><td class=""></td><td class="after">The gaps list becomes the onboarding checklist</td><td class="after">Household profile kept current</td></tr>
+<tr><th scope="row"><span class="cap">Draft in the advisor&#x27;s voice</span><span class="src">Platform</span></th><td class=""></td><td class=""></td><td class=""></td><td class="on"><span class="chip N"><span class="n">3.4</span> Suggested reach-out</span></td><td class="on"><span class="chip B"><span class="n">4.1</span> Intro email</span><span class="chip B"><span class="n">4.5</span> Confirmation</span></td><td class="on"><span class="chip N"><span class="n">5.3</span> Reminder</span></td><td class=""></td><td class="on"><span class="chip B"><span class="n">7.2</span> Thank-you</span></td><td class=""></td><td class="on"><span class="chip N"><span class="n">9.5</span> Thank the referrer</span></td><td class="after">Welcome, document requests, transfer updates</td><td class="after">Check-ins, review invitations</td></tr>
+<tr><th scope="row"><span class="cap">Prep brief</span><span class="src">X-ray</span></th><td class=""></td><td class=""></td><td class=""></td><td class=""></td><td class=""></td><td class="on"><span class="chip B"><span class="n">5.1</span> Prep brief</span><span class="chip L"><span class="n">5.4</span> Connection cues</span></td><td class=""></td><td class=""></td><td class=""></td><td class=""></td><td class="after">The planning meeting</td><td class="after">Every review and call</td></tr>
+<tr><th scope="row"><span class="cap">Rehearse</span><span class="src">SIMGPT</span></th><td class=""></td><td class=""></td><td class=""></td><td class=""></td><td class=""></td><td class="on"><span class="chip B"><span class="n">5.2</span> SIMGPT rehearsal option</span></td><td class=""></td><td class=""></td><td class=""></td><td class=""></td><td class="after">Explaining fees and transfers</td><td class="after">Hard conversations</td></tr>
+<tr><th scope="row"><span class="cap">Listen, summarise and file</span><span class="src">Connected meeting tool · Platform</span></th><td class=""></td><td class=""></td><td class=""></td><td class=""></td><td class=""></td><td class=""></td><td class="on"><span class="chip B"><span class="n">6.1</span> Transcript in</span><span class="chip B"><span class="n">6.2</span> Summary</span><span class="chip N"><span class="n">6.3</span> Connected capture</span><span class="chip L"><span class="n">6.4</span> Live prompts</span></td><td class="on"><span class="chip B"><span class="n">7.1</span> Notes filed</span></td><td class=""></td><td class=""></td><td class="after">Planning notes feed the plan</td><td class="after">Every meeting</td></tr>
+<tr><th scope="row"><span class="cap">Assemble from a template</span><span class="src">Platform · X-ray</span></th><td class="on"><span class="chip N"><span class="n">0.3</span> Templates</span></td><td class=""></td><td class=""></td><td class=""></td><td class=""></td><td class=""></td><td class=""></td><td class=""></td><td class="on"><span class="chip B"><span class="n">8.1</span> Proposal opens</span><span class="chip B"><span class="n">8.2</span> Sections filled</span><span class="chip N"><span class="n">8.3</span> X-ray analysis</span><span class="chip N"><span class="n">8.5</span> Fee agreement</span></td><td class=""></td><td class="after">Account forms pre-filled, first plan draft</td><td class="after">Review packs and reports</td></tr>
+<tr><th scope="row"><span class="cap">Relevant content</span><span class="src">Archi</span></th><td class=""></td><td class=""></td><td class=""></td><td class="on"><span class="chip L"><span class="n">3.5</span> Newsletter</span></td><td class="on"><span class="chip B"><span class="n">4.3</span> Personal page</span></td><td class=""></td><td class=""></td><td class=""></td><td class=""></td><td class=""></td><td class="after">The personal page becomes the client&#x27;s window</td><td class="after">Client newsletters</td></tr>
+<tr class="sec"><th colspan="13">Foundations · built without AI</th></tr>
+<tr><th scope="row"><span class="cap">Capture</span><span class="src">Forms and imports</span></th><td class=""></td><td class="on"><span class="chip B"><span class="n">1.1</span> Web form on the firm&#x27;s site</span><span class="chip B"><span class="n">1.2</span> Advisor&#x27;s intake form</span><span class="chip N"><span class="n">1.3</span> List import</span><span class="chip B"><span class="n">1.4</span> Client referral form</span></td><td class=""></td><td class=""></td><td class=""></td><td class=""></td><td class=""></td><td class=""></td><td class=""></td><td class=""></td><td class="after"></td><td class="after"></td></tr>
+<tr><th scope="row"><span class="cap">Firm settings</span><span class="src">Set once by the firm</span></th><td class="on"><span class="chip N"><span class="n">0.1</span> Brand</span><span class="chip N"><span class="n">0.2</span> Fee schedule</span><span class="chip N"><span class="n">0.4</span> Firm criteria</span></td><td class=""></td><td class=""></td><td class=""></td><td class=""></td><td class=""></td><td class=""></td><td class=""></td><td class=""></td><td class=""></td><td class="after"></td><td class="after"></td></tr>
+<tr><th scope="row"><span class="cap">Lead card and pipeline</span><span class="src">Enrichment service · Platform</span></th><td class=""></td><td class=""></td><td class="on"><span class="chip B"><span class="n">2.2</span> Source on every fact</span><span class="chip B"><span class="n">2.4</span> Enrichment rank</span></td><td class="on"><span class="chip B"><span class="n">3.1</span> Promote to prospect</span><span class="chip B"><span class="n">3.2</span> Park with a date</span><span class="chip B"><span class="n">3.3</span> Evidence</span><span class="chip N"><span class="n">3.6</span> Firm criteria applied</span></td><td class="on"><span class="chip L"><span class="n">4.4</span> Page activity</span></td><td class=""></td><td class=""></td><td class=""></td><td class=""></td><td class=""></td><td class="after"></td><td class="after"></td></tr>
+<tr><th scope="row"><span class="cap">Schedule, sign and hand off</span><span class="src">Calendar · e-signature · portfolio platform</span></th><td class=""></td><td class=""></td><td class=""></td><td class=""></td><td class="on"><span class="chip B"><span class="n">4.2</span> Booking link</span></td><td class=""></td><td class=""></td><td class=""></td><td class="on"><span class="chip B"><span class="n">8.4</span> Advisor review</span></td><td class="on"><span class="chip B"><span class="n">9.1</span> E-signature</span><span class="chip B"><span class="n">9.2</span> New-client alert</span><span class="chip B"><span class="n">9.3</span> Convert, second folder</span><span class="chip N"><span class="n">9.4</span> Portfolio platform link</span></td><td class="after"></td><td class="after"></td></tr>
+</tbody></table></div>
+<div class="legend"><span><span class="chip B"><span class="n">B</span> Baseline</span>Build first: the POC. 27 steps</span><span><span class="chip N"><span class="n">N</span> Next</span>Build second, once the baseline works. 13 steps</span><span><span class="chip L"><span class="n">L</span> Later</span>Not yet scheduled. 4 steps</span><span>Step 4.3 appears in two rows: the personal page both shows content and collects information.</span></div>
+<div class="notes">
+<div class="note"><h2>What the map says</h2><p>24 of 44 steps use AI through one of seven capabilities. The other 20 are built without AI: forms, settings, the lead card, scheduling and signing. They are still components to design and build. The three intake forms are in the Capture row.</p></div>
+<div class="note"><h2>What the POC build leaves out</h2><p>Professional development and business operations are not being built in the POC. SIMGPT is in the baseline as an option inside prospect meeting prep, connected through its API. That is part of this journey.</p></div>
+<div class="note"><h2>After the signature</h2><p>The platform does not end there. The portfolio platform does the money work whenever it is needed; a layer of the platform stays over the whole relationship, notices what needs attention and prepares it for the advisor.</p></div>
+</div>
+<footer>Capability map · 16 Nov 2026 · Drawn from UX_PROSPECT_FLOW.md</footer>
+</main></body></html>
